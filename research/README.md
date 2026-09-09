@@ -2,6 +2,10 @@
 
 The benchmark methodology is developed in separate research modules to reduce premature conclusions and make contradictions visible before synthesis.
 
+> **Governing research methodology:** `research/R00-research-methodology/R00-research-methodology.md`
+>
+> R00 is authoritative for how R01–R11 classify evidence, record sources, separate facts/inferences/recommendations, handle contradictions, assign confidence, respect source licensing/AI-use restrictions, and close a research module.
+
 ## Research sequence
 
 | ID | Topic | Primary purpose |
@@ -20,6 +24,8 @@ The benchmark methodology is developed in separate research modules to reduce pr
 | R11 | Engineering quality | Define maintainability, testing, CI/CD, dependency and secure-development quality |
 
 ## Required structure for every research module
+
+Use `research/templates/research-module-template.md` as the starting point.
 
 Each research document must contain:
 
@@ -41,17 +47,16 @@ Each research document must contain:
 16. Implications for later research modules
 17. Research completion gate
 
-## Evidence hierarchy
+## Evidence model
 
-The exact hierarchy is finalized by R00. Until then, use this provisional order:
+The exact evidence contract is defined in R00. In short:
 
-1. normative or official standards/specifications,
-2. official guidance from standards bodies, security bodies or platform owners,
-3. peer-reviewed or methodologically documented research,
-4. established specialist publications with disclosed methodology,
-5. vendor/blog/community guidance as supporting evidence only.
-
-Do not turn a recommendation into a claimed standard requirement without a source that actually requires it.
+- match evidence to the **type of claim** instead of using one universal source ranking;
+- distinguish normative authority from empirical evidence strength;
+- verify source status/version/currentness;
+- never make a normative claim from an informative/blog/community source;
+- never treat AI model memory as evidence;
+- record copyright/licensing/AI-use restrictions as part of source eligibility.
 
 ## Separation rules
 

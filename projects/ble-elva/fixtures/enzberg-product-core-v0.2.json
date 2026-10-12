@@ -4,7 +4,6 @@
   "fixture_version": "0.2",
   "status": "PROVISIONED_UI_VERIFIED_PRODUCT_NOT_CREATED",
   "application": "BLE/ELVA",
-  "application_commit": "fb933961099a6dd6da301998365d22ccb6921857",
   "test_mode": "isolated_benchmark_only",
   "isolation_required": true,
   "destructive_operations_permitted": false,
@@ -53,12 +52,18 @@
     "The UI check stops before product submission; no STS 0–45 product or sample exists."
   ],
   "verification": {
-    "provisioner_modes": ["WhatIf", "Provision (twice)", "Verify"],
+    "provisioner_modes": [
+      "WhatIf",
+      "Provision (twice)",
+      "Verify"
+    ],
     "independent_database_oracle": "passed",
     "norm_hashes_unchanged": true,
     "no_product_sample_or_report_rows": true
   },
   "reset": "Forbidden. Fixture setup only adds the deterministic synthetic Werk and scope after independent DB identity checks.",
   "independent_oracle": "Read-only PostgreSQL checks for DB identity, tenant/plant/scope, standards hashes, and absence of products, samples, LIMS samples, and reports.",
-  "blocking_issue": "https://github.com/Creynox/software-quality-benchmark/issues/11"
+  "blocking_issue": "https://github.com/Creynox/software-quality-benchmark/issues/11",
+  "application_source_commit": "90b6d58dd875463ca20c48ffd42f5e940a18e815",
+  "fixture_setup_worktree_commit": "fb933961099a6dd6da301998365d22ccb6921857"
 }

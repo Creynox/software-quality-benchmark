@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "fixture_id": "enzberg-product-core-v0.2",
+  "fixture_version": "0.2",
+  "status": "NOT_PROVISIONED",
+  "application": "BLE/ELVA",
+  "test_mode": "isolated_benchmark_only",
+  "isolation_required": true,
+  "destructive_operations_permitted": false,
+  "target_url": "http://127.0.0.1:5059/",
+  "expected_qa_db_port": 55432,
+  "preconditions": [
+    "Dedizierter Benchmark-PostgreSQL-Container/DB/Volume; vor dem Setup tatsächlich anhand Identität prüfen",
+    "Laborleiter-Benchmark-Konto verfügt über die fachlich erforderlichen Produktberechtigungen",
+    "Ein synthetischer Auftraggeber, das Werk Enzberg und das nötige Labor sind korrekt zugeordnet",
+    "Die konkrete Produktanlage ist nur mit fachlich erforderlichen bereits freigegebenen Referenzen durchführbar; fehlende Normen dürfen nicht durch falsche Ausgaben ersetzt werden",
+    "Im Startzustand existiert noch kein STS 0–45-Produkt und keine Probe"
+  ],
+  "setup": "Sichere wiederholbare Stammdaten-Bereitstellung getrennt vom UI-Executor implementieren; Normen-Anlage ist nicht im aktuellen Scope.",
+  "reset": "Nur nach unabhängiger DB-Identitäts-/Isolationsprüfung einen reversiblen und idempotenten Fixture-Reset entwickeln und testen.",
+  "independent_oracle": "Externer read-only Check von Produkt, Werkbezug und erforderlichen tatsächlichen Stammdaten; ohne Oracle bleibt die UI-Beobachtung vorläufig.",
+  "blocking_issue": "https://github.com/Creynox/software-quality-benchmark/issues/11"
+}

@@ -65,6 +65,10 @@ def main(argv=None) -> int:
     scaffold.add_argument("--slug", required=True, help="Lowercase project directory name")
     scaffold.add_argument("--name", help="Human-readable project name")
     scaffold.add_argument("--projects-dir", default="projects", help="Parent directory for project profiles")
+    doctor = sub.add_parser("doctor", help="No-cost local BLE/Chromium/fixture readiness report")
+    doctor.add_argument("--url", default="http://127.0.0.1:5059/")
+    doctor.add_argument("--fixture", default="projects/ble-elva/fixtures/enzberg-product-core-v0.2.json")
+    doctor.add_argument("--storage-state", default=".secrets/ble-session.json")
     preflight = sub.add_parser("preflight", help="Validate scenario without browser or LLM usage")
     preflight.add_argument("--scenario", required=True)
     preflight.add_argument("--url", help="Actual isolated application URL; overrides sample config")
@@ -97,6 +101,12 @@ def main(argv=None) -> int:
         print(f"Blank project profile created: {destination}")
         print("Configure its URL, scenario and isolated fixture before preflight or a live run.")
         return 0
+
+    if args.command == "doctor":
+        from .doctor import readiness
+        result = readiness(args.url, Path(args.fixture), Path(args.storage_state))
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result["status"] == "TECHNICAL_SMOKE_READY" else 2
 
     if args.command == "session":
         save_session(args.url, Path(args.output))

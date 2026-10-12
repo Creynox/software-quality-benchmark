@@ -90,3 +90,19 @@ Zusätzlich gehören ein lokaler Playwright-/Chromium-Smoke-Test und, sobald die
 Für jeden relevanten Änderungssatz Testdatum, Python-/Playwright-Version, Befehle, Exit-Codes, Testergebnis und ggf. lokalen Berichtspfad in PR #10 bzw. dem zuständigen GitHub-Issue dokumentieren. Keine Zugangsdaten oder sensiblen Run-Artefakte nach GitHub hochladen.
 
 **GitHub bleibt ausschließlich für Code, Issues, Pull Requests und Nachweise zuständig.** Fehlende GitHub-Actions-Runs sind ausdrücklich kein Freigabe-Blocker. Die bekannten Anforderungen an fachlichen Persistenznachweis, Tests und Review gelten weiter; kein Merge allein wegen eines erfolgreichen Commits.
+
+## Aktuelle PO-Priorität 12.10.2026 – Prozesse statt Normenanlage
+
+**LAB-01 Prozessbaseline**: `scenarios/sts-0-45-product-core-v0.2.json` mit Fixture-Vertrag `fixtures/enzberg-product-core-v0.2.json` ist der neue Ersttest. Er prüft die Produktanlage und das Wiederöffnen mit existierenden fachlich belegten Referenzen; Normen/Editionen werden **nicht neu angelegt**. Fehlt eine technisch zwingende Referenz, ist das ein dokumentierter Blocker und **kein Anlass, Grenzwerte oder Editionen zu erfinden**.
+
+Das vorherige normative Szenario `scenarios/sts-0-45-product.json` (v0.1) bleibt als **historischer, zurückgestellter** Test erhalten, aber ist kein Pflichtgate des aktuellen Prozesspilots. NORM-01 bleibt gesondertes Backlog.
+
+### Lokal und ohne Modell-/API-Aufrufe prüfen
+
+```powershell
+python -m unittest discover -s tests -v
+python -m sqbf.cli doctor --url http://127.0.0.1:5059/
+python -m sqbf.cli preflight --scenario projects/ble-elva/scenarios/sts-0-45-product-core-v0.2.json --url http://127.0.0.1:5059/
+```
+
+Der `doctor` sendet nur einen lokalen GET nach `/health/ready` und startet einen kleinen lokalen Chromium-Screenshot. Er führt **keinen** KI-Aufruf, keine Datenbankänderung und keinen Produktbenchmark aus. Er prüft den deklarativen Fixture-Status und meldet das Fehlen der unabhängig geprüften DB-Baseline, der sicheren Abo-Agentenintegration und des Persistenz-Oracles offen. Ein `TECHNICAL_SMOKE_READY` ist kein fachlicher Test-PASS.

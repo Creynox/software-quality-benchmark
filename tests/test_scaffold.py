@@ -87,8 +87,14 @@ class BleProfileTests(unittest.TestCase):
         self.assertFalse(fixture["destructive_operations_permitted"])
         self.assertIn("Laborleitung", scenario.persona)
         self.assertIn("STS 0", scenario.task)
-        self.assertIn("TL SoB-StB 20", scenario.task)
-        self.assertIn("ETV-StB-BW", scenario.task)
+        self.assertIn("Lege keine Norm neu an", scenario.task)
+        self.assertNotIn("TL SoB-StB 20", scenario.task)
+        self.assertNotIn("ETV-StB-BW", scenario.task)
+        # The original norm-specific scenario remains versioned and deferred.
+        legacy = Scenario.load(root / "scenarios" / "sts-0-45-product.json")
+        self.assertIn("TL SoB-StB 20", legacy.task)
+        self.assertIn("ETV-StB-BW", legacy.task)
+        self.assertNotEqual(legacy.fixture_id, fixture["fixture_id"])
 
 
 if __name__ == "__main__":

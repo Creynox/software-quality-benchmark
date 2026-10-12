@@ -2,22 +2,63 @@
   "schema_version": 1,
   "fixture_id": "enzberg-product-core-v0.2",
   "fixture_version": "0.2",
-  "status": "NOT_PROVISIONED",
+  "status": "PROVISIONED_UI_VERIFIED_PRODUCT_NOT_CREATED",
   "application": "BLE/ELVA",
+  "application_commit": "fb933961099a6dd6da301998365d22ccb6921857",
   "test_mode": "isolated_benchmark_only",
   "isolation_required": true,
   "destructive_operations_permitted": false,
-  "target_url": "http://127.0.0.1:5059/",
-  "expected_qa_db_port": 55432,
-  "preconditions": [
-    "Dedizierter Benchmark-PostgreSQL-Container/DB/Volume; vor dem Setup tatsächlich anhand Identität prüfen",
-    "Laborleiter-Benchmark-Konto verfügt über die fachlich erforderlichen Produktberechtigungen",
-    "Ein synthetischer Auftraggeber, das Werk Enzberg und das nötige Labor sind korrekt zugeordnet",
-    "Die konkrete Produktanlage ist nur mit fachlich erforderlichen bereits freigegebenen Referenzen durchführbar; fehlende Normen dürfen nicht durch falsche Ausgaben ersetzt werden",
-    "Im Startzustand existiert noch kein STS 0–45-Produkt und keine Probe"
+  "target_url": "http://127.0.0.1:5080/",
+  "database": {
+    "container": "ble-benchmark-pg-20261012",
+    "container_id": "90603c3389acca27a4ff023afd2174e2cf393d94d2164915cdc1d456f9159354",
+    "image": "postgres:16",
+    "host_binding": "127.0.0.1:55432",
+    "database": "ble_benchmark_20261012",
+    "volume": "ble_benchmark_20261012_data",
+    "startup_seeding": "disabled"
+  },
+  "fixture_data": {
+    "tenant_id": "7e9a1d20-0000-4000-8000-000000000001",
+    "synthetic_plant_id": "3bf304e0-3c58-4c3a-8900-7c00bdbfd001",
+    "plant_name": "Enzberg",
+    "plant_site_number": "SQBF-LAB01-ENZBERG",
+    "customer_id": null,
+    "laboratory_id": null,
+    "laboratory_lead_account": "sqbf-laborleitung",
+    "plant_scope_id": "3bf304e0-3c58-4c3a-8900-7c00bdbfd002",
+    "global_scope": "inactive",
+    "tenant_scope": "active",
+    "permission_products_manage": true,
+    "product_count": 0,
+    "sample_count": 0,
+    "report_count": 0
+  },
+  "ui_verification": {
+    "login": "passed",
+    "product_create_route": "/products/new",
+    "enzberg_selected_as_owner": true,
+    "product_saved": false,
+    "screenshot_directory": "D:/Temp/sqbf-lab01-evidence"
+  },
+  "scope": [
+    "Create only the synthetic tenant-owned Enzberg plant and scoped laboratory-lead authorization.",
+    "Do not seed standards, standards versions, customers, laboratories, products, samples, LIMS samples, or reports.",
+    "Do not reset the database; setup is additive and idempotent."
   ],
-  "setup": "Sichere wiederholbare Stammdaten-Bereitstellung getrennt vom UI-Executor implementieren; Normen-Anlage ist nicht im aktuellen Scope.",
-  "reset": "Nur nach unabhängiger DB-Identitäts-/Isolationsprüfung einen reversiblen und idempotenten Fixture-Reset entwickeln und testen.",
-  "independent_oracle": "Externer read-only Check von Produkt, Werkbezug und erforderlichen tatsächlichen Stammdaten; ohne Oracle bleibt die UI-Beobachtung vorläufig.",
+  "preconditions": [
+    "Verify the exact benchmark container, image, loopback port, database, and isolated volume before every write.",
+    "Laborleiter-Benchmark-Konto is synthetic and has products.manage permission with an explicit Enzberg plant scope.",
+    "STS product creation remains blocked until fachlich freigegebene aktuelle Norm- und Produktreferenzen im Testsystem nachgewiesen sind.",
+    "The UI check stops before product submission; no STS 0–45 product or sample exists."
+  ],
+  "verification": {
+    "provisioner_modes": ["WhatIf", "Provision (twice)", "Verify"],
+    "independent_database_oracle": "passed",
+    "norm_hashes_unchanged": true,
+    "no_product_sample_or_report_rows": true
+  },
+  "reset": "Forbidden. Fixture setup only adds the deterministic synthetic Werk and scope after independent DB identity checks.",
+  "independent_oracle": "Read-only PostgreSQL checks for DB identity, tenant/plant/scope, standards hashes, and absence of products, samples, LIMS samples, and reports.",
   "blocking_issue": "https://github.com/Creynox/software-quality-benchmark/issues/11"
 }

@@ -37,6 +37,9 @@ class DoctorTests(unittest.TestCase):
             result = check_fixture(p)
             self.assertEqual(result["status"], "DECLARED_READY")
             self.assertTrue(result["requires_external_isolation_verification"])
+            p.write_text(json.dumps({"fixture_id": "test", "status": "PROVISIONED_UI_VERIFIED_PRODUCT_NOT_CREATED"}))
+            result = check_fixture(p)
+            self.assertEqual(result["status"], "PROVISIONED_SCENARIO_BLOCKED")
 
     def test_no_claim_of_live_ai_readiness_when_health_works(self):
         with tempfile.TemporaryDirectory() as tmp, \

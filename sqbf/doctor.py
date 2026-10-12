@@ -36,7 +36,14 @@ def check_fixture(path: Path) -> dict:
     except (OSError, ValueError) as exc:
         return {"status": "BLOCKED", "reason": type(exc).__name__}
     # Metadata assertions are NOT evidence that a real isolated fixture exists.
-    return {"status": "DECLARED_READY" if data.get("status") == "READY" else "BLOCKED",
+    declared = data.get("status")
+    if declared == "READY":
+        status = "DECLARED_READY"
+    elif declared == "PROVISIONED_UI_VERIFIED_PRODUCT_NOT_CREATED":
+        status = "PROVISIONED_SCENARIO_BLOCKED"
+    else:
+        status = "BLOCKED"
+    return {"status": status,
             "fixture_id": data.get("fixture_id"),
             "fixture_status": data.get("status"),
             "requires_external_isolation_verification": True}
@@ -74,8 +81,10 @@ def readiness(url: str, fixture: Path, storage_state: Path) -> dict:
         pending.append("Local BLE health and Chromium must both be READY")
     if auth["status"] != "PRESENT_UNVERIFIED":
         pending.append("Create a local benchmark-role Playwright session")
-    if fixture_result["status"] != "DECLARED_READY":
+    if fixture_result["status"] == "BLOCKED":
         pending.append("Provision and independently verify isolated BLE fixture")
+    elif fixture_result["status"] == "PROVISIONED_SCENARIO_BLOCKED":
+        pending.append("Verify sanctioned STS product references and persistable UI workflow")
     pending.append("Verify subscription-based vision agent and tool isolation (#14)")
     pending.append("Implement independent persisted-result oracle (#11)")
     return {

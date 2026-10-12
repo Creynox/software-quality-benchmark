@@ -63,3 +63,20 @@ Kein automatischer SharePoint-Upload, keine Issue-Erstellung, keine Mail-Nachric
     python -m unittest discover -s tests -v
 
 Es ist noch kein echter BLE-Pilot durch dieses Repository ausgeführt worden. Nach einem ersten lokalen Run sind Browser-Kompatibilität, Modellverhalten und fachliche Ergebnisverifikation zu prüfen.
+
+
+## Verbindlicher Testweg: ausschließlich lokal (ohne GitHub Actions)
+
+Für das SQBF/BLE-Benchmark-MVP werden **keine GitHub Actions und keine verpflichtende Cloud-CI** eingesetzt. Der Workflow `.github/workflows/mvp-tests.yml` wurde aus dem Entwicklungsbranch entfernt.
+
+Codex prüft nach Änderungen direkt auf dem lokalen Windows-Rechner:
+
+    .\scripts\setup.ps1
+    python -m unittest discover -s tests -v
+    python -m sqbf.cli preflight --scenario projects/ble-elva/scenarios/sts-0-45-product.json
+
+Zusätzlich gehören ein lokaler Playwright-/Chromium-Smoke-Test und, sobald die isolierte BLE-Instanz samt Testkonto und API-Zugang vorhanden ist, der echte STS-0–45-Pilot dazu.
+
+Für jeden relevanten Änderungssatz Testdatum, Python-/Playwright-Version, Befehle, Exit-Codes, Testergebnis und ggf. lokalen Berichtspfad in PR #10 bzw. dem zuständigen GitHub-Issue dokumentieren. Keine Zugangsdaten oder sensiblen Run-Artefakte nach GitHub hochladen.
+
+**GitHub bleibt ausschließlich für Code, Issues, Pull Requests und Nachweise zuständig.** Fehlende GitHub-Actions-Runs sind ausdrücklich kein Freigabe-Blocker. Die bekannten Anforderungen an fachlichen Persistenznachweis, Tests und Review gelten weiter; kein Merge allein wegen eines erfolgreichen Commits.

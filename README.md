@@ -4,7 +4,7 @@ A versioned, AI-first framework for evaluating software quality in a reproducibl
 
 ## Current phase
 
-The project is currently in **Foundation Research**. The immediate goal is to define the benchmark methodology before implementing a runner or dashboard.
+The project has **ongoing Foundation Research** and an **unmerged local MVP prototype**. The next delivery goal is a verified, reproducible first black-box UI run; authoritative quality scoring remains a separate methodology milestone.
 
 Initial MVP target:
 

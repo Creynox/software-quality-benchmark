@@ -16,7 +16,11 @@ def check_health(url: str) -> dict:
         return {"status": "BLOCKED", "reason": "doctor only probes local HTTP loopback"}
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         return {"status": "BLOCKED", "reason": "URL must not contain credentials or query parameters"}
-    origin = f"http://{parsed.hostname}:{parsed.port}" if parsed.port else f"http://{parsed.hostname}"
+    try:
+        port = parsed.port
+    except ValueError:
+        return {"status": "BLOCKED", "reason": "Invalid loopback URL port"}
+    origin = f"http://{parsed.hostname}:{port}" if port else f"http://{parsed.hostname}"
     try:
         with urlopen(origin + "/health/ready", timeout=4) as response:
             payload = response.read(2048).decode("utf-8", errors="replace")

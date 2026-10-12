@@ -13,7 +13,7 @@ class DoctorTests(unittest.TestCase):
     def test_rejects_non_loopback_targets_without_network(self):
         with patch("sqbf.doctor.urlopen") as opener:
             for url in ("https://example.com/", "http://example.com", "http://foo:5059/",
-                        "http://user:pass@127.0.0.1:5059/", "file:///etc/passwd"):
+                        "http://user:pass@127.0.0.1:5059/", "http://127.0.0.1:bad/", "file:///etc/passwd"):
                 self.assertEqual(check_health(url)["status"], "BLOCKED")
             opener.assert_not_called()
 

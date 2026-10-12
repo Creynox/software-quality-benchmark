@@ -123,6 +123,8 @@ def main(argv=None) -> int:
         }, indent=2, ensure_ascii=False))
         return 0
 
+    if args.executor_provider in {"openai", "anthropic"} or args.analyst_provider in {"openai", "anthropic"}:
+        parser.error("Metered HTTP/API providers are disabled by the current subscription-only PO policy. Run 'doctor' and use the future verified Codex/Claude subscription adapter (#14). No API keys or pay-as-you-go fallback.")
     if not args.fixture_ready:
         parser.error("Only an isolated seeded fixture is permitted; pass --fixture-ready after verification.")
     scenario.software_version = args.software_version

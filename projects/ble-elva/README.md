@@ -106,3 +106,5 @@ python -m sqbf.cli preflight --scenario projects/ble-elva/scenarios/sts-0-45-pro
 ```
 
 Der `doctor` sendet nur einen lokalen GET nach `/health/ready` und startet einen kleinen lokalen Chromium-Screenshot. Er führt **keinen** KI-Aufruf, keine Datenbankänderung und keinen Produktbenchmark aus. Er prüft den deklarativen Fixture-Status und meldet das Fehlen der unabhängig geprüften DB-Baseline, der sicheren Abo-Agentenintegration und des Persistenz-Oracles offen. Ein `TECHNICAL_SMOKE_READY` ist kein fachlicher Test-PASS.
+
+**Schutz vor Zusatzkosten:** Der aktuelle CLI-Befehl `run` verweigert ausdrücklich die bisherige `openai`-/`anthropic`-HTTP-Provider-Integration. Abonnements funktionieren **nicht** automatisch über API-Schlüssel; der unterstützte Abo-Vision-Adapter benötigt noch einen gesonderten Sicherheits-/Funktionsnachweis in #14. Das ist bewusst ein Fail-Closed-Verhalten, kein ausgeführter Agententest.

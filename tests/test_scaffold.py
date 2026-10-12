@@ -1,6 +1,7 @@
 """Reusable project templates must be deterministic, empty and safe."""
 
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,8 +22,11 @@ class ScaffoldTests(unittest.TestCase):
             self.assertTrue(filenames_one)
             for name in filenames_one:
                 self.assertEqual((one / name).read_bytes(), (two / name).read_bytes())
-                self.assertNotIn(b"BLE", (one / name).read_bytes())
-                self.assertNotIn(b"Enzberg", (one / name).read_bytes())
+                blob = (one / name).read_bytes()
+                self.assertIsNone(re.search(rb"\bBLE\b", blob))
+                self.assertNotIn(b"ELVA", blob)
+                self.assertNotIn(b"Enzberg", blob)
+                self.assertNotIn(b"STS 0", blob)
             manifest = json.loads((one / "project.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["project_id"], "demo-app")
             self.assertEqual(manifest["display_name"], 'Example "App"')

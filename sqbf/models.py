@@ -40,6 +40,14 @@ class Scenario:
         for key in ("scenario_id", "task", "url", "persona", "fixture_id", "expected"):
             if not data.get(key):
                 raise ValueError(f"Missing scenario field: {key}")
+        # A copied blank project must not accidentally run merely because
+        # an operator supplied a real URL before configuring the scenario.
+        for key in ("task", "persona", "fixture_id", "software_version"):
+            value = data.get(key, "")
+            if isinstance(value, str) and value.startswith("CONFIGURE_"):
+                raise ValueError(f"Unconfigured scenario placeholder: {key}")
+        if any(isinstance(item, str) and item.startswith("CONFIGURE_") for item in data["expected"]):
+            raise ValueError("Unconfigured scenario placeholder: expected")
         parsed = urlparse(data["url"])
         if parsed.scheme not in ("http", "https") or not parsed.hostname:
             raise ValueError("Scenario URL must be http(s) with a hostname")

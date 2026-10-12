@@ -34,6 +34,9 @@ class ScaffoldTests(unittest.TestCase):
             project = create_project(Path(tmp), "blank")
             with self.assertRaises(ValueError):
                 Scenario.load(project / "scenarios" / "first-task.json")
+            # A real URL override alone does not make the blank scenario runnable.
+            with self.assertRaises(ValueError):
+                Scenario.load(project / "scenarios" / "first-task.json", "http://127.0.0.1:5000/")
 
     def test_existing_project_is_never_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:

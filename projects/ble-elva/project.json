@@ -17,7 +17,8 @@
     "site": "Enzberg",
     "persona": "Laborleitung",
     "product": "STS 0–45",
-    "norms": "Deferred: no new norms / no forced historic edition; use only verified existing requirements"
+    "norms": [],
+    "norm_policy": "No new standards or unverified historical editions required for first process pilot; only existing substantiated references if actually mandatory"
   },
   "source": "sqbf-project-profile",
   "related_issues": [

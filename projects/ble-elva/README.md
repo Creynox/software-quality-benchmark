@@ -13,10 +13,12 @@ Die Datenbank-Migrationen und Fixture-Skripte liegen im BLE-Projektrepository, n
 
 ## Installation (Windows PowerShell)
 
-    py -m venv .venv
+    .\scripts\setup.ps1
     .\.venv\Scripts\Activate.ps1
-    pip install -e .
-    python -m playwright install chromium
+
+The setup script uses the available `python` command (Python 3.11 or later),
+creates `.venv` only if it does not exist, and installs the project and
+Playwright Chromium there. It does not replace local configuration or API keys.
 
 ## Vorbereitung
 
@@ -35,9 +37,13 @@ Session-Cookies sind vertraulich; .secrets und runs werden von Git ignoriert.
 In PowerShell den API-Schlüssel der gewählten Modellplattform als Umgebungsvariable setzen. Modell-IDs im folgenden Beispiel sind Platzhalter und müssen gegen tatsächlich verfügbare API-Modelle ersetzt werden.
 
     $env:ANTHROPIC_API_KEY = "API_KEY_NUR_LOKAL"
-    python -m sqbf.cli run --scenario projects/ble-elva/scenarios/sts-0-45-product.json --url http://127.0.0.1:5000/ --storage-state .secrets/ble-session.json --fixture-ready --executor-provider anthropic --executor-model TATSAECHLICHE_HAIKU_ID --analyst-provider anthropic --analyst-model TATSAECHLICHE_SONNET_ID --interactive-budget
+    python -m sqbf.cli run --scenario projects/ble-elva/scenarios/sts-0-45-product.json --url http://127.0.0.1:5000/ --ble-version BLE_COMMIT_SHA --storage-state .secrets/ble-session.json --fixture-ready --executor-provider anthropic --executor-model VERIFIED_EXECUTOR_MODEL_ID --analyst-provider anthropic --analyst-model VERIFIED_ANALYST_MODEL_ID --interactive-budget
 
-Alternativ OPENAI_API_KEY sowie --executor-provider openai bzw. --analyst-provider openai benutzen, wenn das gewählte visionfähige Modell Chat-Completions-Bildeingaben unterstützt.
+Alternativ OPENAI_API_KEY sowie `--executor-provider openai` bzw. `--analyst-provider openai` benutzen, wenn das gewählte visionfähige Modell die Responses API mit Bildeingaben unterstützt. Ein ChatGPT- oder Claude-Abonnement stellt nicht automatisch API-Zugang oder ein Ausgabenlimit bereit.
+
+### Modell-IDs vor dem ersten API-Run
+
+Die Modellnamen sind bei jedem Lauf explizit anzugeben. Zum Prüfzeitpunkt 12.10.2026 nennt OpenAI `gpt-6-luna` und `gpt-6-sol` in den API-Preisinformationen. Anthropic führt `claude-sonnet-5` als aktiv; `claude-haiku-4-5-20251001` ist ebenfalls gelistet, jedoch mit angekündigtem Ruhestand ab 15.10.2026. Die im Entscheidungsprotokoll genannten IDs `claude-haiku-5-5` und `claude-sonnet-5-5` konnte ich in den offiziellen aktuellen Anthropic-Modellangaben nicht bestätigen. Die öffentliche Modellliste belegt weder Zugriff über das lokale Konto noch Provider-Kompatibilität dieses Runners. Ohne lokal gesetzten API-Schlüssel wurde kein Live-Aufruf durchgeführt und es entstehen keine API-Kosten.
 
 --fixture-ready ist eine ausdrückliche Bestätigung durch die ausführende Person, dass isolierte Fixtures vorbereitet wurden. Es startet selbst keinen Reset. Ohne --interactive-budget stoppt der Lauf beim Budget (25 Minuten / 150 UI-Aktionen). Im interaktiven Modus wird eine Erweiterung nur durch die explizite Eingabe APPROVE <zusatz_minuten> <zusatz_aktionen> genehmigt. Kein Resume nach Prozessende in V1.
 

@@ -53,7 +53,12 @@ class Evidence:
             f"- Fixture: {manifest['fixture_id']}",
             f"- BLE-Version: {manifest['software_version']}",
             f"- Status: **{status}**",
+            f"- Technischer Runner: **{manifest.get('technical_status', 'nicht bewertet')}**",
+            f"- Fachliches Ergebnis: **{manifest.get('functional_status', 'nicht bewertet')}**",
             f"- Executor-Endstatus: {manifest['executor_status']}",
+            f"- Modellwartezeit: {manifest.get('model_wait_seconds', 0):.1f} Sekunden",
+            f"- Aktive Runnerzeit (ohne Modellwartezeit): {manifest.get('active_seconds_excluding_model_wait', manifest['wall_seconds']):.1f} Sekunden",
+            "- Fachlicher PASS: **nicht bestätigt** (kein unabhängiger Persistenz-Oracle im MVP)",
             f"- UI-Aktionen: {manifest['actions']} / {manifest['budget_actions']}",
             f"- Dauer (Wallclock, inklusive KI-Wartezeit): {manifest['wall_seconds']:.1f} Sekunden",
             "", "## Nachweise",
@@ -67,7 +72,7 @@ class Evidence:
         lines.extend([
             "", "## Einschränkungen", "",
             "- Screenshots verbleiben lokal; sensible Inhalte vor Weitergabe prüfen.",
-            "- Ohne getrennten fachlichen Oracle-Nachweis beweist ein UI-Screenshot keine Datenbank-Persistenz.",
+            "- VISUAL_PASS_PENDING_ORACLE bedeutet, dass der Analyst den sichtbaren Endzustand unterstützt; ohne getrennten fachlichen Oracle-Nachweis ist dies kein fachlicher PASS und beweist keine Datenbank-Persistenz.",
             "- Ein erfolgreiches Agenten-Endsignal allein wird nicht als PASS gewertet.",
         ])
         (self.path / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

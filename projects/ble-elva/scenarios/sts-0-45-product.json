@@ -2,7 +2,7 @@
   "scenario_id": "ble.product.create.sts-0-45",
   "scenario_version": "0.1",
   "persona": "Laborleitung",
-  "fixture_id": "enzberg-sts-0-45-seeded-v1",
+  "fixture_id": "enzberg-sts-0-45-base-v1",
   "software_version": "unknown-set-from-deployment",
   "url": "http://127.0.0.1:5000/",
   "allowed_hosts": [

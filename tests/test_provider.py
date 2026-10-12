@@ -24,8 +24,8 @@ class FakeHttpResponse:
 
 
 class ProviderTests(unittest.TestCase):
-    def test_openai_chat_vision_payload(self):
-        response = {"choices": [{"message": {"content": '{"action":"done"}'}}], "usage": {"total_tokens": 10}}
+    def test_openai_responses_vision_payload(self):
+        response = {"output": [{"content": [{"type": "output_text", "text": '{"action":"done"}'}]}], "usage": {"total_tokens": 10}}
         with patch.dict(os.environ, {"OPENAI_API_KEY": "TEST_KEY"}), patch(
             "urllib.request.urlopen", return_value=FakeHttpResponse(response)
         ) as urlopen:
@@ -33,7 +33,9 @@ class ProviderTests(unittest.TestCase):
             sent = json.loads(urlopen.call_args.args[0].data.decode())
         self.assertEqual(result.data["action"], "done")
         self.assertEqual(result.usage["total_tokens"], 10)
-        self.assertTrue(sent["messages"][0]["content"][1]["image_url"]["url"].startswith("data:image/png;base64,"))
+        self.assertTrue(urlopen.call_args.args[0].full_url.endswith("/v1/responses"))
+        self.assertTrue(sent["input"][0]["content"][1]["image_url"].startswith("data:image/png;base64,"))
+        self.assertEqual(sent["max_output_tokens"], 450)
 
     def test_anthropic_messages_vision_payload(self):
         response = {"content": [{"type": "text", "text": '{"action":"blocked"}'}], "usage": {"input_tokens": 10}}

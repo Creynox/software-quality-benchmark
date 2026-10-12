@@ -34,13 +34,15 @@ class VisionModel:
             key = os.environ.get("OPENAI_API_KEY")
             if not key:
                 raise ValueError("OPENAI_API_KEY is required")
-            url = "https://api.openai.com/v1/chat/completions"
+            # Use Responses API: it accepts image input and is the current
+            # interface for the configured GPT-6 model family.
+            url = "https://api.openai.com/v1/responses"
             headers = {"Authorization": f"Bearer {key}"}
             payload = {
-                "model": self.model, "max_completion_tokens": max_tokens,
-                "messages": [{"role": "user", "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64," + image}},
+                "model": self.model, "max_output_tokens": max_tokens,
+                "input": [{"role": "user", "content": [
+                    {"type": "input_text", "text": prompt},
+                    {"type": "input_image", "image_url": "data:image/png;base64," + image},
                 ]}],
             }
         else:
@@ -68,7 +70,14 @@ class VisionModel:
         except urllib.error.HTTPError as exc:
             raise RuntimeError(f"{self.provider} request failed with HTTP {exc.code}") from exc
         if self.provider == "openai":
-            text = result["choices"][0]["message"]["content"]
+            text = result.get("output_text")
+            if text is None:
+                text = "\n".join(
+                    block["text"]
+                    for item in result.get("output", [])
+                    for block in item.get("content", [])
+                    if block.get("type") == "output_text"
+                )
         else:
             text = "\n".join(block["text"] for block in result["content"] if block["type"] == "text")
         return ModelResponse(data=parse_json_object(text), usage=result.get("usage") or {})

@@ -80,6 +80,7 @@ def run(
     allowed_seconds = scenario.max_minutes * 60
     allowed_actions = scenario.max_actions
     count, errors = 0, 0
+    model_wait_seconds = 0.0
     executor_status = "INCOMPLETE"
     usage: list[dict] = []
     review: dict | None = None
@@ -139,14 +140,38 @@ def run(
                     last_png = page.screenshot(type="png", animations="disabled", timeout=15_000)
                     if count == 0 or count % 5 == 0:
                         evidence.snapshot(last_png, f"step-{count}")
+                    elapsed = time.monotonic() - started
+                    if elapsed >= allowed_seconds:
+                        executor_status = "PAUSED_BUDGET"
+                        evidence.event(
+                            "budget_pause", actions=count,
+                            elapsed_seconds=round(elapsed, 2),
+                            reason="time_limit_during_screenshot",
+                        )
+                        break
                     prompt = (
                         EXECUTOR_INSTRUCTIONS + "\nUSER TASK:\n" + scenario.task +
                         "\nEXPECTED VISIBLE END STATE:\n" +
                         "\n".join(scenario.expected) +
                         f"\nCompleted UI actions: {count}. Reply with just one JSON action."
                     )
-                    result = executor.ask(prompt, last_png)
+                    model_started = time.monotonic()
+                    try:
+                        result = executor.ask(prompt, last_png)
+                    finally:
+                        model_wait_seconds += time.monotonic() - model_started
                     usage.append({"stage": "executor", "usage": result.usage})
+                    # A slow provider response must not authorize one more UI
+                    # action after the wall-clock budget has expired.
+                    elapsed = time.monotonic() - started
+                    if elapsed >= allowed_seconds:
+                        executor_status = "PAUSED_BUDGET"
+                        evidence.event(
+                            "budget_pause", actions=count,
+                            elapsed_seconds=round(elapsed, 2),
+                            reason="time_limit_during_model_wait",
+                        )
+                        break
                     try:
                         action = validate_action(result.data, viewport["width"], viewport["height"])
                     except ValueError as exc:
@@ -191,9 +216,13 @@ def run(
                 "executor_status": executor_status, "actions": count,
                 "events": evidence.events[-40:],
             }
-            result = analyst.ask(ANALYST_INSTRUCTIONS + "\nRUN:\n" + json.dumps(
-                summary, ensure_ascii=False
-            ), last_png, max_tokens=850)
+            model_started = time.monotonic()
+            try:
+                result = analyst.ask(ANALYST_INSTRUCTIONS + "\nRUN:\n" + json.dumps(
+                    summary, ensure_ascii=False
+                ), last_png, max_tokens=850)
+            finally:
+                model_wait_seconds += time.monotonic() - model_started
             usage.append({"stage": "analyst", "usage": result.usage})
             review = result.data
             if not isinstance(review.get("findings"), list):
@@ -204,10 +233,16 @@ def run(
     manifest.update({
         "executor_status": executor_status, "actions": count,
         "wall_seconds": round(elapsed, 2),
+        "model_wait_seconds": round(model_wait_seconds, 2),
+        "active_seconds_excluding_model_wait": round(max(0.0, elapsed - model_wait_seconds), 2),
         "budget_actions": allowed_actions,
         "budget_minutes": round(allowed_seconds / 60, 2),
         "usage": usage, "finished_at": datetime.now(timezone.utc).isoformat(),
     })
     verdict = assess_run(executor_status, review, len(evidence.images))
+    manifest["technical_status"] = (
+        "PASS" if evidence.images and executor_status != "ERROR" else "FAIL"
+    )
+    manifest["functional_status"] = "UNVERIFIED"
     evidence.finish(manifest, review, verdict)
     return evidence.path

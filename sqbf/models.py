@@ -108,10 +108,12 @@ def safe_action_log(action: dict) -> dict:
 
 
 def assess_run(executor_status: str, review: dict | None, evidence_count: int) -> str:
-    """Never assert a PASS based on the executor self-report alone."""
+    """Keep visual review separate from a functional PASS requiring an Oracle."""
     if executor_status != "DONE":
         return "INCONCLUSIVE" if executor_status.startswith("PAUSED") else "INCOMPLETE"
     if evidence_count < 2 or not review:
         return "INCONCLUSIVE"
     verdict = review.get("verdict", "INCONCLUSIVE")
-    return verdict if verdict in {"PASS", "FAIL"} else "INCONCLUSIVE"
+    if verdict == "PASS":
+        return "VISUAL_PASS_PENDING_ORACLE"
+    return "VISUAL_FAIL" if verdict == "FAIL" else "INCONCLUSIVE"

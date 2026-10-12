@@ -68,7 +68,8 @@ class PolicyTests(unittest.TestCase):
     def test_no_fake_pass(self):
         self.assertEqual(assess_run("DONE", None, 3), "INCONCLUSIVE")
         self.assertEqual(assess_run("DONE", {"verdict": "PASS"}, 1), "INCONCLUSIVE")
-        self.assertEqual(assess_run("DONE", {"verdict": "PASS"}, 2), "PASS")
+        self.assertEqual(assess_run("DONE", {"verdict": "PASS"}, 2), "VISUAL_PASS_PENDING_ORACLE")
+        self.assertNotEqual(assess_run("DONE", {"verdict": "PASS"}, 2), "PASS")
         self.assertEqual(assess_run("PAUSED_BUDGET", {"verdict": "PASS"}, 2), "INCONCLUSIVE")
         self.assertEqual(assess_run("ERROR", {"verdict": "PASS"}, 2), "INCOMPLETE")
 

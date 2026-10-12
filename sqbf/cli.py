@@ -69,6 +69,7 @@ def main(argv=None) -> int:
     execute = sub.add_parser("run", help="Run a scenario on an isolated BLE environment")
     execute.add_argument("--scenario", required=True)
     execute.add_argument("--url", required=True, help="Actual URL for isolated local BLE UI")
+    execute.add_argument("--ble-version", required=True, help="Exact BLE commit SHA or release identifier")
     execute.add_argument("--executor-provider", required=True, choices=["openai", "anthropic"])
     execute.add_argument("--executor-model", required=True, help="Verified API model identifier")
     execute.add_argument("--analyst-provider", choices=["openai", "anthropic"])
@@ -99,6 +100,7 @@ def main(argv=None) -> int:
 
     if not args.fixture_ready:
         parser.error("Only an isolated seeded fixture is permitted; pass --fixture-ready after verification.")
+    scenario.software_version = args.ble_version
     if not args.no_analyst and not (args.analyst_provider and args.analyst_model):
         parser.error("Provide --analyst-provider and --analyst-model, or use --no-analyst for technical smoke")
     if args.storage_state and not Path(args.storage_state).is_file():

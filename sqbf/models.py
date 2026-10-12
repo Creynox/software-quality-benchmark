@@ -35,6 +35,8 @@ class Scenario:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         if base_url:
             data["url"] = base_url
+            # An explicit local target overrides the illustrative sample host.
+            data["allowed_hosts"] = [urlparse(base_url).hostname]
         for key in ("scenario_id", "task", "url", "persona", "fixture_id", "expected"):
             if not data.get(key):
                 raise ValueError(f"Missing scenario field: {key}")

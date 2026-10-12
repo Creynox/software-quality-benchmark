@@ -48,3 +48,16 @@ See `research/README.md` for the research contract and sequencing.
 ## Status
 
 No benchmark score is considered authoritative until Foundation 1.0 has defined the measurement, scoring, gate and reproducibility contracts.
+
+## BLE/ELVA executable MVP (implementation in review)
+
+A small Playwright and screenshot-vision runner now exists under sqbf/ and
+projects/ble-elva/ on the proposed implementation branch. See
+projects/ble-elva/README.md for Windows setup, local isolated fixture
+requirements, sample CLI commands and important security limitations.
+
+This does **not** replace the Foundation research methodology and is not an
+authoritative score: the first BLE dataset, independent persistence Oracle,
+actual vision model access and live benchmark evidence require separate
+verification before MVP GO. The runner records local evidence and separates
+low-cost UI execution from a single end-of-run reviewer.

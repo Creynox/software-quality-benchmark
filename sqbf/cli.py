@@ -1,4 +1,4 @@
-"""CLI for manual browser login, preflight and the first BLE micro benchmark."""
+"""Project-neutral CLI for scaffolding, preflight, browser login and UI runs."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .models import Scenario
+from .scaffold import create_project
 from .providers import VisionModel
 from .runner import run
 
@@ -60,16 +61,21 @@ def save_session(url: str, output: Path):
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="sqbf")
     sub = parser.add_subparsers(dest="command", required=True)
+    scaffold = sub.add_parser("new-project", help="Create a blank, reproducible project profile")
+    scaffold.add_argument("--slug", required=True, help="Lowercase project directory name")
+    scaffold.add_argument("--name", help="Human-readable project name")
+    scaffold.add_argument("--projects-dir", default="projects", help="Parent directory for project profiles")
     preflight = sub.add_parser("preflight", help="Validate scenario without browser or LLM usage")
     preflight.add_argument("--scenario", required=True)
-    preflight.add_argument("--url", help="Actual local BLE UI URL; overrides sample config")
+    preflight.add_argument("--url", help="Actual isolated application URL; overrides sample config")
     session = sub.add_parser("session", help="Save benchmark-role login session manually")
     session.add_argument("--url", required=True)
     session.add_argument("--output", default=".secrets/ble-session.json")
-    execute = sub.add_parser("run", help="Run a scenario on an isolated BLE environment")
+    execute = sub.add_parser("run", help="Run a scenario on an isolated target application")
     execute.add_argument("--scenario", required=True)
-    execute.add_argument("--url", required=True, help="Actual URL for isolated local BLE UI")
-    execute.add_argument("--ble-version", required=True, help="Exact BLE commit SHA or release identifier")
+    execute.add_argument("--url", required=True, help="Actual URL for the isolated local application")
+    execute.add_argument("--software-version", "--ble-version", dest="software_version", required=True,
+                         help="Exact target application commit SHA or release (old --ble-version alias supported)")
     execute.add_argument("--executor-provider", required=True, choices=["openai", "anthropic"])
     execute.add_argument("--executor-model", required=True, help="Verified API model identifier")
     execute.add_argument("--analyst-provider", choices=["openai", "anthropic"])
@@ -82,6 +88,15 @@ def main(argv=None) -> int:
     execute.add_argument("--fixture-ready", action="store_true", help="Assert isolated fixture was prepared")
     execute.add_argument("--interactive-budget", action="store_true", help="Explicit manual run extension")
     args = parser.parse_args(argv)
+
+    if args.command == "new-project":
+        try:
+            destination = create_project(Path(args.projects_dir), args.slug, args.name)
+        except (ValueError, FileExistsError, FileNotFoundError) as exc:
+            parser.error(str(exc))
+        print(f"Blank project profile created: {destination}")
+        print("Configure its URL, scenario and isolated fixture before preflight or a live run.")
+        return 0
 
     if args.command == "session":
         save_session(args.url, Path(args.output))
@@ -100,7 +115,7 @@ def main(argv=None) -> int:
 
     if not args.fixture_ready:
         parser.error("Only an isolated seeded fixture is permitted; pass --fixture-ready after verification.")
-    scenario.software_version = args.ble_version
+    scenario.software_version = args.software_version
     if not args.no_analyst and not (args.analyst_provider and args.analyst_model):
         parser.error("Provide --analyst-provider and --analyst-model, or use --no-analyst for technical smoke")
     if args.storage_state and not Path(args.storage_state).is_file():

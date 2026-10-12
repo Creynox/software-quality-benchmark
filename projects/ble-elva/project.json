@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "project_id": "ble-elva",
+  "display_name": "ELVA / BLE – WPK Blackbox Benchmark",
+  "application": "BLE/ELVA",
+  "profile_status": "BLOCKED_EXTERNAL_FIXTURE_AND_API",
+  "execution_mode": "local_blackbox_ui",
+  "scenarios": [
+    "scenarios/sts-0-45-product.json"
+  ],
+  "fixtures": [
+    "fixtures/enzberg-sts-0-45-base-v1.json"
+  ],
+  "first_pilot": {
+    "site": "Enzberg",
+    "persona": "Laborleitung",
+    "product": "STS 0–45",
+    "norms": [
+      "TL SoB-StB 20",
+      "ETV-StB-BW"
+    ]
+  },
+  "source": "sqbf-project-profile",
+  "related_issues": [
+    "https://github.com/Creynox/software-quality-benchmark/issues/9",
+    "https://github.com/Creynox/software-quality-benchmark/issues/11"
+  ]
+}

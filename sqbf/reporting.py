@@ -44,14 +44,14 @@ class Evidence:
         )
         findings = review.get("findings", []) if review else []
         lines = [
-            "# BLE Blackbox Benchmark – Run Report", "",
+            "# Software Quality Blackbox Benchmark – Run Report", "",
             f"- Run ID: {manifest['run_id']}",
             f"- Szenario: {manifest['scenario_id']}",
             f"- Persona: {manifest['persona']}",
             f"- Executor: {manifest['executor_model']}",
             f"- Analyst: {manifest.get('analyst_model') or 'nicht ausgeführt'}",
             f"- Fixture: {manifest['fixture_id']}",
-            f"- BLE-Version: {manifest['software_version']}",
+            f"- Software-Version: {manifest['software_version']}",
             f"- Status: **{status}**",
             f"- Technischer Runner: **{manifest.get('technical_status', 'nicht bewertet')}**",
             f"- Fachliches Ergebnis: **{manifest.get('functional_status', 'nicht bewertet')}**",

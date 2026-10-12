@@ -49,6 +49,21 @@ See `research/README.md` for the research contract and sequencing.
 
 No benchmark score is considered authoritative until Foundation 1.0 has defined the measurement, scoring, gate and reproducibility contracts.
 
+## Framework structure and reusable project profiles
+
+- `sqbf/`: product-neutral runner, providers, action-policy, reporting and scaffold.
+- `projects/_template/`: **blank versioned project template**; no application URLs, valid user accounts, seed datasets or run artifacts.
+- `projects/ble-elva/`: project-specific profile, STS 0–45 scenario and external fixture contract.
+- `runs/` (ignored by Git): local generated screenshots, JSON evidence and reports.
+
+To create a new independent project in a clean directory, from the repository root:
+
+    python -m sqbf.cli new-project --slug example-app --name "Example application"
+
+This creates `projects/example-app/` only if it does not exist. Running the same command in separate fresh directories with equal inputs yields identical configuration files. It intentionally cannot pass preflight until you replace its configuration placeholders and set up an isolated fixture. See `docs/project-profiles.md`.
+
+All tests are **local-only** (Codex/PowerShell + Python unittest + Playwright); GitHub Actions is not used.
+
 ## BLE/ELVA executable MVP (implementation in review)
 
 A small Playwright and screenshot-vision runner now exists under sqbf/ and

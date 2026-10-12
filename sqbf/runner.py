@@ -34,7 +34,7 @@ Do not invent test outcomes. Prefer the shortest safe UI workflow.
 
 ANALYST_INSTRUCTIONS = """Review an external black-box UI test without re-running it.
 Use only the supplied screenshot and summarized event evidence. Evaluate
-whether the requested end state is visibly supported. Never invent BLE
+whether the requested end state is visibly supported. Never invent application
 database facts or hidden verification. A DONE agent signal is not proof.
 Output ONLY a JSON object:
 {"verdict":"PASS|FAIL|INCONCLUSIVE","reason":"specific evidence-based rationale",

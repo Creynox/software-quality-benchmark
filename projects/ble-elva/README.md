@@ -1,5 +1,15 @@
 # BLE/ELVA Blackbox Micro-Pilot V1
 
+Dieses Projekt ist ein **separates konfiguriertes Profil** des generischen SQBF.
+Der ausführbare SQBF-Kern enthält keine Enzberg-, Produkt-, WPK- oder Normlogik.
+
+- Profil: `projects/ble-elva/project.json`
+- Szenario: `scenarios/sts-0-45-product.json`
+- reproduzierbarer, noch **nicht bereitgestellter** Startzustand: `fixtures/enzberg-sts-0-45-base-v1.json`
+- allgemeine leere Vorlage: `projects/_template/` (niemals mit BLE-Dateien überschreiben)
+
+Das Fixture-Manifest beschreibt die Voraussetzungen, erstellt aber **keine** Datenbank und kein Testkonto. Die isolierte BLE-Instanz und der eigenständige Persistenz-Oracle aus Issue #11 müssen vor einem fachlichen GO tatsächlich bereitstehen.
+
 Erster Test: Als Laborleitung Produkt STS 0–45 in Enzberg anlegen, die vorbereiteten Regelwerke TL SoB-StB 20 und ETV-StB-BW verknüpfen, speichern und über die UI erneut öffnen.
 
 ## Reale Voraussetzungen – noch nicht automatisch vorbereitet
@@ -37,7 +47,7 @@ Session-Cookies sind vertraulich; .secrets und runs werden von Git ignoriert.
 In PowerShell den API-Schlüssel der gewählten Modellplattform als Umgebungsvariable setzen. Modell-IDs im folgenden Beispiel sind Platzhalter und müssen gegen tatsächlich verfügbare API-Modelle ersetzt werden.
 
     $env:ANTHROPIC_API_KEY = "API_KEY_NUR_LOKAL"
-    python -m sqbf.cli run --scenario projects/ble-elva/scenarios/sts-0-45-product.json --url http://127.0.0.1:5000/ --ble-version BLE_COMMIT_SHA --storage-state .secrets/ble-session.json --fixture-ready --executor-provider anthropic --executor-model VERIFIED_EXECUTOR_MODEL_ID --analyst-provider anthropic --analyst-model VERIFIED_ANALYST_MODEL_ID --interactive-budget
+    python -m sqbf.cli run --scenario projects/ble-elva/scenarios/sts-0-45-product.json --url http://127.0.0.1:5000/ --software-version BLE_COMMIT_SHA --storage-state .secrets/ble-session.json --fixture-ready --executor-provider anthropic --executor-model VERIFIED_EXECUTOR_MODEL_ID --analyst-provider anthropic --analyst-model VERIFIED_ANALYST_MODEL_ID --interactive-budget
 
 Alternativ OPENAI_API_KEY sowie `--executor-provider openai` bzw. `--analyst-provider openai` benutzen, wenn das gewählte visionfähige Modell die Responses API mit Bildeingaben unterstützt. Ein ChatGPT- oder Claude-Abonnement stellt nicht automatisch API-Zugang oder ein Ausgabenlimit bereit.
 

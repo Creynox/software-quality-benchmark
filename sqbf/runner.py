@@ -59,6 +59,11 @@ def apply_action(page, action: dict) -> None:
     elif operation == "key":
         page.keyboard.press(action["key"])
     elif operation == "scroll":
+        # Wheel events are delivered at the current pointer, not at keyboard
+        # focus. Honor the visible coordinates instead of leaving it over the
+        # last numeric input (which can change its value rather than scroll).
+        if action.get('x') is not None and action.get('y') is not None:
+            page.mouse.move(action['x'],action['y'])
         page.mouse.wheel(0, action.get("amount", 400))
     elif operation == "wait":
         page.wait_for_timeout(round(float(action.get("seconds", 1)) * 1000))

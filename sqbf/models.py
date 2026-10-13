@@ -107,6 +107,10 @@ def validate_action(data: dict, width: int, height: int) -> dict:
     if action == "key" and data.get("key") not in SAFE_KEYS:
         raise ActionValidationError("KEY_NOT_ALLOWED")
     if action == "scroll":
+        if 'x' in data or 'y' in data:
+            x,y=data.get('x'),data.get('y')
+            if not all(type(v) in (int,float) for v in (x,y)) or not (0<=x<width and 0<=y<height):
+                raise ActionValidationError('SCROLL_COORDINATES_INVALID')
         amount = data.get("amount", 400)
         if not isinstance(amount, (float, int)) or abs(amount) > 1400:
             raise ActionValidationError("SCROLL_OUT_OF_BOUNDS")

@@ -6,6 +6,8 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from .artifact_privacy import check_private_directory, create_private_file
+from uuid import uuid4
 
 
 def now_iso() -> str:
@@ -16,8 +18,16 @@ class Evidence:
     def __init__(self, path: Path):
         self.path = path
         self.path.mkdir(parents=True, exist_ok=False)
+        check_private_directory(self.path, protect=True)
         self.events: list[dict] = []
         self.images: list[dict] = []
+
+    @classmethod
+    def attach(cls, path):
+        check_private_directory(path)
+        evidence = cls.__new__(cls)
+        evidence.path, evidence.events, evidence.images = Path(path), [], []
+        return evidence
 
     def event(self, kind: str, **values) -> None:
         self.events.append({"time": now_iso(), "kind": kind, **values})
@@ -57,8 +67,8 @@ class Evidence:
             f"- Fachliches Ergebnis: **{manifest.get('functional_status', 'nicht bewertet')}**",
             f"- KI-UX-Bewertung: **{(review or {}).get('verdict','nicht bewertet')}**",
             f"- Executor-Endstatus: {manifest['executor_status']}",
-            f"- Modellwartezeit: {manifest.get('model_wait_seconds', 0):.1f} Sekunden",
-            f"- Aktive Runnerzeit (ohne Modellwartezeit): {manifest.get('active_seconds_excluding_model_wait', manifest['wall_seconds']):.1f} Sekunden",
+            f"- Modellwartezeit: {format_duration(manifest.get('model_wait_seconds'))}",
+            f"- Aktive Runnerzeit (ohne Modellwartezeit): {format_duration(manifest.get('active_seconds_excluding_model_wait'))}",
             (f"- Unabhängiger No-Write-Oracle: **{manifest['oracle']['status']}**"
              if "oracle" in manifest else "- Fachlicher PASS: **nicht bestätigt** (kein unabhängiger Persistenz-Oracle im MVP)"),
             f"- UI-Aktionen: {manifest['actions']} / {manifest['budget_actions']}",
@@ -83,6 +93,10 @@ class Evidence:
         (self.path / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def format_duration(value):
+    return "nicht gemessen" if value is None else f"{value:.1f} Sekunden"
+
+
 def index_run(output_root: Path, folder: Path) -> None:
     """Local JSON-lines registry, rebuilt from immutable run manifests."""
     rows=[]
@@ -94,6 +108,7 @@ def index_run(output_root: Path, folder: Path) -> None:
                      "reviewer":run.get("analyst_model"),"result":run["verdict"],
                      "scores":run.get("review",{}).get("scores",{}),
                      "findings":run.get("review",{}).get("findings",[]),"path":str(path.parent.resolve())})
-    temporary=output_root/"index.tmp"
+    temporary=output_root/f".index-{uuid4()}.tmp"
+    create_private_file(temporary)
     temporary.write_text("\n".join(json.dumps(row,ensure_ascii=False) for row in rows)+"\n",encoding="utf-8")
     temporary.replace(output_root/"index.jsonl")

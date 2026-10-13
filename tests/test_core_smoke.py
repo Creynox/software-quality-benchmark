@@ -190,8 +190,10 @@ class CoreSmokeTests(unittest.TestCase):
                     patch("playwright.sync_api.sync_playwright",return_value=playwright), \
                     patch("sqbf.smoke_runner.ask_bounded",side_effect=ask) as calls, \
                     patch("sqbf.smoke_runner.observation",return_value={"query_visible":False,"empty_visible":True}):
+                folder=Path(directory)/'pilot'
+                Evidence(folder)
                 payload={"scenario":asdict(scenario),"executor":model_spec(self.model()),"reviewer":model_spec(self.model()),
-                         "seconds":5,"folder":directory,"storage_state":"test-session","headed":False}
+                         "seconds":5,"folder":str(folder),"storage_state":"test-session","headed":False}
                 if invalid:
                     result=browser_pilot(payload)
                     self.assertEqual(result["executor_status"],"BLOCKED_READ_ONLY")

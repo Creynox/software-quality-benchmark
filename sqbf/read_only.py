@@ -1,6 +1,7 @@
 """Controller-only semantic action gate; no DOM information reaches the agent."""
 from urllib.parse import urlsplit
 import json
+from .models import SEARCH_KEYS
 
 
 class ReadOnlyViolation(RuntimeError):
@@ -31,7 +32,7 @@ def allow_operation(action, target, focused_search, policy):
         return
     if kind == "type" and focused_search and action.get("text") == policy["query"]:
         return
-    if kind == "key" and focused_search and action.get("key") in {"ControlOrMeta+A", "Backspace", "Delete", "Enter"}:
+    if kind == "key" and focused_search and action.get("key") in SEARCH_KEYS:
         return
     raise ReadOnlyViolation("Action target or input is outside the approved read-only contract")
 

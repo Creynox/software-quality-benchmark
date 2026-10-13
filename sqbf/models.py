@@ -14,6 +14,13 @@ SAFE_KEYS = {
     "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End",
     "ControlOrMeta+A", "Space",
 }
+SEARCH_KEYS = ("ControlOrMeta+A", "Backspace", "Delete", "Enter")
+
+
+class ActionValidationError(ValueError):
+    def __init__(self, code):
+        self.code = code
+        super().__init__(code)
 
 
 @dataclass
@@ -85,27 +92,27 @@ def parse_json_object(raw: str) -> dict:
 def validate_action(data: dict, width: int, height: int) -> dict:
     action = data.get("action")
     if action not in ALLOWED_ACTIONS:
-        raise ValueError(f"Disallowed action: {action!r}")
+        raise ActionValidationError("ACTION_NOT_ALLOWED")
     if action == "click":
         x, y = data.get("x"), data.get("y")
         if not isinstance(x, (float, int)) or not isinstance(y, (float, int)):
-            raise ValueError("click requires numeric x/y")
+            raise ActionValidationError("CLICK_COORDINATES_INVALID")
         if not (0 <= x < width and 0 <= y < height):
-            raise ValueError("click coordinates outside screenshot")
+            raise ActionValidationError("CLICK_OUTSIDE_VIEWPORT")
     if action == "type":
         value = data.get("text")
         if not isinstance(value, str) or len(value) > 500:
-            raise ValueError("type requires <=500 characters")
+            raise ActionValidationError("TYPE_TEXT_INVALID")
     if action == "key" and data.get("key") not in SAFE_KEYS:
-        raise ValueError("Unsupported keyboard shortcut")
+        raise ActionValidationError("KEY_NOT_ALLOWED")
     if action == "scroll":
         amount = data.get("amount", 400)
         if not isinstance(amount, (float, int)) or abs(amount) > 1400:
-            raise ValueError("scroll amount out of bounds")
+            raise ActionValidationError("SCROLL_OUT_OF_BOUNDS")
     if action == "wait":
         seconds = data.get("seconds", 1)
         if not isinstance(seconds, (int, float)) or not 0 <= seconds <= 2:
-            raise ValueError("wait must be between 0 and 2 seconds")
+            raise ActionValidationError("WAIT_OUT_OF_BOUNDS")
     return data
 
 

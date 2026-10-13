@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from .bounded import Budget, BudgetExceeded, ask_bounded, invoke_worker, model_spec, restore_model
-from .models import Scenario, safe_action_log, validate_action
+from .models import Scenario, safe_action_log, validate_action, ActionValidationError, ALLOWED_ACTIONS, SAFE_KEYS, SEARCH_KEYS
 from .no_write_oracle import compare, snapshot
 from .read_only import event_guard, validate_policy, ReadOnlyViolation, check_action, observation, request_allowed
 from .reporting import Evidence, index_run
@@ -23,7 +23,7 @@ def object_schema(properties):
 ACTION_SCHEMA = object_schema({
     "action": {"type": "string", "enum": ["click", "type", "key", "scroll", "wait", "done", "blocked"]},
     "x": {"type": ["number", "null"]}, "y": {"type": ["number", "null"]},
-    "text": {"type": ["string", "null"]}, "key": {"type": ["string", "null"]},
+    "text": {"type": ["string", "null"]}, "key": {"type": ["string", "null"], "enum": [None, *SEARCH_KEYS]},
     "amount": {"type": ["number", "null"]}, "seconds": {"type": ["number", "null"]},
     "reason": {"type": "string"},
 })
@@ -41,7 +41,7 @@ DB, shell, tools, passwords, hidden URLs or browser shortcuts. This task permits
 only the requested read-only navigation and search/filter operations. Never
 create, edit, save, delete or change a record. If the task cannot be completed,
 return blocked. Report done only after performing every requested step.
-"""
+""" + "For key actions use exactly one of: " + ", ".join(SEARCH_KEYS) + ". No aliases or compound shortcuts.\n"
 REVIEW_INSTRUCTIONS = """Independently review this read-only user workflow using only the
 selected screenshots (initial, search evidence when available, final) and visible
 action history and timings. No DB facts are provided. Judge whether navigation,
@@ -53,6 +53,14 @@ No tools, URLs, code or hidden state. Return only the strict JSON object.
 """
 
 
+def decision_metadata(action):
+    """Only fixed protocol identifiers; no reason, typed text or arbitrary keys."""
+    kind = action.get("action")
+    key = action.get("key")
+    return {"action": kind if isinstance(kind,str) and kind in ALLOWED_ACTIONS else "REDACTED",
+            "key": key if isinstance(key,str) and key in SAFE_KEYS else (None if key is None else "REDACTED")}
+
+
 def browser_pilot(payload):
     from playwright.sync_api import sync_playwright
     from .runner import apply_action
@@ -60,12 +68,25 @@ def browser_pilot(payload):
     scenario = Scenario(**payload["scenario"])
     executor, reviewer = restore_model(payload["executor"]), restore_model(payload["reviewer"])
     budget = Budget(payload["seconds"], scenario.max_model_calls)
-    evidence = Evidence.__new__(Evidence)
-    evidence.path, evidence.events, evidence.images = Path(payload["folder"]), [], []
+    evidence = Evidence.attach(payload["folder"])
     started = time.monotonic()
     actions, observations, usage, images = [], [], [], []
     status, review = "INCOMPLETE", None
     last = b""
+    model_wait = 0.0
+    def ask(model, prompt, screenshots, stage):
+        nonlocal model_wait
+        evidence.event("model_call_started", stage=stage)
+        call_started = time.monotonic()
+        try:
+            return ask_bounded(model, prompt, screenshots, budget)
+        finally:
+            elapsed = time.monotonic() - call_started
+            model_wait += elapsed
+            evidence.event("model_call_finished", stage=stage, duration_seconds=round(elapsed,6))
+
+    def timings():
+        return {"model_wait_seconds": round(model_wait,6), "timing_complete": True}
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=not payload["headed"], timeout=min(15000, budget.remaining()*1000))
         try:
@@ -102,12 +123,19 @@ def browser_pilot(payload):
                 # Reserve one model call and up to 30 seconds for the reviewer.
                 if budget.calls >= budget.limit - 1:
                     raise BudgetExceeded("Executor model call budget exhausted")
-                result = ask_bounded(executor, INSTRUCTIONS + "\nTASK:\n" + scenario.task +
-                         "\nPREVIOUS VISIBLE ACTIONS:\n" + json.dumps(actions,ensure_ascii=False), last, budget)
+                result = ask(executor, INSTRUCTIONS + "\nTASK:\n" + scenario.task +
+                         "\nPREVIOUS VISIBLE ACTIONS:\n" + json.dumps(actions,ensure_ascii=False), last, "executor")
                 usage.append({"stage": "executor", "usage": result.usage})
                 action = {k: v for k, v in result.data.items() if v is not None}
-                validate_action(action,1280,800)
-                check_action(page,action,scenario.read_only_policy)
+                metadata=decision_metadata(action)
+                evidence.event("action_received", turn=turn+1, **metadata)
+                try:
+                    validate_action(action,1280,800)
+                    check_action(page,action,scenario.read_only_policy)
+                except (ActionValidationError, ReadOnlyViolation) as error:
+                    code=error.code if isinstance(error,ActionValidationError) else "ACTION_SCOPE_DENIED"
+                    evidence.event("action_rejected",turn=turn+1,error_code=code,**metadata)
+                    raise
                 evidence.event("agent_decision",**safe_action_log(action))
                 if action["action"] in {"done","blocked"}:
                     status = action["action"].upper()
@@ -126,10 +154,10 @@ def browser_pilot(payload):
             if last:
                 selection.append(last)
             if selection and budget.remaining() > 1:
-                result = ask_bounded(reviewer, REVIEW_INSTRUCTIONS + "\n" + json.dumps({
+                result = ask(reviewer, REVIEW_INSTRUCTIONS + "\n" + json.dumps({
                     "task": scenario.task, "actions": actions, "executor_observation": result.data.get("reason","")
                     if usage else "no completed observation", "wall_seconds": round(time.monotonic()-started,2)},
-                    ensure_ascii=False),selection[:3],budget)
+                    ensure_ascii=False),selection[:3],"reviewer")
                 review=result.data
                 if any(not 0 <= score <= 5 for score in review["scores"].values()):
                     raise ValueError("Reviewer scores outside rubric")
@@ -137,16 +165,19 @@ def browser_pilot(payload):
             return {"executor_status":status,"actions":len(actions),"model_calls":budget.calls,
                     "observations":observations,"review":review,"usage":usage,
                     "events":evidence.events,"images":evidence.images,
-                    "wall_seconds":round(time.monotonic()-started,2)}
+                    "wall_seconds":round(time.monotonic()-started,2),**timings()}
         except Exception as error:
             status=("BLOCKED_READ_ONLY" if isinstance(error,ReadOnlyViolation) else
                     "BLOCKED_TIMEOUT" if isinstance(error,BudgetExceeded) else "ERROR")
-            evidence.event("stopped_fail_closed",error=type(error).__name__)
+            error_code=(error.code if isinstance(error,ActionValidationError) else
+                        "ACTION_SCOPE_DENIED" if isinstance(error,ReadOnlyViolation) else
+                        "BUDGET_EXCEEDED" if isinstance(error,BudgetExceeded) else "WORKER_FAILURE")
+            evidence.event("stopped_fail_closed",error_code=error_code)
             return {"executor_status":status,"actions":len(actions),"model_calls":budget.calls,
                     "observations":observations,"review":review,"usage":usage,
                     "usage_unavailable_calls":budget.calls-len(usage),
                     "events":evidence.events,"images":evidence.images,
-                    "wall_seconds":round(time.monotonic()-started,2)}
+                    "wall_seconds":round(time.monotonic()-started,2),**timings()}
         finally:
             browser.close()
 
@@ -219,6 +250,15 @@ def run_smoke(scenario,executor,reviewer,output_root,storage_state,headed,fixtur
                     technical_status=technical,functional_status=oracle["status"],oracle=oracle,
                     wall_seconds=round(time.monotonic()-started,2),completion_status=verdict,
                     finished_at=datetime.now(timezone.utc).isoformat())
+    if result.get("timing_complete"):
+        manifest["active_seconds_excluding_model_wait"]=round(max(0,manifest["wall_seconds"]-result["model_wait_seconds"]),6)
+    else:
+        # Hard termination may interrupt an in-flight call. Completed event
+        # durations are only a lower bound, never a claimed zero/full duration.
+        manifest["model_wait_seconds"]=None
+        manifest["active_seconds_excluding_model_wait"]=None
+        manifest["timing_complete"]=False
+        manifest["measured_model_wait_seconds"]=sum(e.get("duration_seconds",0) for e in evidence.events if e["kind"]=="model_call_finished")
     (folder/"oracle.json").write_text(json.dumps(oracle,indent=2),encoding="utf-8")
     (folder/"scores.json").write_text(json.dumps((review or {}).get("scores",{}),indent=2),encoding="utf-8")
     (folder/"findings.json").write_text(json.dumps((review or {}).get("findings",[]),ensure_ascii=False,indent=2),encoding="utf-8")

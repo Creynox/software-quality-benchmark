@@ -49,6 +49,42 @@ def provider():
 
 
 class ChatGPTPlanProviderTests(unittest.TestCase):
+    def test_schema_constraints_cannot_be_silently_ignored_or_mutated(self):
+        schema = json.loads(json.dumps(ACTION_SCHEMA))
+        schema["properties"]["reason"]["maxLength"] = 3
+        with self.assertRaisesRegex(ValueError, "cannot be ignored"):
+            ChatGPTPlanModel("model", provider().credential, schema)
+        schema = json.loads(json.dumps(ACTION_SCHEMA))
+        model = ChatGPTPlanModel("model", provider().credential, schema)
+        schema["properties"]["action"]["enum"].append("run_shell")
+        self.assertNotIn("run_shell", model.response_schema["properties"]["action"]["enum"])
+
+    def test_rejects_duplicate_fields_and_nonfinite_numbers(self):
+        for output in ['{"action":"blocked","action":"done","reason":"ok"}',
+                       '{"action":"done","reason":NaN}']:
+            body = sse({"type": "response.output_text.delta", "delta": output},
+                       {"type": "response.completed", "response": {}})
+            with patch("urllib.request.urlopen", return_value=FakeStream(body)), \
+                    self.assertRaisesRegex(ValueError, "not valid JSON"):
+                provider().ask("task", b"png")
+
+    def test_rejects_tools_only_present_in_terminal_response(self):
+        for kind in ["custom_tool_call", "local_shell_call", "mcp_call", "new_unknown_tool"]:
+            with self.subTest(kind=kind):
+                body = sse({"type": "response.output_text.delta", "delta": '{"action":"done","reason":"ok"}'},
+                           {"type": "response.completed", "response": {"output": [{"type": kind}]}})
+                with patch("urllib.request.urlopen", return_value=FakeStream(body)), \
+                        self.assertRaisesRegex(RuntimeError, "tool call"):
+                    provider().ask("task", b"png")
+
+    def test_refusals_and_malformed_stream_fail_without_payload_leaks(self):
+        for event in [{"type": "response.refusal.delta", "delta": "secret-canary"},
+                      {"type": "response.output_item.done", "item": []}, ["secret-canary"]]:
+            with patch("urllib.request.urlopen", return_value=FakeStream(sse(event))), \
+                    self.assertRaises(RuntimeError) as caught:
+                provider().ask("task", b"png")
+            self.assertNotIn("secret-canary", str(caught.exception))
+
     def test_sends_image_json_schema_and_no_tools_then_validates_response(self):
         output = json.dumps({"action": "done", "reason": "visible target found"})
         body = sse(

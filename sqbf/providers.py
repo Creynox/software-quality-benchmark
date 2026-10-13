@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import base64
+import copy
 import json
+import math
 import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -19,6 +22,43 @@ class ModelResponse:
 
 
 CHATGPT_PLAN_SCOPE = "chatgpt.tokens.use.direct"
+
+
+def _strict_json(text: str):
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError("Duplicate JSON field")
+            result[key] = value
+        return result
+
+    def constant(_):
+        raise ValueError("Non-finite JSON number")
+
+    def number(text):
+        value = float(text)
+        if not math.isfinite(value):
+            raise ValueError("Non-finite JSON number")
+        return value
+
+    return json.loads(text, object_pairs_hook=pairs, parse_constant=constant, parse_float=number)
+
+
+def _check_output_item(item: dict) -> None:
+    if not isinstance(item, dict):
+        raise RuntimeError("Malformed ChatGPT plan output item")
+    if item.get("type") not in {"message", "reasoning"}:
+        raise RuntimeError("ChatGPT plan response attempted a tool call or unsupported output")
+    if item.get("type") == "message":
+        if item.get("role") != "assistant":
+            raise RuntimeError("Unexpected ChatGPT plan message role")
+        content = item.get("content", [])
+        if not isinstance(content, list) or any(
+            not isinstance(block, dict) or block.get("type") != "output_text"
+            for block in content
+        ):
+            raise RuntimeError("ChatGPT plan response contained non-text output or refusal")
 
 
 @dataclass(frozen=True)
@@ -76,7 +116,18 @@ def _validate_schema_value(value, schema: dict, path: str = "$", *, strict: bool
 
 def _validate_strict_schema_contract(schema: dict) -> None:
     """Reject schemas that do not meet the strict structured-output contract."""
+    if not isinstance(schema, dict):
+        raise ValueError("Response schema nodes must be objects")
     kind = schema.get("type")
+    allowed = {"type", "enum", "description", "title"}
+    if kind == "object":
+        allowed |= {"properties", "required", "additionalProperties"}
+    elif kind == "array":
+        allowed.add("items")
+    if set(schema) - allowed:
+        raise ValueError("Unsupported response schema keyword; constraints cannot be ignored")
+    if "enum" in schema and (not isinstance(schema["enum"], list) or not schema["enum"]):
+        raise ValueError("Response schema enum must be a nonempty list")
     if isinstance(kind, list):
         if not kind or not all(
             isinstance(item, str) and item in ("string", "number", "integer", "boolean", "null")
@@ -89,7 +140,8 @@ def _validate_strict_schema_contract(schema: dict) -> None:
         required = schema.get("required")
         if not isinstance(properties, dict) or schema.get("additionalProperties") is not False:
             raise ValueError("Strict object schemas require properties and additionalProperties=false")
-        if not isinstance(required, list) or set(required) != set(properties):
+        if (not isinstance(required, list) or not all(isinstance(k, str) for k in required)
+                or len(required) != len(set(required)) or set(required) != set(properties)):
             raise ValueError("Strict object schemas must require every property")
         for child in properties.values():
             _validate_strict_schema_contract(child)
@@ -126,13 +178,13 @@ class ChatGPTPlanModel:
         if not isinstance(response_schema, dict) or response_schema.get("type") != "object":
             raise ValueError("A strict object response schema is required")
         _validate_strict_schema_contract(response_schema)
-        if not schema_name or len(schema_name) > 64:
-            raise ValueError("Schema name must be 1 to 64 characters")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", schema_name):
+            raise ValueError("Schema name must be 1 to 64 letters, digits, underscores or hyphens")
         if timeout <= 0 or max_response_chars <= 0:
             raise ValueError("Request timeout and response limit must be positive")
         self.model = model
         self.credential = credential
-        self.response_schema = response_schema
+        self.response_schema = copy.deepcopy(response_schema)
         self.schema_name = schema_name
         self.timeout = timeout
         self.max_response_chars = max_response_chars
@@ -179,17 +231,24 @@ class ChatGPTPlanModel:
                     content = line[5:].strip()
                     if content == "[DONE]":
                         break
-                    event = json.loads(content)
+                    try:
+                        event = _strict_json(content)
+                    except (ValueError, TypeError):
+                        raise RuntimeError("Malformed ChatGPT plan stream JSON") from None
+                    if not isinstance(event, dict) or not isinstance(event.get("type"), str):
+                        raise RuntimeError("Malformed ChatGPT plan stream event")
                     event_type = event.get("type", "")
-                    item_type = (event.get("item") or {}).get("type", "")
                     tool_markers = (
                         "function_call", "computer_call", "web_search_call",
-                        "code_interpreter", "mcp_call",
+                        "code_interpreter", "mcp_", "custom_tool_call", "shell_call",
+                        "file_search_call", "image_generation_call", "tool_search_call",
                     )
-                    if any(marker in event_type for marker in tool_markers) or any(
-                        marker in item_type for marker in tool_markers
-                    ):
+                    if any(marker in event_type for marker in tool_markers):
                         raise RuntimeError("ChatGPT plan response attempted a tool call")
+                    if event_type in {"response.output_item.added", "response.output_item.done"}:
+                        _check_output_item(event.get("item"))
+                    if "refusal" in event_type or event_type == "error":
+                        raise RuntimeError("ChatGPT plan response refused or reported an error")
                     if event_type == "response.output_text.delta":
                         delta = event.get("delta", "")
                         if not isinstance(delta, str) or response_chars + len(delta) > self.max_response_chars:
@@ -210,8 +269,14 @@ class ChatGPTPlanModel:
                     elif event_type == "response.incomplete":
                         raise RuntimeError("ChatGPT plan response was incomplete")
                     elif event_type == "response.completed":
-                        usage = (event.get("response", {}).get("usage") or {})
+                        result = event.get("response")
+                        if not isinstance(result, dict):
+                            raise RuntimeError("Malformed ChatGPT plan completed response")
+                        for item in result.get("output", []):
+                            _check_output_item(item)
+                        usage = result.get("usage") or {}
                         completed = True
+                        break
         except urllib.error.HTTPError as exc:
             raise RuntimeError(f"ChatGPT plan request failed with HTTP {exc.code}") from None
         except (urllib.error.URLError, TimeoutError, OSError):
@@ -219,8 +284,8 @@ class ChatGPTPlanModel:
         if not completed:
             raise RuntimeError("ChatGPT plan stream ended without response.completed")
         try:
-            data = json.loads("".join(chunks))
-        except json.JSONDecodeError:
+            data = _strict_json("".join(chunks))
+        except (ValueError, TypeError):
             raise ValueError("ChatGPT plan response was not valid JSON") from None
         if not isinstance(data, dict):
             raise ValueError("ChatGPT plan response must be a JSON object")

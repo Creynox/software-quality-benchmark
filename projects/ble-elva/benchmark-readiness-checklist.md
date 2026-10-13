@@ -1,6 +1,6 @@
 # BLE/ELVA – Benchmark-V1-Readiness und Arbeitscheckliste
 
-**Stichtag:** 12.10.2026 · **Scope:** zuerst Workflow Produkt → Probenahmeplan → Probe → Messung → Bewertung → Freigabe/Bericht. **Keine Neuanlage von Normen** und keine vollständige Norminventur als Voraussetzung. Die Normenhistorie und korrekte Bewertungsgrundlagen bleiben Datenintegritätsgrenzen.
+**Stichtag:** 13.10.2026 · **Scope:** zuerst Workflow Produkt → Probenahmeplan → Probe → Messung → Bewertung → Freigabe/Bericht. **Keine Neuanlage von Normen** und keine vollständige Norminventur als Voraussetzung. Die Normenhistorie und korrekte Bewertungsgrundlagen bleiben Datenintegritätsgrenzen.
 
 ## Legende
 
@@ -18,25 +18,26 @@
 | BLE/ELVA-Profil und historisches Normen-Szenario | [x] | `projects/ble-elva`; normatives v0.1 zurückgestellt |
 | Zwei echte SharePoint-Fachreferenzen übernommen | [x] | `projects/ble-elva/references`; originalgetreuer Vergleich belegt |
 | Python 3.13, Playwright, Chromium installiert | [t] | Codex-Protokoll vom 12.10.2026 (lokaler PC) |
-| 15 lokale Unit-/Mock-/Chromiumtests, Scenario-Preflight | [t] | Codex-Vorlauf, **nicht** neuer Branch |
-| BLE `127.0.0.1:5059` + eigene DB `55432`, 77 Migrationen, Testkonto | [t] | Codex-Vorlauf; momentane Erreichbarkeit erneut prüfen |
+| 29 lokale Unit-/Mock-/Chromiumtests, Scenario-Preflight | [x] | Branch `b1ea29b` + lokale LAB-01-Änderungen; 29/29, Exit 0 am 13.10.2026 |
+| BLE `127.0.0.1:5080` + isolierte DB `55432`, 77 Migrationen, Testkonto | [x] | Fixture-Container/Volume/DB-Identität und Enzberg live verifiziert; 5433 und 5059 unverändert |
 | Echte BLE-Anbindung ohne Modellaufruf: 3 Screenshots | [t] | No-cost Mock-Smoke; 0 UI-Aktionen; fachlich INCONCLUSIVE |
-| Neuer read-only `doctor` prüft BLE-Health und Chromium | [x] | `sqbf/doctor.py`, `tests/test_doctor.py`; lokaler Nachtest offen |
-| Normenfreie Prozessbaseline STS 0-45 | [x] | `scenarios/sts-0-45-product-core-v0.2.json`, nur Szenario, kein Live-Test |
-| Offenbleibender Fixture-Vertrag für diese Baseline | [x] | `fixtures/enzberg-product-core-v0.2.json`, `status=NOT_PROVISIONED` |
+| Neuer read-only `doctor` prüft BLE-Health und Chromium | [x] | lokaler Nachtest: BLE 200, Chromium READY, `TECHNICAL_SMOKE_READY` |
+| Normenfreie Prozessbaseline STS 0-45 | [x] | `scenarios/sts-0-45-product-core-v0.2.json`, URL 5080; 25 Minuten/150 Aktionen; noch kein Produktlauf |
+| Isolierte Fixture und Laborleitungs-Session | [x] | `READY_FOR_UI_PROCESS_PILOT`; Enzberg gewählt, Formularroute nach Session-Restore erreichbar; noch keine Speicherung |
+| Read-only Oracle, LAB-01 Baseline | [x] | `sqbf_oracle_ro`, vor/nachgelagerte Assertions; Live-Baseline dokumentiert: 0 Produkte/Proben/LIMS-Proben/Berichte/Normzuordnungen, 15 Normen/Versionen |
 
 ## B. In Reihenfolge abzuarbeiten
 
 | ID | Status | Pflichtarbeit | Abschlussnachweis |
 |---|---|---|---|
-| A1 | [ ] | Den neuen Branch in einem sicheren Worktree lokal prüfen; Unit-/Browser- und Scaffoldtests wiederholen (#12/#13) | Tatsächliche Befehle, Version, Exit-Code, 0 unerklärte Fehler |
-| A2 | [ ] | Read-only `python -m sqbf.cli doctor --url http://127.0.0.1:5059/` ausführen | Health/Chromium/Abo-CLI/Session-/Fixture-Gaps als JSON |
-| A3 | [ ] | Isolierte **minimale** Werk-/Labor-/Auftraggeber-Stammdaten und Laborleitungsrechte erstellen/prüfen; ohne neue Normen | DB-/Scope-Identität, definierter Ausgangszustand und keine Produkte |
-| A4 | [ ] | Sicheren Fixture-Setup/Reset implementieren und nur gegen eindeutig isolierte DB testen (#11) | Mehrfachlauf identisch, 5433 und bestehender Checkout unberührt |
-| A5 | [ ] | Unabhängigen read-only Produkt-Persistenz-Oracle außerhalb des UI-Agents implementieren (#11) | Produkt-/Werkbezug und gespeicherte Pflichtdaten unabhängig bestätigt |
+| A1 | [x] | Branch im separaten Worktree synchronisiert und Unit-/Browser-/Scaffold-/Oracletests lokal ausgeführt | 29 Tests, Exit 0; `preflight` Exit 0; kein kostenpflichtiger Provider |
+| A2 | [x] | Read-only Doctor auf `http://127.0.0.1:5080/` | Health HTTP 200, Chromium READY; technische Bereitschaft, kein KI-Benchmark |
+| A3 | [x] | Isolierte Werk-/Testkonto-/Laborleitungs-Scope-Daten geprüft | Zielcontainer/DB/Volume, Enzberg und aktiver STS-Klassifikator bestätigt; keine Produkt-/Proben-/Berichtzeilen |
+| A4 | [x] | Vorhandene additive Fixture-Provisionierung/Prüfung bestätigt | separater loopback Container/Volume, 5433 nicht verwendet; kein Reset in diesem Arbeitsschritt |
+| A5 | [x] | Read-only Produkt-Persistenz-Oracle außerhalb des UI-Agents implementiert und getestet | Baseline live bestanden; nachgelagerter Produkt-PASS bleibt bis späterer Anlage offen |
 | A6 | [ ] | Codex-CLI/Claude-Code-Abologin, Vision-Screenshot-Eingabe und Modellverfügbarkeit lokal verifizieren (#14) | Nur Abo-Kontingent, keine PAYG-/API-Keys; echte Tool-/Dateiisolation nachweisen |
 | A7 | [ ] | Einziger **sicherer** Agenten-Schritt Screenshot → JSON-Aktion → Playwright testen (#14) | 1 bestätigte Aktion, keine unerlaubten Tools/Dateisicht, kontrollierte Limits |
-| B1 | [ ] | **LAB-01** Produkt STS 0-45 ohne Normenneuanlage speichern und erneut öffnen (#11) | UI-Evidence plus unabhängiger Oracle; kein LLM-Selbstergebnis als PASS |
+| B1 | [ ] | **LAB-01** Produkt STS 0-45 ohne Normenneuanlage speichern und erneut öffnen (#11); derzeit ausdrücklich nicht ausgeführt | UI-Evidence plus unabhängiger Oracle; kein LLM-Selbstergebnis als PASS |
 | B2 | [ ] | LAB-02 Probenahmeplan als eigene Scenario-/Fixture-Datei umsetzen | Befüllter Plan mit Produkt/Rotation, Wiederaufruf und Oracle |
 | B3 | [ ] | LAB-03 Probenerzeugung und Probenbezug | Plan-/Probe-ID getrennt und nachgewiesen |
 | B4 | [ ] | LAB-04 Messdatenerfassung, später Batch-Szenarien | Prüfmodulwerte je Probe/Teilprobe nachvollziehbar |

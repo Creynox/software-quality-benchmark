@@ -37,7 +37,7 @@ def check_fixture(path: Path) -> dict:
         return {"status": "BLOCKED", "reason": type(exc).__name__}
     # Metadata assertions are NOT evidence that a real isolated fixture exists.
     declared = data.get("status")
-    if declared == "READY":
+    if declared in {"READY", "READY_FOR_UI_PROCESS_PILOT"}:
         status = "DECLARED_READY"
     elif declared == "PROVISIONED_UI_VERIFIED_PRODUCT_NOT_CREATED":
         status = "PROVISIONED_SCENARIO_BLOCKED"
@@ -86,7 +86,7 @@ def readiness(url: str, fixture: Path, storage_state: Path) -> dict:
     elif fixture_result["status"] == "PROVISIONED_SCENARIO_BLOCKED":
         pending.append("Verify sanctioned STS product references and persistable UI workflow")
     pending.append("Verify subscription-based vision agent and tool isolation (#14)")
-    pending.append("Implement independent persisted-result oracle (#11)")
+    pending.append("Run the independent before/after persistence oracle from the dedicated read-only environment")
     return {
         "status": "TECHNICAL_SMOKE_READY" if basic_ready else "BLOCKED",
         "live_ai_benchmark_ready": False,

@@ -4,18 +4,19 @@ Dieses Projekt ist ein **separates konfiguriertes Profil** des generischen SQBF.
 Der ausführbare SQBF-Kern enthält keine Enzberg-, Produkt-, WPK- oder Normlogik.
 
 - Profil: `projects/ble-elva/project.json`
-- Szenario: `scenarios/sts-0-45-product.json`
-- reproduzierbarer, noch **nicht bereitgestellter** Startzustand: `fixtures/enzberg-sts-0-45-base-v1.json`
+- aktive Prozessbaseline: `scenarios/sts-0-45-product-core-v0.2.json`
+- historisches, zurückgestelltes Normenszenario: `scenarios/sts-0-45-product.json`
+- isolierter Startzustand für LAB-01: `fixtures/enzberg-product-core-v0.2.json`
 - allgemeine leere Vorlage: `projects/_template/` (niemals mit BLE-Dateien überschreiben)
 
 Das Fixture-Manifest beschreibt die Voraussetzungen, erstellt aber **keine** Datenbank und kein Testkonto. Die isolierte BLE-Instanz und der eigenständige Persistenz-Oracle aus Issue #11 müssen vor einem fachlichen GO tatsächlich bereitstehen.
 
-Erster Test: Als Laborleitung Produkt STS 0–45 in Enzberg anlegen, die vorbereiteten Regelwerke TL SoB-StB 20 und ETV-StB-BW verknüpfen, speichern und über die UI erneut öffnen.
+Aktiver Ersttest: Als Laborleitung STS 0–45 dem isolierten Werk Enzberg zuordnen, speichern und über die UI erneut öffnen. Die Produkt-Speicherlogik benötigt keine Normedition; das alte normative v0.1-Szenario bleibt separat erhalten.
 
 ## Reale Voraussetzungen – noch nicht automatisch vorbereitet
 
 - Lokale, ausschließlich für diesen Benchmark bestimmte BLE-Instanz samt isolierter Testdatenbank. Keine produktiven oder fremden Entwicklungsdaten verändern.
-- Zurücksetzbarer Startzustand mit Laborleitungs-Testkonto und beiden vorhandenen Regelwerken. Das Produkt STS 0–45 darf vor dem Lauf noch nicht existieren.
+- Isolierter Startzustand mit Laborleitungs-Testkonto und passendem Werk-Scope. Das Produkt STS 0–45 darf vor dem Lauf noch nicht existieren. Fachdaten für Materialbasis/-herkunft müssen belegbar sein.
 - Verifizierte BLE-URL und Softwareversion.
 - Tatsächlich verfügbare visionfähige API-Modell-IDs und entsprechende API-Schlüssel. ChatGPT Plus oder ein Claude-Abo ist kein automatisches API-Guthaben.
 
@@ -101,10 +102,10 @@ Das vorherige normative Szenario `scenarios/sts-0-45-product.json` (v0.1) bleibt
 
 ```powershell
 python -m unittest discover -s tests -v
-python -m sqbf.cli doctor --url http://127.0.0.1:5059/
-python -m sqbf.cli preflight --scenario projects/ble-elva/scenarios/sts-0-45-product-core-v0.2.json --url http://127.0.0.1:5059/
+python -m sqbf.cli doctor --url http://127.0.0.1:5080/ --fixture projects/ble-elva/fixtures/enzberg-product-core-v0.2.json --storage-state <lokale-Laborleitungssitzung>
+python -m sqbf.cli preflight --scenario projects/ble-elva/scenarios/sts-0-45-product-core-v0.2.json
 ```
 
-Der `doctor` sendet nur einen lokalen GET nach `/health/ready` und startet einen kleinen lokalen Chromium-Screenshot. Er führt **keinen** KI-Aufruf, keine Datenbankänderung und keinen Produktbenchmark aus. Er prüft den deklarativen Fixture-Status und meldet das Fehlen der unabhängig geprüften DB-Baseline, der sicheren Abo-Agentenintegration und des Persistenz-Oracles offen. Ein `TECHNICAL_SMOKE_READY` ist kein fachlicher Test-PASS.
+Der `doctor` sendet nur einen lokalen GET nach `/health/ready` und startet einen kleinen lokalen Chromium-Screenshot. Er führt **keinen** KI-Aufruf, keine Datenbankänderung und keinen Produktbenchmark aus. Das Manifest allein beweist keine Fixture-Isolation; dafür wird der separate Oracle ausgeführt. Der Oracle benötigt `SQBF_ORACLE_DSN` für den dedizierten, SELECT-only Login auf `127.0.0.1:55432`; die DSN darf weder in Git noch in CLI-Argumenten stehen. Er kann die Baseline vor einer Produktanlage dokumentieren und später mit `--phase after --baseline <before.json>` den gespeicherten Zustand vergleichen. Der Browser-/Screenshot-Agent erhält diese DB-Verbindung nicht. Ein `TECHNICAL_SMOKE_READY` ist kein fachlicher Test-PASS.
 
 **Schutz vor Zusatzkosten:** Der aktuelle CLI-Befehl `run` verweigert ausdrücklich die bisherige `openai`-/`anthropic`-HTTP-Provider-Integration. Abonnements funktionieren **nicht** automatisch über API-Schlüssel; der unterstützte Abo-Vision-Adapter benötigt noch einen gesonderten Sicherheits-/Funktionsnachweis in #14. Das ist bewusst ein Fail-Closed-Verhalten, kein ausgeführter Agententest.

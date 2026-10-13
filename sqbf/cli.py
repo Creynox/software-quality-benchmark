@@ -59,7 +59,7 @@ def save_session(url: str, output: Path):
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(prog="sqbf")
+    parser = argparse.ArgumentParser(prog="sqbf", allow_abbrev=False)
     sub = parser.add_subparsers(dest="command", required=True)
     scaffold = sub.add_parser("new-project", help="Create a blank, reproducible project profile")
     scaffold.add_argument("--slug", required=True, help="Lowercase project directory name")
@@ -75,6 +75,12 @@ def main(argv=None) -> int:
     session = sub.add_parser("session", help="Save benchmark-role login session manually")
     session.add_argument("--url", required=True)
     session.add_argument("--output", default=".secrets/ble-session.json")
+    oracle = sub.add_parser("oracle", help="Read-only independent LAB-01 persistence oracle", allow_abbrev=False)
+    oracle.add_argument("--phase", required=True, choices=["before", "after"])
+    oracle.add_argument("--fixture", default="projects/ble-elva/fixtures/enzberg-product-core-v0.2.json")
+    oracle.add_argument("--baseline", help="Before-phase JSON report required for --phase after")
+    oracle.add_argument("--output", help="Local JSON report; defaults under runs/lab01-oracle/")
+    oracle.add_argument("--dsn-env", default="SQBF_ORACLE_DSN", help="Environment variable containing the restricted DSN")
     execute = sub.add_parser("run", help="Run a scenario on an isolated target application")
     execute.add_argument("--scenario", required=True)
     execute.add_argument("--url", required=True, help="Actual URL for the isolated local application")
@@ -110,6 +116,25 @@ def main(argv=None) -> int:
 
     if args.command == "session":
         save_session(args.url, Path(args.output))
+        return 0
+
+    if args.command == "oracle":
+        from .oracle import OracleError, verify_fixture
+        dsn = os.environ.get(args.dsn_env)
+        if not dsn:
+            parser.error(f"Environment variable {args.dsn_env} is not set; the DSN is never accepted as a CLI argument.")
+        if args.phase == "after" and not args.baseline:
+            parser.error("--baseline is required for --phase after")
+        output = Path(args.output) if args.output else Path("runs/lab01-oracle") / f"{args.phase}.json"
+        try:
+            report = verify_fixture(
+                dsn, Path(args.fixture), args.phase,
+                baseline_path=Path(args.baseline) if args.baseline else None,
+                output_path=output,
+            )
+        except (OracleError, OSError, ValueError) as exc:
+            parser.error(f"Oracle rejected the state: {exc}")
+        print(json.dumps(report, indent=2, ensure_ascii=False))
         return 0
 
     scenario = Scenario.load(args.scenario, getattr(args, "url", None))

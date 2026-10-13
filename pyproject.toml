@@ -7,7 +7,7 @@ name = "sqbf"
 version = "0.1.0"
 description = "Local screenshot-only BLE/ELVA black-box benchmark MVP"
 requires-python = ">=3.11"
-dependencies = ["playwright>=1.52,<2"]
+dependencies = ["playwright>=1.52,<2", "psycopg[binary]>=3.2,<4"]
 
 [project.scripts]
 sqbf = "sqbf.cli:main"

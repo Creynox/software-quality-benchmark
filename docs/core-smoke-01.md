@@ -111,7 +111,7 @@ be cleared. That information is not passed as an extra hint to the executor.
 
 Live completion is recorded separately after the single authorized pilot.
 
-## Current completion: PARTIAL GO / BLOCKED_USER_AUTHORIZATION
+## Earlier completion: PARTIAL GO / BLOCKED_USER_AUTHORIZATION
 
 The first launch on source commit `04cad1ea7c84237133e7ca0c71166ebce4b2c446`
 opened the separate SQBF account-selection page at approximately 14:10 UTC.
@@ -132,3 +132,49 @@ The smallest next step is a fresh interactive SQBF authorization followed by
 one reviewer compatibility test and exactly one CORE-SMOKE-01 pilot. There is no
 automatic login retry loop. Portfolio expansion from #16 remains gated on the
 actual multiagent pilot's GO.
+
+## Actual pilot completion, 2026-10-13: NO-GO
+
+The fresh, separately authorized SQBF login completed successfully. The live
+account catalog allowed `gpt-6-luna` and `gpt-6.1-sol`. The single synthetic
+reviewer compatibility request passed image interpretation and strict JSON
+output with `gpt-6.1-sol`: 143 input, 19 output, 162 total tokens. No tools were
+offered, no API key was used, and bearer tokens remained in process memory.
+
+Exactly one pilot was attempted on SQBF commit
+`2116fc867c0cd619deeecde12abb9714a2e7c848`:
+
+- Run-ID: `f9b0f20a-39ed-4694-a888-e53dbc3e858c`.
+- Start: 2026-10-13 19:38:01 Europe/Berlin; duration: 2.83 seconds.
+- Technical result: FAIL; executor status: ERROR.
+- UI actions: 0/10; pilot model calls: 0/12. The prerequisite synthetic
+  reviewer request above is separate from the pilot call counter.
+- No pilot screenshot was captured and no UI task step completed. No UX
+  scores or reviewer verdict exist; none are inferred from the synthetic test.
+- Independent before/after snapshots match for the exact isolated database,
+  identity, all ten protected table counts and all ten row hashes.
+  `database_unchanged=true`. Overall Oracle FAIL reflects missing search,
+  cleared-filter and completion evidence, not an observed database change.
+- The command tool reported exit code 1. No automatic retry followed.
+
+The event log records a fail-closed RuntimeError before the first screenshot.
+A separate controller-only diagnostic repeated the initial page load, without
+model calls or UI interactions: the same stored BLE session resolves `5080/`
+to `/login` (HTTP 200, no blocked requests). The pilot rejects this path as an
+unapproved page/session. The formerly usable session is currently
+unauthenticated; its precise expiry/revocation cause was not established.
+
+Local archive:
+`D:\Temp\sqbf-core-smoke-runs\f9b0f20a-39ed-4694-a888-e53dbc3e858c`.
+It contains run/report/scores/findings/events/evidence and before/after Oracle
+JSON files, and is searchable in the local `index.jsonl`. Empty evidence,
+scores and findings accurately represent this aborted attempt. The prerequisite
+reviewer compatibility result is retained in `run.json`.
+
+**Completion: NO-GO.** The earlier 65/65 local tests passed at the tested source
+commit; they do not establish a valid current BLE session or a successful
+workflow. The smallest next step is a fresh authorized Laborleitung session in
+the isolated 5080 instance, verified immediately before a separately released
+pilot. No further pilot was run. Portfolio implementation from #16 remains
+gated on actual GO. No database writes/resets, BLE code changes, GitHub Actions,
+main changes or merge were performed.

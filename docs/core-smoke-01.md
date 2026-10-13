@@ -13,6 +13,8 @@ python -m sqbf.cli run --scenario projects/ble-elva/scenarios/core-smoke-01.json
   --url http://127.0.0.1:5080/ --software-version <verified-running-build> `
   --executor-provider chatgpt_plan --executor-model gpt-6-luna `
   --analyst-provider chatgpt_plan --analyst-model gpt-6.1-sol `
+  --identity-application-root <verified-BLE.Web-content-root> `
+  --identity-verifier <built-controller-only-IdentityCheck.dll> `
   --storage-state <existing-local-laborleitung-session> --fixture-ready --headless
 ```
 

@@ -134,6 +134,14 @@ def main(argv=None) -> int:
     session_check.add_argument("--url", required=True)
     session_check.add_argument("--storage-state", required=True)
     session_check.add_argument("--output", help="Local sanitized JSON evidence")
+    scope_check = sub.add_parser("scope-check", help="Model-free independent signed identity and authorization gate", allow_abbrev=False)
+    scope_check.add_argument("--scenario", required=True)
+    scope_check.add_argument("--url", required=True)
+    scope_check.add_argument("--storage-state", required=True)
+    scope_check.add_argument("--fixture", default="projects/ble-elva/fixtures/enzberg-product-core-v0.2.json")
+    scope_check.add_argument("--identity-application-root", required=True)
+    scope_check.add_argument("--identity-verifier", required=True)
+    scope_check.add_argument("--output", help="New private local JSON evidence file")
     session = sub.add_parser("session", help="Save benchmark-role login session manually")
     session.add_argument("--url", required=True)
     session.add_argument("--output", default=".secrets/ble-session.json")
@@ -157,6 +165,8 @@ def main(argv=None) -> int:
     execute.add_argument("--analyst-model")
     execute.add_argument("--no-analyst", action="store_true", help="Technical smoke only; no PASS")
     execute.add_argument("--storage-state", help="Local Playwright session state file")
+    execute.add_argument("--identity-application-root", help="Verified application's cookie discriminator/content root")
+    execute.add_argument("--identity-verifier", help="Built controller-only signed-ticket verifier DLL")
     execute.add_argument("--allow-host", action="append", default=[], help="Additional trusted asset host")
     execute.add_argument("--output", default="runs")
     execute.add_argument("--headless", action="store_true")
@@ -220,6 +230,18 @@ def main(argv=None) -> int:
         return 0
 
     scenario = Scenario.load(args.scenario, getattr(args, "url", None))
+    if args.command == "scope-check":
+        from .scope_check import check_scope
+        result = check_scope(scenario.url, args.storage_state, scenario.read_only_policy,
+                             json.loads(Path(args.fixture).read_text(encoding="utf-8-sig")),
+                             args.identity_application_root, args.identity_verifier)
+        if args.output:
+            from .artifact_privacy import create_private_file
+            output = Path(args.output)
+            create_private_file(output)
+            output.write_text(json.dumps(result, indent=2), encoding="utf-8")
+        print(json.dumps(result, indent=2))
+        return 0 if result["status"] == "SCOPE_VERIFIED" else 2
     if args.command == "session-check" or (args.command == "preflight" and args.storage_state):
         from .session_check import check_session
         result = check_session(scenario.url, args.storage_state, scenario.read_only_policy)
@@ -260,6 +282,13 @@ def main(argv=None) -> int:
         session_result=check_session(scenario.url,args.storage_state,scenario.read_only_policy)
         if session_result["status"] != "SESSION_RESTORED":
             print(json.dumps(session_result,indent=2))
+            return 2
+        from .scope_check import check_scope
+        scope_result=check_scope(scenario.url,args.storage_state,scenario.read_only_policy,
+                                json.loads(Path(args.fixture).read_text(encoding="utf-8-sig")),
+                                args.identity_application_root,args.identity_verifier)
+        if scope_result["status"] != "SCOPE_VERIFIED":
+            print(json.dumps(scope_result,indent=2))
             return 2
         directory=Path(os.environ.get("LOCALAPPDATA",str(Path.home()/".local/share")))/"SQBF"/"plan-login"
         record=_load_host(directory)

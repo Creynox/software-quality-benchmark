@@ -34,6 +34,14 @@
     "oracle_role": "sqbf_oracle_ro",
     "startup_seeding": "disabled"
   },
+  "identity_scope_check": {
+    "access": "verified_fixture_controller_read_only",
+    "role": "ble_benchmark",
+    "projection": "projects/ble-elva/tools/identity-scope.sql",
+    "projection_sha256": "c9c5ea9fbb0b435c005229946c40a0d494e8fa92d7a646e979570a24d3b49cd5",
+    "executable": "bin/Debug/net8.0/BLE.Web.exe",
+    "assembly": "bin/Debug/net8.0/BLE.Web.dll"
+  },
   "fixture_data": {
     "tenant_id": "7e9a1d20-0000-4000-8000-000000000001",
     "plant_id": "3bf304e0-3c58-4c3a-8900-7c00bdbfd001",
@@ -42,6 +50,7 @@
     "customer_id": null,
     "laboratory_id": null,
     "laboratory_lead_account": "sqbf-laborleitung",
+    "laboratory_lead_user_id": "a3d08b2e-7643-41cc-9396-13b0096d3614",
     "plant_scope_id": "3bf304e0-3c58-4c3a-8900-7c00bdbfd002",
     "global_scope": "inactive",
     "tenant_scope": "active",

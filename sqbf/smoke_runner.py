@@ -11,7 +11,7 @@ from uuid import uuid4
 from .bounded import Budget, BudgetExceeded, ask_bounded, invoke_worker, model_spec, restore_model
 from .models import Scenario, safe_action_log, validate_action
 from .no_write_oracle import compare, snapshot
-from .read_only import EVENT_GUARD, ReadOnlyViolation, check_action, observation, request_allowed
+from .read_only import event_guard, validate_policy, ReadOnlyViolation, check_action, observation, request_allowed
 from .reporting import Evidence, index_run
 
 
@@ -38,7 +38,7 @@ INSTRUCTIONS = """You are a user testing a product. Use only the current screens
 and your previous visible actions. Return one JSON action with all fields; use
 null for unused fields. Coordinates are screenshot pixels. No code, DOM, APIs,
 DB, shell, tools, passwords, hidden URLs or browser shortcuts. This task permits
-only navigation to the product overview and search/filter operations. Never
+only the requested read-only navigation and search/filter operations. Never
 create, edit, save, delete or change a record. If the task cannot be completed,
 return blocked. Report done only after performing every requested step.
 """
@@ -71,10 +71,11 @@ def browser_pilot(payload):
         try:
             context = browser.new_context(viewport={"width": 1280, "height": 800},
                         storage_state=payload["storage_state"], accept_downloads=False, service_workers="block")
-            context.add_init_script(EVENT_GUARD)
-            origin = "http://127.0.0.1:5080"
+            context.add_init_script(event_guard(scenario.read_only_policy))
+            parsed=urlsplit(scenario.url)
+            origin=f"{parsed.scheme}://{parsed.netloc}"
             def route_request(route):
-                if request_allowed(route.request.url, route.request.method, origin):
+                if request_allowed(route.request.url, route.request.method, origin,scenario.read_only_policy):
                     route.continue_()
                 else:
                     evidence.event("blocked_request", method=route.request.method,
@@ -87,12 +88,12 @@ def browser_pilot(payload):
             for turn in range(scenario.max_actions + 1):
                 budget.remaining()
                 page.set_default_timeout(min(3000,budget.remaining()*1000))
-                if urlsplit(page.url).path not in {"/", "/products"}:
+                if urlsplit(page.url).path not in scenario.read_only_policy["allowed_paths"]:
                     raise RuntimeError("Unapproved page/session")
                 last = page.screenshot(animations="disabled", timeout=min(5000,budget.remaining()*1000))
                 evidence.snapshot(last, f"step-{len(actions)}")
                 images.append(last)
-                seen = observation(page, scenario.read_only_policy["query"])
+                seen = observation(page, scenario.read_only_policy)
                 seen["screenshot"] = evidence.images[-1]["name"]
                 observations.append(seen)
                 if len(actions) >= scenario.max_actions:
@@ -151,14 +152,17 @@ def browser_pilot(payload):
 
 
 def run_smoke(scenario,executor,reviewer,output_root,storage_state,headed,fixture_path):
-    if (scenario.scenario_id != "CORE-SMOKE-01" or scenario.url != "http://127.0.0.1:5080/"
+    validate_policy(scenario.read_only_policy)
+    if (urlsplit(scenario.url).hostname!='127.0.0.1'
             or not 1 <= scenario.max_actions <= 10 or not 0 < scenario.max_minutes <= 5
             or not 2 <= scenario.max_model_calls <= 12 or not scenario.read_only_policy
-            or scenario.read_only_policy != {"query":"STS 0–45"} or not storage_state or reviewer is None):
+            or not storage_state or reviewer is None):
         raise ValueError("Read-only pilot configuration violates the fixed acceptance contract")
     # Provider serialization validates type; no API/key fallback is possible.
     executor_spec,reviewer_spec=model_spec(executor),model_spec(reviewer)
     fixture=json.loads(Path(fixture_path).read_text(encoding="utf-8-sig"))
+    if scenario.url!=fixture["target_url"] or scenario.fixture_id!=fixture["fixture_id"]:
+        raise ValueError("Scenario and independently approved fixture target do not match")
     folder=output_root / str(uuid4())
     evidence=Evidence(folder)
     started=time.monotonic()

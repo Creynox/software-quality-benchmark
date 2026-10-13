@@ -6,18 +6,17 @@ The Docker identity verifies the external 55432 mapping before every read.
 """
 import json
 import subprocess
+import re
 
 from .oracle import OracleError, verify_docker_identity
 
 
-TABLES = (
-    "workspace_products", "samples", "lims_sample", "ble_reports",
-    "product_norm_version_assignments", "norm_standards", "norm_versions",
-    "workspace_plants", "material_classes", "product_types",
-)
-
-
 def snapshot(fixture, run=subprocess.run):
+    expected=fixture.get("read_only_oracle",{}).get("expected_counts")
+    if not isinstance(expected,dict) or not expected or any(
+            not re.fullmatch(r"[a-z][a-z0-9_]*",table) or type(count) is not int or count<0
+            for table,count in expected.items()):
+        raise OracleError("Project fixture must define safe protected table identifiers and expected counts")
     docker = verify_docker_identity(fixture, run=lambda *args, **kwargs: run(*args, timeout=5, **kwargs))
     spec = fixture["database"]
     statements = ["BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;",
@@ -33,7 +32,7 @@ def snapshot(fixture, run=subprocess.run):
                   " OR has_any_column_privilege(current_user,c.oid,'INSERT,UPDATE,REFERENCES')),false))"
                   " FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace"
                   " WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m','f');"]
-    for table in TABLES:
+    for table in expected:
         statements.append(
             f"SELECT json_build_object('table','{table}','count',count(*),'hash',"
             f"md5(coalesce(string_agg(to_jsonb(t)::text,E'\\n' ORDER BY to_jsonb(t)::text),''))) FROM {table} t;"
@@ -53,10 +52,10 @@ def snapshot(fixture, run=subprocess.run):
             or rows[1]["can_write"]):
         raise OracleError("Oracle identity, isolation, or SELECT-only privileges failed")
     tables = {row["table"]: {"count": row["count"], "hash": row["hash"]} for row in rows[2:]}
-    if set(tables) != set(TABLES):
+    if set(tables) != set(expected):
         raise OracleError("Oracle snapshot has missing protected tables")
-    if tables["workspace_products"]["count"] != 0:
-        raise OracleError("CORE-SMOKE-01 requires the verified empty product fixture")
+    if any(tables[table]["count"]!=count for table,count in expected.items()):
+        raise OracleError("Protected table counts do not match the project fixture")
     return {"docker": docker, "identity": identity, "tables": tables}
 
 
@@ -64,8 +63,8 @@ def compare(before, after, observations, done):
     unchanged = before == after
     search = any(o.get("query_visible") and o.get("empty_visible") for o in observations)
     final = observations[-1] if observations else {}
-    reset = search and final.get("products_page") and final.get("filter_cleared") and final.get("empty_visible")
+    reset = search and final.get("target_page") and final.get("filter_cleared") and final.get("empty_visible")
     return {"database_unchanged": unchanged, "search_empty_verified": search,
             "filter_reset_verified": bool(reset), "completed_signal": done,
             "status": "PASS" if unchanged and search and reset and done else "FAIL",
-            "limitations": ["An entirely empty fixture verifies search input and empty-state display; it cannot prove filtering of populated data."]}
+            "limitations": ["Visible query/reset evidence does not establish filtering of populated data unless separately covered by the fixture."]}

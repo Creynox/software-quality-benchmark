@@ -1,7 +1,7 @@
 # CORE-SMOKE-01: bounded subscription-only read-only pilot
 
 The existing `sqbf run` command now accepts `chatgpt_plan` for the executor and
-analyst. Only the fixed CORE-SMOKE-01 profile is enabled through that path.
+analyst. CORE-SMOKE-01 is the prepared project profile for that path.
 Legacy metered API modes remain blocked. Tokens stay in process memory and IPC
 pipes; no OAuth token is stored in a file, command argument, event, or report.
 The same separately authorized account is used throughout one pilot, without
@@ -17,6 +17,13 @@ python -m sqbf.cli run --scenario projects/ble-elva/scenarios/core-smoke-01.json
 ```
 
 ## Enforced boundaries
+
+BLE URLs, navigation/search selectors, empty-state text and request paths are
+configured only in `projects/ble-elva/scenarios/core-smoke-01.json`. Protected
+table names and independently measured expected counts are configured in the
+project fixture. The new generic guard/loop/snapshot code does not embed them.
+Scenario URL and fixture identity must agree; incomplete policies or unsafe SQL
+identifiers are rejected. The blank project template remains unchanged.
 
 - At most 300 seconds for the pilot, including model waits, browser operations,
   reviewer and independent snapshots. A supervisor reserves 30 seconds for
@@ -103,3 +110,25 @@ be cleared. That information is not passed as an extra hint to the executor.
   and the fixture HEAD; its permitted load/search handlers do not save records.
 
 Live completion is recorded separately after the single authorized pilot.
+
+## Current completion: PARTIAL GO / BLOCKED_USER_AUTHORIZATION
+
+The first launch on source commit `04cad1ea7c84237133e7ca0c71166ebce4b2c446`
+opened the separate SQBF account-selection page at approximately 14:10 UTC.
+No callback arrived within five minutes; the process stopped with the sanitized
+authorization timeout, **exit 1**. No token exchange, model catalog request,
+reviewer compatibility inference or benchmark was performed. There is no Run-ID,
+UX score or benchmark PASS to report. The earlier provider-image test remains a
+separate completed test and is not counted as this benchmark.
+
+The CLI now handles that condition with `BLOCKED_USER_AUTHORIZATION`, **exit 2**,
+without a traceback or starting an inference/runner; this is covered by mocks.
+After the timeout, the profile details were moved out of the generic core and
+the final suite contains **65/65 tests passed, no skipped, exit 0**. Guarded live
+preflight is independently rechecked against the unchanged fixture; it is not
+reported as a KI benchmark.
+
+The smallest next step is a fresh interactive SQBF authorization followed by
+one reviewer compatibility test and exactly one CORE-SMOKE-01 pilot. There is no
+automatic login retry loop. Portfolio expansion from #16 remains gated on the
+actual multiagent pilot's GO.

@@ -10,6 +10,16 @@
   "max_actions": 10,
   "max_model_calls": 12,
   "allowed_hosts": ["127.0.0.1"],
-  "read_only_policy": {"query": "STS 0–45"},
+  "read_only_policy": {
+    "query": "STS 0–45",
+    "search_placeholder": "Produkt, Code, Werk oder Kunde",
+    "target_path": "/products",
+    "navigation_selector": "a[href=\"/products\"]",
+    "empty_text": "Keine Produkte gefunden",
+    "allowed_paths": ["/", "/products"],
+    "transport_post_paths": ["/_blazor/negotiate", "/_blazor"],
+    "asset_prefixes": ["/_framework/", "/_content/", "/css/", "/js/", "/images/", "/fonts/", "/assets/"],
+    "asset_paths": ["/_blazor", "/_blazor/initializers", "/_blazor/disconnect", "/app.css", "/BLE.Web.styles.css", "/favicon.ico"]
+  },
   "software_version": "operator-must-verify-running-build"
 }

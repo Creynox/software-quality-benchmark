@@ -8,11 +8,13 @@ from unittest.mock import patch
 
 from sqbf.bounded import Budget, BudgetExceeded, ask_bounded, invoke_worker
 from sqbf.models import Scenario
-from sqbf.no_write_oracle import TABLES, compare, snapshot
+from sqbf.no_write_oracle import compare, snapshot
 from sqbf.providers import ChatGPTPlanCredential, ChatGPTPlanModel, CHATGPT_PLAN_SCOPE
-from sqbf.read_only import allow_operation, request_allowed, ReadOnlyViolation, EVENT_GUARD, check_action
+from sqbf.read_only import allow_operation, request_allowed, ReadOnlyViolation, event_guard, check_action,validate_policy
 from sqbf.reporting import Evidence,index_run
 from sqbf.smoke_runner import ACTION_SCHEMA, REVIEW_SCHEMA, run_smoke
+
+POLICY=Scenario.load("projects/ble-elva/scenarios/core-smoke-01.json").read_only_policy
 
 
 class CoreSmokeTests(unittest.TestCase):
@@ -65,7 +67,7 @@ class CoreSmokeTests(unittest.TestCase):
 
     def test_write_targets_and_unapproved_text_keys_are_blocked(self):
         policy={"query":"STS 0–45"}
-        allow_operation({"action":"click"},"products-navigation",False,policy)
+        allow_operation({"action":"click"},"navigation",False,policy)
         allow_operation({"action":"type","text":"STS 0–45"},None,True,policy)
         allow_operation({"action":"key","key":"Backspace"},None,True,policy)
         for action,target,focus in [({"action":"click"},"new-product",False),
@@ -76,16 +78,16 @@ class CoreSmokeTests(unittest.TestCase):
 
     def test_http_origin_route_and_write_method_limits(self):
         origin="http://127.0.0.1:5080"
-        self.assertTrue(request_allowed(origin+"/products","GET",origin))
-        self.assertTrue(request_allowed(origin+"/_blazor/negotiate","POST",origin))
+        self.assertTrue(request_allowed(origin+"/products","GET",origin,POLICY))
+        self.assertTrue(request_allowed(origin+"/_blazor/negotiate","POST",origin,POLICY))
         for url,method in [(origin+"/products/new","GET"),(origin+"/api/products","POST"),
                            ("http://127.0.0.1:5059/products","GET"),(origin+"/products","DELETE")]:
-            self.assertFalse(request_allowed(url,method,origin))
+            self.assertFalse(request_allowed(url,method,origin,POLICY))
 
     def test_oracle_requires_stable_identity_hashes_and_all_visible_steps(self):
         before={"docker":{"id":"one"},"tables":{"products":{"count":0,"hash":"hash"}}}
         observations=[{"query_visible":True,"empty_visible":True},
-                      {"products_page":True,"filter_cleared":True,"empty_visible":True}]
+                      {"target_page":True,"filter_cleared":True,"empty_visible":True}]
         self.assertEqual(compare(before,before,observations,True)["status"],"PASS")
         changed={"docker":{"id":"two"},"tables":before["tables"]}
         self.assertEqual(compare(before,changed,observations,True)["status"],"FAIL")
@@ -95,10 +97,12 @@ class CoreSmokeTests(unittest.TestCase):
         self.assertEqual(compare(before,before,observations,False)["status"],"FAIL")
 
     def test_oracle_uses_only_read_queries_and_select_only_existing_role(self):
-        fixture={"database":{"container":"isolated","oracle_role":"sqbf_oracle_ro","name":"fixture"}}
+        fixture={"database":{"container":"isolated","oracle_role":"sqbf_oracle_ro","name":"fixture"},
+                 "read_only_oracle":{"expected_counts":{"test_records":0,"test_versions":0}}}
         identity={"database":"fixture","username":"sqbf_oracle_ro","read_only":"on",
                   **{k:False for k in ["superuser","createdb","createrole","bypassrls","create_schema","create_object"]}}
-        rows=[identity,{"can_write":False}]+[{"table":table,"count":0,"hash":"hash"} for table in TABLES]
+        rows=[identity,{"can_write":False}]+[{"table":table,"count":0,"hash":"hash"}
+                for table in fixture["read_only_oracle"]["expected_counts"]]
         import types
         with patch("sqbf.no_write_oracle.verify_docker_identity",return_value={"id":"one"}), \
                 patch("subprocess.run",return_value=types.SimpleNamespace(stdout="\n".join(json.dumps(row) for row in rows))) as command:
@@ -114,7 +118,7 @@ class CoreSmokeTests(unittest.TestCase):
     def test_all_outputs_and_registry_with_mocked_pilot(self):
         scenario=Scenario.load("projects/ble-elva/scenarios/core-smoke-01.json")
         observations=[{"query_visible":True,"empty_visible":True},
-                      {"products_page":True,"filter_cleared":True,"empty_visible":True}]
+                      {"target_page":True,"filter_cleared":True,"empty_visible":True}]
         result={"executor_status":"DONE","actions":5,"model_calls":7,"observations":observations,
                 "review":{"verdict":"PASS","reason":"visible","findings":[],
                           "scores":{"findability":4,"clarity":4,"task_progress":5,"error_recovery":3}},
@@ -148,7 +152,7 @@ class CoreSmokeTests(unittest.TestCase):
             context=browser.new_context()
             page=context.new_page()
             page.set_content('<button onclick="window.writes=1">Neues Produkt</button><input placeholder="Produkt, Code, Werk oder Kunde">')
-            page.evaluate(EVENT_GUARD)
+            page.evaluate(event_guard(POLICY))
             page.get_by_text("Neues Produkt").click()
             self.assertIsNone(page.evaluate("window.writes"))
             field=page.locator('input')
@@ -170,7 +174,7 @@ class CoreSmokeTests(unittest.TestCase):
             page=MagicMock()
             page.url=scenario.url
             page.screenshot.return_value=b"synthetic-screenshot"
-            page.evaluate.return_value={"target":"product-search","focused":True}
+            page.evaluate.return_value={"target":"search","focused":True}
             browser=MagicMock()
             browser.new_context.return_value.new_page.return_value=page
             playwright=MagicMock()
@@ -211,6 +215,39 @@ class CoreSmokeTests(unittest.TestCase):
             with patch("sys.stdout",output):
                 main(["list-runs","--output",directory,"--test-id","CORE-SMOKE-01","--role","luna","--min-score","3"])
             self.assertEqual(len(json.loads(output.getvalue())),1)
+
+    def test_invalid_profile_or_sql_table_identifier_fail_closed(self):
+        with self.assertRaises(ReadOnlyViolation):validate_policy({"query":"unknown"})
+        validate_policy(POLICY)
+        with patch("sqbf.no_write_oracle.verify_docker_identity") as inspect:
+            with self.assertRaises(RuntimeError):snapshot({"read_only_oracle":{"expected_counts":{"bad;DROP":0}}})
+            inspect.assert_not_called()
+
+    def test_read_only_contract_can_use_another_project_without_ble_defaults(self):
+        profile=json.loads(json.dumps(POLICY))
+        profile.update(query='FIND',search_placeholder='Find things',target_path='/items',
+                       navigation_selector='a[href="/items"]',empty_text='Nothing found',
+                       allowed_paths=['/','/items'],transport_post_paths=[],asset_paths=[],asset_prefixes=['/css/'])
+        validate_policy(profile)
+        self.assertTrue(request_allowed('http://127.0.0.1:9000/items','GET','http://127.0.0.1:9000',profile))
+        self.assertFalse(request_allowed('http://127.0.0.1:9000/products','GET','http://127.0.0.1:9000',profile))
+        self.assertNotIn('Produkt',event_guard(profile))
+
+    def test_cli_auth_timeout_does_not_start_reviewer_or_benchmark(self):
+        from sqbf.cli import main
+        with tempfile.TemporaryDirectory() as directory,patch("sqbf.plan_login._load_host",return_value={}), \
+                patch("sqbf.plan_login.authorize",side_effect=RuntimeError("synthetic timeout")), \
+                patch("sqbf.bounded.invoke_worker") as inference,patch("sqbf.cli.run") as runner:
+            session=Path(directory)/'session.json'
+            session.write_text('{}')
+            status=main(['run','--scenario','projects/ble-elva/scenarios/core-smoke-01.json',
+                '--url','http://127.0.0.1:5080/','--software-version','build','--fixture-ready',
+                '--executor-provider','chatgpt_plan','--executor-model','gpt-6-luna',
+                '--analyst-provider','chatgpt_plan','--analyst-model','gpt-6.1-sol',
+                '--storage-state',str(session),'--output',directory])
+            self.assertEqual(status,2)
+            inference.assert_not_called()
+            runner.assert_not_called()
 
 
 if __name__ == "__main__": unittest.main()

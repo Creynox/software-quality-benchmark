@@ -184,9 +184,15 @@ def main(argv=None) -> int:
             parser.error("Only the fixed read-only pilot with Luna and a separate ChatGPT-plan reviewer is enabled")
         from .plan_login import _load_host, authorize, catalog
         from .smoke_runner import ACTION_SCHEMA, REVIEW_SCHEMA
+        from .read_only import validate_policy
+        validate_policy(scenario.read_only_policy)
         directory=Path(os.environ.get("LOCALAPPDATA",str(Path.home()/".local/share")))/"SQBF"/"plan-login"
         record=_load_host(directory)
-        credential=authorize(record)
+        try:
+            credential=authorize(record)
+        except RuntimeError:
+            print("BLOCKED_USER_AUTHORIZATION: OpenAI authorization was not completed; zero inference calls and no benchmark started.")
+            return 2
         models=catalog(credential)
         if args.executor_model not in models or args.analyst_model not in models:
             parser.error("Executor/reviewer model not in the authorized account catalog; no fallback")

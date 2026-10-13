@@ -41,3 +41,10 @@ Kein Health-200, Modell-DONE oder Screenshot allein gilt als fachliches PASS.
 v0.2 und normenspezifisches v0.1 bleiben erhalten. TL SoB-StB 20 / ETV-StB-BW
 sind keine Pflichtverknüpfungen des Produkt-Speichervertrags. Normenanlage und
 breiteres Portfolio (#15/#16) bleiben getrennte Erweiterungen.
+
+## LAB-01-Abschlussstand
+
+Run `b0834f9f-3777-497c-9dae-bd28369b9fb0` ist NO-GO wegen eines nachgewiesenen
+Harness-SPA-Guardfehlers, ohne Produktwrite. Reparatur `dde2ca0` besteht 134 lokale
+Tests und die modellfreie reale Formularnavigation. Ein gültiger Produkt-Persistenzlauf
+steht aus. [Completion Report](../../docs/benchmark-environment-completion.md).

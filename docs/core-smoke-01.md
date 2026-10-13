@@ -79,7 +79,14 @@ status remain distinct. No screenshots or session files are committed.
 ```powershell
 python -m sqbf.cli list-runs --test-id CORE-SMOKE-01 --date 2026-10-13
 python -m sqbf.cli list-runs --role luna --result GO --min-score 3
+python -m sqbf.cli list-runs --run-id 04bd06b3-f868-4390-b7d6-3df67e9cb85f
 ```
+
+`--result` matches the complete case-sensitive verdict: GO does not match NO-GO
+or PARTIAL GO. `--run-id` is an exact identifier lookup. Test ID, software version
+and date retain case-sensitive substring search; role searches persona/executor/
+reviewer by case-insensitive substring. Filters combine with AND. These queries
+read the existing index without rebuilding it or changing run artifacts.
 
 The empty fixture has zero products. This can prove entering/resetting the
 search and displaying an empty state; it **cannot prove filtering populated

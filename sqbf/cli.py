@@ -122,8 +122,11 @@ def main(argv=None) -> int:
     doctor.add_argument("--storage-state", default=".secrets/ble-session.json")
     registry=sub.add_parser("list-runs",help="Search the local run index",allow_abbrev=False)
     registry.add_argument("--output",default="runs")
-    for option in ["test-id","software-version","date","role","result"]:
-        registry.add_argument("--"+option)
+    for option in ["test-id","software-version","date"]:
+        registry.add_argument("--"+option, help="Case-sensitive substring match")
+    registry.add_argument("--role", help="Case-insensitive substring in persona/executor/reviewer")
+    registry.add_argument("--result", help="Exact case-sensitive verdict (GO, NO-GO, PARTIAL GO, etc.)")
+    registry.add_argument("--run-id", help="Exact run identifier")
     registry.add_argument("--min-score",type=int)
     preflight = sub.add_parser("preflight", help="Validate scenario without browser or LLM usage")
     preflight.add_argument("--scenario", required=True)
@@ -176,14 +179,9 @@ def main(argv=None) -> int:
     if args.command=="list-runs":
         path=Path(args.output)/"index.jsonl"
         rows=[json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line] if path.exists() else []
-        for argument,key in [("test_id","scenario_id"),("software_version","software_version"),
-                             ("date","date"),("result","result")]:
-            value=getattr(args,argument)
-            if value:rows=[row for row in rows if value in str(row.get(key,""))]
-        if args.role:
-            rows=[row for row in rows if any(args.role.lower() in str(row.get(key,"")).lower() for key in ["persona","executor","reviewer"])]
-        if args.min_score is not None:
-            rows=[row for row in rows if row.get("scores") and min(row["scores"].values())>=args.min_score]
+        from .registry import filter_runs
+        rows=filter_runs(rows,result=args.result,run_id=args.run_id,test_id=args.test_id,
+                         software_version=args.software_version,date=args.date,role=args.role,min_score=args.min_score)
         print(json.dumps(rows,ensure_ascii=False,indent=2))
         return 0
 

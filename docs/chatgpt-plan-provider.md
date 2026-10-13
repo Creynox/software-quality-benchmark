@@ -1,12 +1,12 @@
 # ChatGPT-plan provider prototype
 
-**Status: `PARTIAL GO / PENDING_USER_OAUTH`.** Offline provider and a separate local OAuth diagnostic are implemented. A successful authorized account catalog and synthetic vision test are still required before harness integration. No BLE benchmark is enabled by this diagnostic.
+**Status: `GO` for integration into the SQBF harness, not for a BLE benchmark.** Separate user-authorized ChatGPT-plan OAuth, the account catalog, and exactly one synthetic vision/JSON inference succeeded on 2026-10-13. The provider and local OAuth diagnostic are tested offline. Durable sessions, hard total request deadlines, and harness call budgets remain integration work.
 
 ## Eligibility and authorization
 
 Correction to the initial report: the official plan-sharing overview explicitly covers **open-source and locally hosted apps**. It does not specify a repository `LICENSE` file as a technical prerequisite. SQBF is being tested as a local application; absence of that file alone is insufficient evidence for `BLOCKED_ELIGIBILITY`. This does not establish open-source status, guarantee acceptance by OpenAI, or authorize paid/remotely hosted distribution. No license was added; Product Owner approval remains required before adding one.
 
-The actual account gate is the user's separate SQBF browser authorization, a validated identity token, the token response's `chatgpt.tokens.use.direct` scope, and account-specific model availability. If registration or plan permission is denied, stop without inference or API-key fallback. The local-hosted interpretation is documentation-based; actual account acceptance remains unverified until the flow succeeds.
+The actual account gate is the user's separate SQBF browser authorization, a validated identity token, the token response's `chatgpt.tokens.use.direct` scope, and account-specific model availability. If registration or plan permission is denied, stop without inference or API-key fallback. The local-hosted interpretation is documentation-based; actual account acceptance was verified by the successful flow described below. This is an account-specific result, not a guarantee for other plans or distribution modes.
 
 The documented sign-in flow is a separate app authorization, not reuse of Codex CLI's existing ChatGPT login. `sqbf.plan_login` prepares a stable opaque host ID, uses the system browser and PKCE, binds a one-time loopback callback to state, and verifies the ID token against OpenAI's JWKS (RS256, issuer, client audience, expiry, issuance time, nonce, subject). It rejects a different account when reusing an issued registration. The plan scope is checked in the token response. Callback request logging is disabled.
 
@@ -41,7 +41,18 @@ The subscription-sharing preview requires `store: false` and `stream: true`; it 
 
 ## Account-specific model and image support
 
-Do not select a hard-coded model ID. The official guidance is to query `/v1/models` using the same authorized plan token, then choose an account-listed model that accepts image input and structured outputs. The account-specific list is not available until OAuth is authorized. No model catalog or image capability was queried in this task. A previous Codex CLI synthetic-image success is not evidence for this separate OAuth client.
+The official guidance is to query `/v1/models` using the same authorized plan token, then choose an account-listed model that accepts image input and structured outputs. The diagnostic checks the explicitly requested model against that live list before inference. The successful catalog contained `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`. Only `gpt-6-luna` image/structured-output capability was actually tested. A previous Codex CLI synthetic-image success is not evidence for this separate OAuth client.
+
+## Completion evidence, 2026-10-13
+
+- Local command: `python -m unittest discover -s tests -v`; **51/51 PASS, zero skipped, exit 0**, with PyJWT 2.15.1 and cryptography 50.0.2 installed in the existing environment.
+- Live command: `python -m sqbf.plan_login --vision-test --model gpt-6-luna`; **exit 0**, exactly one inference, no retry/fallback. The user completed OpenAI authentication and consent in the system browser. Identity signature, issuer, audience, expiry, issuance time, nonce, subject and the granted plan scope passed validation before the catalog/inference calls.
+- Synthetic image exact text match `SQBF VISION TEST`: **PASS**. Strict JSON object/schema: **PASS**. Complete response stream: **PASS**. No model tools offered or dispatched. No API keys or Codex credentials read; OAuth tokens were kept in process memory and not persisted.
+- Reported usage: **143 input + 19 output = 162 total tokens**, zero reasoning tokens. These are usage metrics, not a separate monetary charge. The authorized plan endpoint was used; no independent invoice/billing export was inspected.
+- Live process ran the prepared worktree source subsequently committed as `fb2883cdf6744f313079b71f95d029af9a43b64b`. After that process started, only sanitized HTTP-error formatting in the login helper was added; the final commit's full suite passed. No second inference was made to repeat an unchanged successful path.
+- Local completion evidence: `D:/Temp/sqbf-plan-vision-20261013/completion.json` and `report.md`. The synthetic PNG was generated in memory; its original bytes were not archived, and no reconstructed image is claimed as the original request.
+- No BLE access, database changes, license changes, GitHub Actions or merge. Existing dirty/detached worktrees stayed intact.
+- Next step: wire this tool-free provider into the bounded harness, then prepare CORE-SMOKE-01 separately. The current `sqbf run` CLI remains blocked for metered legacy API providers.
 
 ## Offline verification
 

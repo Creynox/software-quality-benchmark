@@ -1,0 +1,15 @@
+{
+  "scenario_id": "CORE-SMOKE-01",
+  "scenario_version": "1.0",
+  "task": "Als Laborleitung: Finde die Produktübersicht. Suche dort nach STS 0–45. Stelle anhand der Oberfläche fest, ob Produkte gefunden wurden; erwartet wird ein Leerzustand. Setze anschließend den Suchfilter zurück, ohne einen Datensatz anzulegen, zu bearbeiten, zu speichern oder zu löschen. Beende dann den Test mit einer kurzen Erstbeobachtung.",
+  "url": "http://127.0.0.1:5080/",
+  "persona": "Laborleitung",
+  "fixture_id": "enzberg-product-core-v0.2",
+  "expected": ["Produktübersicht erreicht", "STS 0–45 als sichtbare Suche eingegeben", "Keine Produkte gefunden sichtbar", "Suchfeld abschließend leer"],
+  "max_minutes": 5,
+  "max_actions": 10,
+  "max_model_calls": 12,
+  "allowed_hosts": ["127.0.0.1"],
+  "read_only_policy": {"query": "STS 0–45"},
+  "software_version": "operator-must-verify-running-build"
+}

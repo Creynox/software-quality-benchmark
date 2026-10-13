@@ -195,12 +195,14 @@ class ChatGPTPlanModel:
         # ChatGPT plan usage currently rejects `max_output_tokens`; keep the
         # existing adapter signature, omit that request field, and cap the
         # accepted streamed result locally instead.
-        image = base64.b64encode(screenshot_png).decode("ascii")
+        images = screenshot_png if isinstance(screenshot_png, list) else [screenshot_png]
+        if not 1 <= len(images) <= 3 or any(not isinstance(png, bytes) or len(png) > 2_000_000 for png in images):
+            raise ValueError("Provide one to three bounded screenshot byte strings")
         payload = {
             "model": self.model,
-            "input": [{"role": "user", "content": [
-                {"type": "input_text", "text": prompt},
-                {"type": "input_image", "image_url": "data:image/png;base64," + image},
+            "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}] + [
+                {"type": "input_image", "image_url": "data:image/png;base64," + base64.b64encode(png).decode("ascii")}
+                for png in images
             ]}],
             "text": {"format": {
                 "type": "json_schema", "name": self.schema_name,

@@ -55,10 +55,12 @@ class Evidence:
             f"- Status: **{status}**",
             f"- Technischer Runner: **{manifest.get('technical_status', 'nicht bewertet')}**",
             f"- Fachliches Ergebnis: **{manifest.get('functional_status', 'nicht bewertet')}**",
+            f"- KI-UX-Bewertung: **{(review or {}).get('verdict','nicht bewertet')}**",
             f"- Executor-Endstatus: {manifest['executor_status']}",
             f"- Modellwartezeit: {manifest.get('model_wait_seconds', 0):.1f} Sekunden",
             f"- Aktive Runnerzeit (ohne Modellwartezeit): {manifest.get('active_seconds_excluding_model_wait', manifest['wall_seconds']):.1f} Sekunden",
-            "- Fachlicher PASS: **nicht bestätigt** (kein unabhängiger Persistenz-Oracle im MVP)",
+            (f"- Unabhängiger No-Write-Oracle: **{manifest['oracle']['status']}**"
+             if "oracle" in manifest else "- Fachlicher PASS: **nicht bestätigt** (kein unabhängiger Persistenz-Oracle im MVP)"),
             f"- UI-Aktionen: {manifest['actions']} / {manifest['budget_actions']}",
             f"- Dauer (Wallclock, inklusive KI-Wartezeit): {manifest['wall_seconds']:.1f} Sekunden",
             "", "## Nachweise",
@@ -69,6 +71,9 @@ class Evidence:
             lines.extend(f"- {str(finding)}" for finding in findings)
         else:
             lines.append("- Keine dokumentiert oder nicht bewertet.")
+        if review and "scores" in review:
+            lines.extend(["","## UX-Scores (0–5)",""])
+            lines.extend(f"- {name}: {score}" for name,score in review["scores"].items())
         lines.extend([
             "", "## Einschränkungen", "",
             "- Screenshots verbleiben lokal; sensible Inhalte vor Weitergabe prüfen.",
@@ -76,3 +81,19 @@ class Evidence:
             "- Ein erfolgreiches Agenten-Endsignal allein wird nicht als PASS gewertet.",
         ])
         (self.path / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def index_run(output_root: Path, folder: Path) -> None:
+    """Local JSON-lines registry, rebuilt from immutable run manifests."""
+    rows=[]
+    for path in sorted(output_root.glob("*/run.json")):
+        run=json.loads(path.read_text(encoding="utf-8"))
+        rows.append({"run_id":run["run_id"],"scenario_id":run["scenario_id"],
+                     "software_version":run["software_version"],"date":run["started_at"],
+                     "persona":run["persona"],"executor":run["executor_model"],
+                     "reviewer":run.get("analyst_model"),"result":run["verdict"],
+                     "scores":run.get("review",{}).get("scores",{}),
+                     "findings":run.get("review",{}).get("findings",[]),"path":str(path.parent.resolve())})
+    temporary=output_root/"index.tmp"
+    temporary.write_text("\n".join(json.dumps(row,ensure_ascii=False) for row in rows)+"\n",encoding="utf-8")
+    temporary.replace(output_root/"index.jsonl")

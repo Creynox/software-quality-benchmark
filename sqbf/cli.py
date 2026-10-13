@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 from .models import Scenario
 from .scaffold import create_project
-from .providers import VisionModel
+from .providers import ChatGPTPlanModel, VisionModel
 from .runner import run
 
 
@@ -69,6 +69,11 @@ def main(argv=None) -> int:
     doctor.add_argument("--url", default="http://127.0.0.1:5059/")
     doctor.add_argument("--fixture", default="projects/ble-elva/fixtures/enzberg-product-core-v0.2.json")
     doctor.add_argument("--storage-state", default=".secrets/ble-session.json")
+    registry=sub.add_parser("list-runs",help="Search the local run index",allow_abbrev=False)
+    registry.add_argument("--output",default="runs")
+    for option in ["test-id","software-version","date","role","result"]:
+        registry.add_argument("--"+option)
+    registry.add_argument("--min-score",type=int)
     preflight = sub.add_parser("preflight", help="Validate scenario without browser or LLM usage")
     preflight.add_argument("--scenario", required=True)
     preflight.add_argument("--url", help="Actual isolated application URL; overrides sample config")
@@ -86,9 +91,10 @@ def main(argv=None) -> int:
     execute.add_argument("--url", required=True, help="Actual URL for the isolated local application")
     execute.add_argument("--software-version", "--ble-version", dest="software_version", required=True,
                          help="Exact target application commit SHA or release (old --ble-version alias supported)")
-    execute.add_argument("--executor-provider", required=True, choices=["openai", "anthropic"])
+    execute.add_argument("--executor-provider", required=True, choices=["openai", "anthropic", "chatgpt_plan"])
     execute.add_argument("--executor-model", required=True, help="Verified API model identifier")
-    execute.add_argument("--analyst-provider", choices=["openai", "anthropic"])
+    execute.add_argument("--analyst-provider", choices=["openai", "anthropic", "chatgpt_plan"])
+    execute.add_argument("--fixture",default="projects/ble-elva/fixtures/enzberg-product-core-v0.2.json")
     execute.add_argument("--analyst-model")
     execute.add_argument("--no-analyst", action="store_true", help="Technical smoke only; no PASS")
     execute.add_argument("--storage-state", help="Local Playwright session state file")
@@ -98,6 +104,19 @@ def main(argv=None) -> int:
     execute.add_argument("--fixture-ready", action="store_true", help="Assert isolated fixture was prepared")
     execute.add_argument("--interactive-budget", action="store_true", help="Explicit manual run extension")
     args = parser.parse_args(argv)
+    if args.command=="list-runs":
+        path=Path(args.output)/"index.jsonl"
+        rows=[json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line] if path.exists() else []
+        for argument,key in [("test_id","scenario_id"),("software_version","software_version"),
+                             ("date","date"),("result","result")]:
+            value=getattr(args,argument)
+            if value:rows=[row for row in rows if value in str(row.get(key,""))]
+        if args.role:
+            rows=[row for row in rows if any(args.role.lower() in str(row.get(key,"")).lower() for key in ["persona","executor","reviewer"])]
+        if args.min_score is not None:
+            rows=[row for row in rows if row.get("scores") and min(row["scores"].values())>=args.min_score]
+        print(json.dumps(rows,ensure_ascii=False,indent=2))
+        return 0
 
     if args.command == "new-project":
         try:
@@ -158,18 +177,45 @@ def main(argv=None) -> int:
     if args.storage_state and not Path(args.storage_state).is_file():
         parser.error("Session state file does not exist")
     scenario.allowed_hosts = list(set(scenario.allowed_hosts + [h.lower() for h in args.allow_host]))
-    executor = VisionModel(args.executor_provider, args.executor_model)
-    analyst = None if args.no_analyst else VisionModel(args.analyst_provider, args.analyst_model)
+    if args.executor_provider == "chatgpt_plan":
+        if (not scenario.read_only_policy or args.analyst_provider != "chatgpt_plan"
+                or args.no_analyst or args.interactive_budget or args.allow_host
+                or args.executor_model != "gpt-6-luna" or args.analyst_model == args.executor_model):
+            parser.error("Only the fixed read-only pilot with Luna and a separate ChatGPT-plan reviewer is enabled")
+        from .plan_login import _load_host, authorize, catalog
+        from .smoke_runner import ACTION_SCHEMA, REVIEW_SCHEMA
+        directory=Path(os.environ.get("LOCALAPPDATA",str(Path.home()/".local/share")))/"SQBF"/"plan-login"
+        record=_load_host(directory)
+        credential=authorize(record)
+        models=catalog(credential)
+        if args.executor_model not in models or args.analyst_model not in models:
+            parser.error("Executor/reviewer model not in the authorized account catalog; no fallback")
+        # Exactly one synthetic reviewer compatibility call, before any BLE
+        # screenshots are transmitted, under the same in-memory authorization.
+        from .bounded import invoke_worker, model_spec
+        schema={"type":"object","properties":{"visible_text":{"type":"string"}},
+                "required":["visible_text"],"additionalProperties":False}
+        probe=ChatGPTPlanModel(args.analyst_model,credential,schema,timeout=30,max_response_chars=200)
+        compatibility=invoke_worker("vision-test",{"provider":model_spec(probe)},45)
+        print(json.dumps({"reviewer_compatibility":compatibility}))
+        executor=ChatGPTPlanModel(args.executor_model,credential,ACTION_SCHEMA)
+        analyst=ChatGPTPlanModel(args.analyst_model,credential,REVIEW_SCHEMA)
+    else:
+        parser.error("Only separately authorized ChatGPT plan usage is enabled")
     folder = run(
         scenario, executor, analyst, Path(args.output),
         storage_state=args.storage_state,
         headed=not args.headless,
         ask_extension=ask_extension if args.interactive_budget else None,
+        fixture_path=Path(args.fixture),
     )
     summary = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+    if args.executor_provider=="chatgpt_plan":
+        summary["reviewer_compatibility"]=compatibility
+        (folder/"run.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
     print(f"Run artifacts: {folder}")
     print(f"Verdict: {summary['verdict']} (executor={summary['executor_status']})")
-    return 0 if summary["verdict"] == "PASS" else 2
+    return 0 if summary["verdict"] in {"PASS","GO"} else 2
 
 
 if __name__ == "__main__":

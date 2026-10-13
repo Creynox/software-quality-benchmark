@@ -29,6 +29,8 @@ class Scenario:
     allowed_hosts: list[str] = field(default_factory=list)
     software_version: str = "unknown"
     scenario_version: str = "1"
+    read_only_policy: dict | None = None
+    max_model_calls: int = 12
 
     @classmethod
     def load(cls, path: str | Path, base_url: str | None = None) -> "Scenario":

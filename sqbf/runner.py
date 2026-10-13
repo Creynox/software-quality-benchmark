@@ -70,8 +70,14 @@ def run(
     scenario: Scenario, executor: VisionModel, analyst: VisionModel | None,
     output_root: Path, storage_state: str | None = None, headed: bool = True,
     ask_extension=None,
+    fixture_path=None,
 ) -> Path:
     """Execute browser UI only. Fixture preparation is a separate prerequisite."""
+    if scenario.read_only_policy:
+        if ask_extension or fixture_path is None:
+            raise ValueError("Read-only pilot requires its Oracle fixture and permits no budget extensions")
+        from .smoke_runner import run_smoke
+        return run_smoke(scenario,executor,analyst,output_root,storage_state,headed,fixture_path)
     from playwright.sync_api import sync_playwright
 
     run_id = str(uuid4())

@@ -14,6 +14,28 @@ from .providers import ChatGPTPlanModel, VisionModel
 from .runner import run
 
 
+def prepare_session_file(output):
+    """Reserve a new confidential file before writing cookies into it."""
+    with output.open("x"):
+        pass
+    try:
+        if os.name == "nt":
+            import subprocess
+            sid = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                                  "[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value"],
+                                 capture_output=True, text=True, check=True, timeout=10).stdout.strip()
+            import re
+            if not re.fullmatch(r"S-1-\d+(?:-\d+)+", sid):
+                raise ValueError("Cannot identify session file owner")
+            subprocess.run(["icacls.exe", str(output), "/inheritance:r", "/grant:r", f"*{sid}:F"],
+                           capture_output=True, check=True, timeout=10)
+        else:
+            os.chmod(output, 0o600)
+    except Exception:
+        output.unlink()
+        raise ValueError("Cannot enforce private session file permissions") from None
+
+
 def ask_extension():
     print("\nPAUSED_BUDGET: Chrome and fixture remain in this process.")
     print("Enter APPROVE <extra_minutes> <extra_actions> to extend; anything else stops.")
@@ -33,7 +55,7 @@ def ask_extension():
     return None
 
 
-def save_session(url: str, output: Path):
+def save_session(url: str, output: Path, credentials_path=None, expected_username=None):
     from playwright.sync_api import sync_playwright
 
     parsed = urlparse(url)
@@ -41,16 +63,45 @@ def save_session(url: str, output: Path):
         raise ValueError("Session URL must be http(s)")
     if output.exists():
         raise ValueError("Session file already exists; remove manually to replace")
+    credentials = None
+    if credentials_path:
+        if parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("Automatic benchmark login requires a clean loopback HTTP URL")
+        from .session_credentials import load_credentials
+        credentials = load_credentials(credentials_path, expected_username)
     output.parent.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         context = browser.new_context()
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded")
-        print("Sign in manually in Chrome using the correct isolated benchmark account.")
-        input("After sign-in has completed, press Enter to save local session state.")
-        context.storage_state(path=str(output))
-        browser.close()
+        if credentials:
+            try:
+                page.locator('input[name="username"]').wait_for(state="visible")
+                # Blazor hydration can reset the first input during sequential
+                # fills. Set both ordinary form fields and requestSubmit in one
+                # browser turn; native validation and server authentication run.
+                page.locator('form:has(input[name="username"]):has(input[name="password"])').evaluate("""(form, c) => {
+                    form.elements.namedItem('username').value=c.username;
+                    form.elements.namedItem('password').value=c.password;
+                    form.requestSubmit();
+                }""", credentials)
+                page.wait_for_url(url, timeout=15000)
+                if urlparse(page.url).path == "/login":
+                    raise ValueError()
+            except Exception:
+                browser.close()
+                raise ValueError("BLOCKED_SESSION: benchmark login failed; no retry or state saved") from None
+            finally:
+                credentials.clear()
+        else:
+            print("Sign in manually in Chrome using the correct isolated benchmark account.")
+            input("After sign-in has completed, press Enter to save local session state.")
+        try:
+            prepare_session_file(output)
+            context.storage_state(path=str(output))
+        finally:
+            browser.close()
     try:
         os.chmod(output, 0o600)
     except OSError:
@@ -77,9 +128,17 @@ def main(argv=None) -> int:
     preflight = sub.add_parser("preflight", help="Validate scenario without browser or LLM usage")
     preflight.add_argument("--scenario", required=True)
     preflight.add_argument("--url", help="Actual isolated application URL; overrides sample config")
+    preflight.add_argument("--storage-state", help="Optional model-free read-only session restoration check")
+    session_check = sub.add_parser("session-check", help="Verify stored session in two new read-only contexts")
+    session_check.add_argument("--scenario", required=True)
+    session_check.add_argument("--url", required=True)
+    session_check.add_argument("--storage-state", required=True)
+    session_check.add_argument("--output", help="Local sanitized JSON evidence")
     session = sub.add_parser("session", help="Save benchmark-role login session manually")
     session.add_argument("--url", required=True)
     session.add_argument("--output", default=".secrets/ble-session.json")
+    session.add_argument("--credentials", help="Explicit local user-only DPAPI benchmark credential file (Windows)")
+    session.add_argument("--username", help="Required exact benchmark username for DPAPI login")
     oracle = sub.add_parser("oracle", help="Read-only independent LAB-01 persistence oracle", allow_abbrev=False)
     oracle.add_argument("--phase", required=True, choices=["before", "after"])
     oracle.add_argument("--fixture", default="projects/ble-elva/fixtures/enzberg-product-core-v0.2.json")
@@ -134,7 +193,11 @@ def main(argv=None) -> int:
         return 0 if result["status"] == "TECHNICAL_SMOKE_READY" else 2
 
     if args.command == "session":
-        save_session(args.url, Path(args.output))
+        try:
+            save_session(args.url, Path(args.output), args.credentials, args.username)
+        except (ValueError, EOFError, OSError):
+            print("BLOCKED_SESSION: session creation failed; no automatic retry.")
+            return 2
         return 0
 
     if args.command == "oracle":
@@ -157,6 +220,13 @@ def main(argv=None) -> int:
         return 0
 
     scenario = Scenario.load(args.scenario, getattr(args, "url", None))
+    if args.command == "session-check" or (args.command == "preflight" and args.storage_state):
+        from .session_check import check_session
+        result = check_session(scenario.url, args.storage_state, scenario.read_only_policy)
+        if args.command == "session-check" and args.output:
+            Path(args.output).write_text(json.dumps(result, indent=2), encoding="utf-8")
+        print(json.dumps(result, indent=2))
+        return 0 if result["status"] == "SESSION_RESTORED" else 2
     if args.command == "preflight":
         print(json.dumps({
             "scenario_id": scenario.scenario_id, "persona": scenario.persona,
@@ -186,6 +256,11 @@ def main(argv=None) -> int:
         from .smoke_runner import ACTION_SCHEMA, REVIEW_SCHEMA
         from .read_only import validate_policy
         validate_policy(scenario.read_only_policy)
+        from .session_check import check_session
+        session_result=check_session(scenario.url,args.storage_state,scenario.read_only_policy)
+        if session_result["status"] != "SESSION_RESTORED":
+            print(json.dumps(session_result,indent=2))
+            return 2
         directory=Path(os.environ.get("LOCALAPPDATA",str(Path.home()/".local/share")))/"SQBF"/"plan-login"
         record=_load_host(directory)
         try:

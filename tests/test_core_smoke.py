@@ -236,6 +236,7 @@ class CoreSmokeTests(unittest.TestCase):
     def test_cli_auth_timeout_does_not_start_reviewer_or_benchmark(self):
         from sqbf.cli import main
         with tempfile.TemporaryDirectory() as directory,patch("sqbf.plan_login._load_host",return_value={}), \
+                patch("sqbf.session_check.check_session",return_value={"status":"SESSION_RESTORED"}), \
                 patch("sqbf.plan_login.authorize",side_effect=RuntimeError("synthetic timeout")), \
                 patch("sqbf.bounded.invoke_worker") as inference,patch("sqbf.cli.run") as runner:
             session=Path(directory)/'session.json'

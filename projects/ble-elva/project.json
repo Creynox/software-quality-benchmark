@@ -3,7 +3,7 @@
   "project_id": "ble-elva",
   "display_name": "ELVA / BLE – WPK Blackbox Benchmark",
   "application": "BLE/ELVA",
-  "profile_status": "PARTIAL_GO_LAB01_HARNESS_REPAIRED_PERSISTENCE_PILOT_PENDING",
+  "profile_status": "PARTIAL_GO_SCROLL_REPAIR_TESTED_PERSISTENCE_PILOT_PENDING",
   "execution_mode": "local_blackbox_ui",
   "scenarios": [
     "scenarios/sts-0-45-product-core-v0.2.json",
@@ -29,10 +29,10 @@
   ],
   "active_product_scenario": "scenarios/sts-0-45-product-core-v0.3.json",
   "latest_lab01_attempt": {
-    "run_id": "b0834f9f-3777-497c-9dae-bd28369b9fb0",
+    "run_id": "fc489109-17ac-4d47-8823-61d292c457e1",
     "result": "NO-GO",
     "classification": "INVALID_HARNESS",
     "persisted_product": false,
-    "repair": "dde2ca076bfd35b85a5dede5d2e2a096d6f493ee"
+    "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   }
 }

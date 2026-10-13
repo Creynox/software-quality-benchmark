@@ -29,3 +29,7 @@ Die bestehende Dauerfreigabe für CORE-SMOKE-01 bleibt separat unverändert.
 
 Ein einzelner bestandener Pilot beweist die technische Umgebung und diesen Prozess,
 keine statistische Reproduzierbarkeit oder umfassende BLE-Fachabnahme.
+
+## Zusätzlicher ausdrücklicher Einzelauftrag
+
+Nach dem archivierten ersten Harnessfehler antwortete der PO: „Ja, einen neuen LAB-01-Piloten durchführen“. Dies autorisiert genau einen weiteren Einzelpilot mit erneut geprüften Gates und frischem OAuth, keine automatische Folge-Wiederholung. Dieser Auftrag wurde durch Run fc489109-17ac-4d47-8823-61d292c457e1 erfüllt (NO-GO, kein Save). Der darauffolgende Scroll-Fix ist nur lokal getestet.

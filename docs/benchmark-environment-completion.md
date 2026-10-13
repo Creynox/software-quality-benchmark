@@ -91,3 +91,7 @@ Keine neue Issue-Welle, Actions, Merge, main-Commits oder Secrets in GitHub.
 Nächster einzelner Schritt: gültigen LAB-01-Piloten mit getesteter SPA-Reparatur und
 unveränderter leerer Working Copy ausführen; erneut Gates prüfen und bei Bedarf
 separate OAuth-Anmeldung. Ein erfolgreicher Produkt-Oracle ist die verbleibende Abnahme.
+
+## Update: ausdrücklich freigegebener zusätzlicher Einzelpilot
+
+Run fc489109-17ac-4d47-8823-61d292c457e1 am 13.10.2026, SQBF 7b83bb2, bleibt NO-GO ohne Save. Die SPA-Reparatur funktioniert; ein weiterer Runnerfehler ignorierte Scrollkoordinaten und drehte dadurch den Zahlenwert 45 auf 44,9. Reparatur 2f269f1 ist mit 138 lokalen Tests bestanden. Alle Bestände unverändert. [Vollständiger zusätzlicher Pilotbericht](lab01-second-pilot.md). #11/Persistenzabnahme weiterhin offen; kein weiterer Live-Retry.

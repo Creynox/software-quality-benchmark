@@ -4,7 +4,7 @@ A versioned, AI-first framework for evaluating software quality in a reproducibl
 
 ## Current phase
 
-The project has **ongoing Foundation Research** and an **unmerged local MVP prototype**. The next delivery goal is a verified, reproducible first black-box UI run; authoritative quality scoring remains a separate methodology milestone.
+The project has **ongoing Foundation Research** and an **unmerged local MVP prototype**. The first bounded real CORE-SMOKE-01 run has passed with independent database evidence. LAB-01 uses a separate disposable working copy; authoritative quality scoring remains a separate methodology milestone.
 
 Initial MVP target:
 
@@ -71,8 +71,4 @@ projects/ble-elva/ on the proposed implementation branch. See
 projects/ble-elva/README.md for Windows setup, local isolated fixture
 requirements, sample CLI commands and important security limitations.
 
-This does **not** replace the Foundation research methodology and is not an
-authoritative score: the first BLE dataset, independent persistence Oracle,
-actual vision model access and live benchmark evidence require separate
-verification before MVP GO. The runner records local evidence and separates
-low-cost UI execution from a single end-of-run reviewer.
+CORE-SMOKE-01 run `04bd06b3-f868-4390-b7d6-3df67e9cb85f` passed technical, independent no-write Oracle and reviewer checks. LAB-01 v0.3 adds bounded product creation in a separate working copy with a SELECT-only persistence Oracle. See [local operations](projects/ble-elva/operations.md). These process proofs do not replace Foundation methodology or establish an authoritative software-quality score. PR #10 remains Draft; no automatic merge.

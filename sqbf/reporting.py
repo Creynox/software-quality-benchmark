@@ -69,7 +69,7 @@ class Evidence:
             f"- Executor-Endstatus: {manifest['executor_status']}",
             f"- Modellwartezeit: {format_duration(manifest.get('model_wait_seconds'))}",
             f"- Aktive Runnerzeit (ohne Modellwartezeit): {format_duration(manifest.get('active_seconds_excluding_model_wait'))}",
-            (f"- Unabhängiger No-Write-Oracle: **{manifest['oracle']['status']}**"
+            (f"- Unabhängiger {'Persistenz' if manifest.get('scenario_id') == 'LAB-01' else 'No-Write'}-Oracle: **{manifest['oracle']['status']}**"
              if "oracle" in manifest else "- Fachlicher PASS: **nicht bestätigt** (kein unabhängiger Persistenz-Oracle im MVP)"),
             f"- UI-Aktionen: {manifest['actions']} / {manifest['budget_actions']}",
             f"- Dauer (Wallclock, inklusive KI-Wartezeit): {manifest['wall_seconds']:.1f} Sekunden",

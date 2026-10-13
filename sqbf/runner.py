@@ -73,6 +73,12 @@ def run(
     fixture_path=None,
 ) -> Path:
     """Execute browser UI only. Fixture preparation is a separate prerequisite."""
+    if scenario.write_policy:
+        if ask_extension or fixture_path is None:
+            raise ValueError('LAB requires its working fixture and permits no extension')
+        from .write_profile import load_write_profile
+        module=load_write_profile(scenario.write_policy['contract'],'lab_runner')
+        return module.run_lab(scenario,executor,analyst,output_root,storage_state,headed,fixture_path)
     if scenario.read_only_policy:
         if ask_extension or fixture_path is None:
             raise ValueError("Read-only pilot requires its Oracle fixture and permits no budget extensions")

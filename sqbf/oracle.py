@@ -340,6 +340,8 @@ def verify_after(snapshot: dict[str, Any], fixture: dict[str, Any], baseline: di
         for field in ("material_base", "material_origin"):
             if not isinstance(product.get(field), str) or not product[field].strip():
                 errors.append(f"Pflichtfeld {field} fehlt")
+            elif field in e and product[field] != e[field]:
+                errors.append(f"Gespeicherter synthetischer Fixture-Wert {field} stimmt nicht")
     if errors:
         raise OracleError("; ".join(errors))
     return {

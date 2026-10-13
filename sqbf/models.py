@@ -38,6 +38,7 @@ class Scenario:
     scenario_version: str = "1"
     read_only_policy: dict | None = None
     max_model_calls: int = 12
+    write_policy: dict | None = None
 
     @classmethod
     def load(cls, path: str | Path, base_url: str | None = None) -> "Scenario":

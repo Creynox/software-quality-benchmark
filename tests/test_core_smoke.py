@@ -239,7 +239,7 @@ class CoreSmokeTests(unittest.TestCase):
         from sqbf.cli import main
         with tempfile.TemporaryDirectory() as directory,patch("sqbf.plan_login._load_host",return_value={}), \
                 patch("sqbf.session_check.check_session",return_value={"status":"SESSION_RESTORED"}), \
-                patch("sqbf.scope_check.check_scope",return_value={"status":"SCOPE_VERIFIED"}), \
+                patch("sqbf.scope_check.check_scope",return_value={"status":"SCOPE_VERIFIED","runtime":{"assembly":"build"}}), \
                 patch("sqbf.plan_login.authorize",side_effect=RuntimeError("synthetic timeout")), \
                 patch("sqbf.bounded.invoke_worker") as inference,patch("sqbf.cli.run") as runner:
             session=Path(directory)/'session.json'

@@ -1,0 +1,55 @@
+{
+  "scenario_id": "LAB-01",
+  "scenario_version": "0.3",
+  "persona": "Laborleitung",
+  "fixture_id": "lab01-working-generated",
+  "software_version": "unknown-set-from-deployment",
+  "url": "http://127.0.0.1:5081/",
+  "allowed_hosts": [
+    "127.0.0.1"
+  ],
+  "max_minutes": 25,
+  "max_actions": 150,
+  "task": "Als Laborleitung im isolierten synthetischen Werk Enzberg: Lege genau ein Produkt mit dem Namen STS 0–45 an. Werk Enzberg, Oberkategorie / Materialklasse Ungebundenes Gemisch, Kategorie Gemisch, Produkttyp STS, Verwendungsbereich Ungebundenes Gemisch, Produktstufe Fertiges Gemisch. Die synthetischen Fixture-Werte sind Materialbasis / Gesteinsart Kalkstein und Materialherkunft gebrochen (keine Aussage über reale Enzberg-Materialien). Siebbereich von 0 mm bis 45 mm. Keine optionalen Felder, Normen, Grenzwerte, Proben oder Berichte verändern. Prüfe die Pflichtfelder, speichere genau einmal, kehre zur Produktübersicht zurück, finde das Produkt und öffne es erneut, um die gespeicherten Stammdaten zu prüfen. Falls die Voraussetzungen fehlen oder das Speichern fehlschlägt: blocked, kein weiterer Speicherversuch.",
+  "expected": [
+    "Ein Produkt STS 0–45 ist dem Benchmark-Werk Enzberg eindeutig zugeordnet und über BLE.Web gespeichert.",
+    "Nach Verlassen der Eingabemaske ist das Produkt durch sichtbare Navigation oder Suche wieder auffindbar.",
+    "Die Pflichtfelder Materialbasis und Materialherkunft sind mit belegbaren Werten gespeichert; es wurde keine Normedition neu angelegt oder unbelegt zugeordnet."
+  ],
+  "max_model_calls": 152,
+  "read_only_policy": {
+    "query": "STS 0–45",
+    "search_placeholder": "Produkt, Code, Werk oder Kunde",
+    "target_path": "/products",
+    "navigation_selector": "a[href=\"/products\"]",
+    "empty_text": "Keine Produkte gefunden",
+    "allowed_paths": [
+      "/",
+      "/products"
+    ],
+    "transport_post_paths": [
+      "/_blazor/negotiate",
+      "/_blazor"
+    ],
+    "asset_prefixes": [
+      "/_framework/",
+      "/_content/",
+      "/css/",
+      "/js/",
+      "/images/",
+      "/fonts/",
+      "/assets/"
+    ],
+    "asset_paths": [
+      "/_blazor",
+      "/_blazor/initializers",
+      "/_blazor/disconnect",
+      "/app.css",
+      "/BLE.Web.styles.css",
+      "/favicon.ico"
+    ]
+  },
+  "write_policy": {
+    "contract": "LAB-01-SINGLE-PRODUCT-v1"
+  }
+}

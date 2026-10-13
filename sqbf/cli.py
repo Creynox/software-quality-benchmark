@@ -120,6 +120,13 @@ def main(argv=None) -> int:
     doctor.add_argument("--url", default="http://127.0.0.1:5059/")
     doctor.add_argument("--fixture", default="projects/ble-elva/fixtures/enzberg-product-core-v0.2.json")
     doctor.add_argument("--storage-state", default=".secrets/ble-session.json")
+    working = sub.add_parser('working-fixture', help='New private LAB working copy; never reset/reuse a database')
+    working.add_argument('--source', required=True)
+    working.add_argument('--output', required=True)
+    working.add_argument('--application-root', required=True)
+    restart=sub.add_parser('working-web',help='Restart verified LAB clone only, without seeding or restore')
+    restart.add_argument('--fixture',required=True)
+    restart.add_argument('--application-root',required=True)
     registry=sub.add_parser("list-runs",help="Search the local run index",allow_abbrev=False)
     registry.add_argument("--output",default="runs")
     for option in ["test-id","software-version","date"]:
@@ -176,6 +183,26 @@ def main(argv=None) -> int:
     execute.add_argument("--fixture-ready", action="store_true", help="Assert isolated fixture was prepared")
     execute.add_argument("--interactive-budget", action="store_true", help="Explicit manual run extension")
     args = parser.parse_args(argv)
+    if args.command == 'working-web':
+        from .write_profile import load_write_profile
+        start_working_web=load_write_profile('LAB-01-SINGLE-PRODUCT-v1','working_fixture').start_working_web
+        try:
+            pid=start_working_web(args.fixture,args.application_root)
+        except Exception:
+            print('BLOCKED_WORKING_WEB: port occupied, identity/build or private credential unavailable; no fallback.')
+            return 2
+        print(f'Owned working application started, PID {pid}; run session/scope gates before use.')
+        return 0
+    if args.command == 'working-fixture':
+        from .write_profile import load_write_profile
+        create_working_fixture=load_write_profile('LAB-01-SINGLE-PRODUCT-v1','working_fixture').create_working_fixture
+        try:
+            path = create_working_fixture(args.source,args.output,args.application_root)
+        except Exception:
+            print('BLOCKED_WORKING_FIXTURE: inspect private provisioning evidence; no retry/reset/fallback.')
+            return 2
+        print(f'Working fixture: {path}')
+        return 0
     if args.command=="list-runs":
         path=Path(args.output)/"index.jsonl"
         rows=[json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line] if path.exists() else []
@@ -271,11 +298,26 @@ def main(argv=None) -> int:
         if (not scenario.read_only_policy or args.analyst_provider != "chatgpt_plan"
                 or args.no_analyst or args.interactive_budget or args.allow_host
                 or args.executor_model != "gpt-6-luna" or args.analyst_model == args.executor_model):
-            parser.error("Only the fixed read-only pilot with Luna and a separate ChatGPT-plan reviewer is enabled")
+            parser.error("Only the fixed CORE/LAB pilot with Luna and a separate ChatGPT-plan reviewer is enabled")
         from .plan_login import _load_host, authorize, catalog
         from .smoke_runner import ACTION_SCHEMA, REVIEW_SCHEMA
         from .read_only import validate_policy
         validate_policy(scenario.read_only_policy)
+        fixture=json.loads(Path(args.fixture).read_text(encoding='utf-8-sig'))
+        if scenario.write_policy:
+            from .write_profile import load_write_profile
+            validate_target=load_write_profile(scenario.write_policy['contract'],'lab_guard').validate_target
+            oracle_dsn=load_write_profile(scenario.write_policy['contract'],'lab_runner').oracle_dsn
+            from .oracle import collect_snapshot, verify_before
+            from .no_write_oracle import snapshot
+            validate_target(scenario,fixture)
+            scenario.fixture_id=fixture['fixture_id']
+            source=json.loads(Path(fixture['working_copy']['source_fixture']).read_text(encoding='utf-8-sig'))
+            load_write_profile(scenario.write_policy['contract'],'lab_guard').validate_source(source)
+            if snapshot(source)!=fixture['working_copy']['source_snapshot']:
+                parser.error('Protected source changed; no model calls')
+            snapshot(fixture)
+            verify_before(collect_snapshot(oracle_dsn(fixture),fixture),fixture)
         from .session_check import check_session
         session_result=check_session(scenario.url,args.storage_state,scenario.read_only_policy)
         if session_result["status"] != "SESSION_RESTORED":
@@ -288,6 +330,8 @@ def main(argv=None) -> int:
         if scope_result["status"] != "SCOPE_VERIFIED":
             print(json.dumps(scope_result,indent=2))
             return 2
+        if args.software_version != scope_result['runtime']['assembly']:
+            parser.error('Software version must match the independently verified running assembly')
         directory=Path(os.environ.get("LOCALAPPDATA",str(Path.home()/".local/share")))/"SQBF"/"plan-login"
         record=_load_host(directory)
         try:
@@ -306,6 +350,8 @@ def main(argv=None) -> int:
         probe=ChatGPTPlanModel(args.analyst_model,credential,schema,timeout=30,max_response_chars=200)
         compatibility=invoke_worker("vision-test",{"provider":model_spec(probe)},45)
         print(json.dumps({"reviewer_compatibility":compatibility}))
+        if scenario.write_policy:
+            ACTION_SCHEMA=load_write_profile(scenario.write_policy['contract'],'lab_runner').LAB_ACTION_SCHEMA
         executor=ChatGPTPlanModel(args.executor_model,credential,ACTION_SCHEMA)
         analyst=ChatGPTPlanModel(args.analyst_model,credential,REVIEW_SCHEMA)
     else:

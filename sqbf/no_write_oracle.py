@@ -11,7 +11,7 @@ import re
 from .oracle import OracleError, verify_docker_identity
 
 
-def snapshot(fixture, run=subprocess.run):
+def snapshot(fixture, run=subprocess.run, enforce_counts=True):
     expected=fixture.get("read_only_oracle",{}).get("expected_counts")
     if not isinstance(expected,dict) or not expected or any(
             not re.fullmatch(r"[a-z][a-z0-9_]*",table) or type(count) is not int or count<0
@@ -54,7 +54,7 @@ def snapshot(fixture, run=subprocess.run):
     tables = {row["table"]: {"count": row["count"], "hash": row["hash"]} for row in rows[2:]}
     if set(tables) != set(expected):
         raise OracleError("Oracle snapshot has missing protected tables")
-    if any(tables[table]["count"]!=count for table,count in expected.items()):
+    if enforce_counts and any(tables[table]["count"]!=count for table,count in expected.items()):
         raise OracleError("Protected table counts do not match the project fixture")
     return {"docker": docker, "identity": identity, "tables": tables}
 

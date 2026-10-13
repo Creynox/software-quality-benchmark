@@ -44,6 +44,15 @@ class Budget:
         self.calls += 1
 
 
+class LabBudget(Budget):
+    """Separate explicitly commissioned write pilot; CORE limits stay fixed."""
+    def __init__(self, seconds, calls):
+        if not 0 < seconds <= 1500 or not 2 <= calls <= 152:
+            raise ValueError('LAB budgets exceed 25 minutes or 152 calls')
+        self.deadline = time.monotonic() + seconds
+        self.limit, self.calls = calls, 0
+
+
 def _windows_job(process):
     class Basic(ctypes.Structure):
         _fields_ = [("process_time", ctypes.c_int64), ("job_time", ctypes.c_int64),
@@ -208,6 +217,10 @@ def main():
         elif mode == "pilot":
             from .smoke_runner import browser_pilot
             output = browser_pilot(payload)
+        elif mode == "lab-pilot":
+            from .write_profile import load_write_profile
+            module=load_write_profile(payload['scenario']['write_policy']['contract'],'lab_runner')
+            output = module.browser_pilot(payload)
         elif mode == "test-hang":
             time.sleep(60)  # Explicit local regression mode, no credentials/UI.
             output = {}

@@ -47,6 +47,16 @@ def review_images(images, reopened):
     return [images[0]]+(reopened if reopened else images[-2:])
 
 
+def repeated_no_progress(images, actions):
+    if len(images)<4 or len(actions)<3:
+        return False
+    clicks=actions[-3:]
+    return (all(a['action']=='click' for a in clicks)
+            and max(a['x'] for a in clicks)-min(a['x'] for a in clicks)<=5
+            and max(a['y'] for a in clicks)-min(a['y'] for a in clicks)<=5
+            and all(png==images[-1] for png in images[-4:]))
+
+
 def browser_pilot(payload):
     from playwright.sync_api import sync_playwright
     from sqbf.runner import apply_action
@@ -99,6 +109,10 @@ def browser_pilot(payload):
                 png=page.screenshot(animations='disabled',timeout=min(5000,budget.remaining()*1000))
                 evidence.snapshot(png,f'step-{len(actions)}');images.append(png)
                 if reopened:reopened_images.append(png)
+                if repeated_no_progress(images,actions):
+                    status='BLOCKED_NO_PROGRESS'
+                    evidence.event('stopped_fail_closed',error_code='REPEATED_CLICK_WITHOUT_VISIBLE_PROGRESS')
+                    break
                 if len(actions)>=scenario.max_actions:raise BudgetExceeded('Action budget exhausted')
                 if budget.calls>=budget.limit-1:raise BudgetExceeded('Executor call budget exhausted')
                 result=ask(executor,INSTRUCTIONS+'\nTASK:\n'+scenario.task+'\nPREVIOUS VISIBLE ACTIONS:\n'+

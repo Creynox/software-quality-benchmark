@@ -65,11 +65,11 @@ def transport_allowed(url, method, origin, policy):
 # Never exposed to executor/reviewer. No labels, selectors or values are hidden.
 CLASSIFY = r"""
 const label=e=>e?.closest('.mud-input-control')?.querySelector('label')?.innerText.replace(/\s*\*\s*$/,'').trim();
-const path=location.pathname;
-const creating=path==='/products/new';
-const product=/^\/products\/[a-f0-9-]{36}$/.test(path);
 const field=e=>label(e);
 const classify=e=>{
+ const path=location.pathname;
+ const creating=path==='/products/new';
+ const product=/^\/products\/[a-f0-9-]{36}$/.test(path);
  if(!e)return {kind:'blocked'};
  if(e.closest('a[href="/products"]'))return {kind:'navigation'};
  const button=e.closest('button');

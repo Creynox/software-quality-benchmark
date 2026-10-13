@@ -202,3 +202,29 @@ class LabTests(unittest.TestCase):
             selection=lab.review_images(images,images[:count])
             self.assertLessEqual(len(selection),3)
             self.assertTrue(all(png in images for png in selection))
+
+    def test_native_guard_tracks_spa_route_without_page_reload(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser=p.chromium.launch();page=browser.new_page(viewport={'width':1280,'height':800})
+            page.route('**/*',lambda r:r.fulfill(content_type='text/html',body='''<button id="new">Neues Produkt</button>
+            <div class="mud-input-control"><label>Produktname *</label><input value="STS 0&#8211;45"></div>
+            <script>window.clicks=0;document.addEventListener('click',()=>window.clicks++);</script>'''))
+            page.add_init_script(event_guard());page.goto('http://127.0.0.1:5081/')
+            page.evaluate("history.pushState({},'', '/products')")
+            box=page.locator('#new').bounding_box()
+            check_action(page,{'action':'click','x':box['x']+10,'y':box['y']+10})
+            page.locator('#new').click();self.assertEqual(page.evaluate('window.clicks'),1)
+            page.evaluate("history.pushState({},'', '/products/new')")
+            page.locator('input').click();self.assertEqual(page.evaluate('window.clicks'),2)
+            page.evaluate("history.pushState({},'', '/products/11111111-1111-1111-1111-111111111111')")
+            page.locator('input').click();self.assertEqual(page.evaluate('window.clicks'),2)
+            browser.close()
+
+    def test_three_identical_noop_clicks_stop_without_another_executor_call(self):
+        clicks=[{'action':'click','x':1178+i,'y':234} for i in range(3)]
+        self.assertTrue(lab.repeated_no_progress([b'same']*4,clicks))
+        self.assertFalse(lab.repeated_no_progress([b'same']*3,clicks[:2]))
+        self.assertFalse(lab.repeated_no_progress([b'same']*3+[b'changed'],clicks))
+        clicks[-1]['x']=1100
+        self.assertFalse(lab.repeated_no_progress([b'same']*4,clicks))

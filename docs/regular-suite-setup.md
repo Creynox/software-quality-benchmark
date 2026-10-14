@@ -140,7 +140,7 @@ Unit follow-up validation: full project-venv suite **160 tests, 35.465 s, exit 0
 Unknown source units fail closed; cm/mm equivalence, exact 95/122 and 96/121
 projections, two-repetition retention and source immutability are covered.
 
-## Current correction: source unit remains unconfirmed
+## Historical correction: source unit temporarily unconfirmed
 
 The PO subsequently withdrew certainty about cm. The uploaded primary document
 DIN EN 933-8:2015-07 was inspected directly: section 6.5 specifies a metric ruler,
@@ -157,3 +157,54 @@ applicability; the 2004/2007 versus TL SoB-StB 20 mismatch remains documented.
 
 See [unit evidence](sand-equivalent-unit-evidence.md). Last code test result
 remains 160 tests, exit 0; this correction changes metadata/documentation only.
+
+## Current PO reconfirmation
+
+The PO reconfirmed original cm entries after the measurement endpoints were
+explained. The active unit contract is cm -> mm (factor 10), retaining A 95/122
+and B 96/121 mm. The norm specifies the target unit; the PO identifies the
+historical entry convention. This resolves the unit blocker only. No production
+rows changed and no normative release or full-suite approval is inferred.
+
+## Reference preparation implementation — 2026-10-14
+
+Implemented `sqbf.cli reference-project`, a pure controller-side projection of
+all ten recorded positions. New private output is reserved exclusively before
+writing, cannot overwrite a prior file and is rejected inside a Git worktree.
+Source and unit-decision SHA-256 bind the output to reviewed input versions.
+Credentials, identity/source row IDs and stored calculated verdicts are omitted.
+
+Original raw sieve, wash, shape, boiling, actual partial-series/preparation and
+repeated SÄ readings survive. SÄ is projected from confirmed cm to mm, retaining
+both repetitions. Missing SQL aggregates remain explicitly unrecorded; they do
+not become synthetic measurements or automatically non-applicable modules.
+Independent arithmetic proposals remain separate from conformity/release.
+The pure comparison blocks missing, extra, duplicate or changed measurement
+records, and emits mismatch identifiers only. It is not yet a DB persistence
+adapter and is not exposed to the screenshot Executor/Reviewer.
+
+`session-check --expected-products <private-name-array.json>` now supports the
+populated-fixture UI contract. Empty fixture checking is still the default.
+Malformed expectations stop before opening a browser. Session-check output is
+now also a new private file, never an overwrite. Neither mode proves identity;
+the independent signed identity/role/scope gate remains mandatory.
+
+### Local evidence
+
+- Full project-venv tests: `python -m unittest discover -s tests -v`;
+  **171 tests, 19.562 seconds, exit 0**.
+- Actual ten-position projection: exit 0, PREPARATION_ONLY; zero DB writes/model calls.
+- Golden fixture independently identified on loopback 55432: before/after
+  snapshots identical; products/samples/LIMS/reports/assignments remain zero,
+  standards/versions remain 15. Source port 5433 was not used in this step.
+- No OAuth or live benchmark operation; printed auth messages in tests are mocks.
+
+### Next dependency
+
+The PO is being asked whether to reproduce the historical DB standard context
+with the edition mismatch recorded and normative release held, or first update
+only the new isolated fixture using verified available editions. No original
+standard assignment is modified. Full suite stays BLOCKED_DATA_REVIEW; no stage
+is marked implemented solely because projection/session helpers are tested.
+Remaining work: populated disposable fixture, per-role gates, stage write guards,
+DB persistence adapters and bounded workflow/report acceptance.

@@ -116,6 +116,23 @@ class SessionCheckTests(unittest.TestCase):
             self.assertEqual(main(["preflight", "--scenario", "projects/ble-elva/scenarios/core-smoke-01.json",
                                    "--storage-state", "expired.json"]), 2)
 
+    def test_cli_populated_expectations_are_explicit_and_invalid_contract_stops(self):
+        from sqbf.cli import main
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'names.json'
+            args = ['session-check', '--scenario', 'projects/ble-elva/scenarios/core-smoke-01.json',
+                    '--url', URL, '--storage-state', 'private.json', '--expected-products', str(path)]
+            path.write_text(json.dumps(['synthetic STS']), encoding='utf-8')
+            with patch('sqbf.session_check.check_session', return_value={'status': 'SESSION_RESTORED'}) as check, patch('builtins.print'):
+                self.assertEqual(main(args), 0)
+                self.assertEqual(check.call_args.kwargs['expected_products'], ['synthetic STS'])
+            path.write_text(json.dumps(['duplicate', 'duplicate']), encoding='utf-8')
+            with patch('sqbf.session_check.check_session') as check, patch('builtins.print'):
+                self.assertEqual(main(args), 2)
+                check.assert_not_called()
+
     def test_run_checks_session_before_authorization_or_inference(self):
         from sqbf.cli import main
         with tempfile.TemporaryDirectory() as directory, \

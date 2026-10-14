@@ -131,6 +131,11 @@ def main(argv=None) -> int:
     suites=sub.add_parser('suite-check',help='Validate fixed suite/dataset contracts without models or DB writes')
     suites.add_argument('--suite',required=True)
     suites.add_argument('--dataset',help='Private reviewed dataset JSON; never model credentials')
+    reference=sub.add_parser('reference-project',help='Private BLE raw-measurement projection; no DB or models',allow_abbrev=False)
+    reference.add_argument('--suite',required=True)
+    reference.add_argument('--dataset',required=True)
+    reference.add_argument('--unit-decision',required=True)
+    reference.add_argument('--output',required=True,help='New private local JSON file; never overwrites')
     registry.add_argument("--output",default="runs")
     for option in ["test-id","software-version","date"]:
         registry.add_argument("--"+option, help="Case-sensitive substring match")
@@ -147,6 +152,7 @@ def main(argv=None) -> int:
     session_check.add_argument("--url", required=True)
     session_check.add_argument("--storage-state", required=True)
     session_check.add_argument("--output", help="Local sanitized JSON evidence")
+    session_check.add_argument('--expected-products',help='Local JSON array of exact names for a populated fixture; default requires empty state')
     scope_check = sub.add_parser("scope-check", help="Model-free independent signed identity and authorization gate", allow_abbrev=False)
     scope_check.add_argument("--scenario", required=True)
     scope_check.add_argument("--url", required=True)
@@ -186,6 +192,24 @@ def main(argv=None) -> int:
     execute.add_argument("--fixture-ready", action="store_true", help="Assert isolated fixture was prepared")
     execute.add_argument("--interactive-budget", action="store_true", help="Explicit manual run extension")
     args = parser.parse_args(argv)
+    if args.command=='reference-project':
+        from importlib import import_module
+        from .artifact_privacy import create_private_file
+        try:
+            data=json.loads(Path(args.dataset).read_text(encoding='utf-8-sig'))
+            suite=json.loads(Path(args.suite).read_text(encoding='utf-8-sig'))
+            unit=json.loads(Path(args.unit_decision).read_text(encoding='utf-8-sig'))
+            report=import_module('projects.ble-elva.tools.reference_projection').project_reference(data,suite,unit)
+            output=Path(args.output)
+            if any((parent/'.git').exists() for parent in output.resolve().parents):
+                raise ValueError('Private raw evidence must remain outside Git worktrees')
+            create_private_file(output)
+            output.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+        except Exception:
+            print('BLOCKED_REFERENCE_PROJECTION: invalid source/unit evidence or private output; no runtime operation.')
+            return 2
+        print(json.dumps({key:report[key] for key in ('status','dataset_id','source_sha256','unit_decision_sha256','model_calls','database_writes')}))
+        return 0
     if args.command=='suite-check':
         from .suites import suite_check
         try:
@@ -282,9 +306,29 @@ def main(argv=None) -> int:
         return 0 if result["status"] == "SCOPE_VERIFIED" else 2
     if args.command == "session-check" or (args.command == "preflight" and args.storage_state):
         from .session_check import check_session
-        result = check_session(scenario.url, args.storage_state, scenario.read_only_policy)
+        expected_products=None
+        if args.command == 'session-check' and args.expected_products:
+            try:
+                expected_products=json.loads(Path(args.expected_products).read_text(encoding='utf-8-sig'))
+                if (not isinstance(expected_products,list) or not 1<=len(expected_products)<=100
+                        or any(not isinstance(name,str) or not name for name in expected_products)
+                        or len(set(expected_products))!=len(expected_products)):
+                    raise ValueError()
+            except (OSError, ValueError, TypeError):
+                print('BLOCKED_SESSION: invalid expected-product contract; no browser operation.')
+                return 2
+        result = (check_session(scenario.url, args.storage_state, scenario.read_only_policy)
+                  if expected_products is None else check_session(scenario.url, args.storage_state,
+                       scenario.read_only_policy,expected_products=expected_products))
         if args.command == "session-check" and args.output:
-            Path(args.output).write_text(json.dumps(result, indent=2), encoding="utf-8")
+            from .artifact_privacy import create_private_file
+            try:
+                output=Path(args.output)
+                create_private_file(output)
+                output.write_text(json.dumps(result, indent=2), encoding="utf-8")
+            except Exception:
+                print('BLOCKED_SESSION_EVIDENCE: private new output unavailable; no overwrite.')
+                return 2
         print(json.dumps(result, indent=2))
         return 0 if result["status"] == "SESSION_RESTORED" else 2
     if args.command == "preflight":

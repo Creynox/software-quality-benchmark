@@ -20,10 +20,19 @@ resulting ratio proves its actual physical scale. Scaling both heights by ten
 leaves the percentage unchanged. A raw measurement record or instrument-scale
 comparison is needed before converting these source values.
 
-Current source-unit status: UNCONFIRMED. Conversion authorized: false. Original
+Historical interim source-unit status: UNCONFIRMED. Conversion was blocked. Original
 DB inputs remain authoritative and immutable. Earlier cm confirmation and its
 factor-ten proposal are superseded, not silently applied. No synthetic heights.
 
 The available norm defines the method; it does not resolve which historical
 product application edition should govern conformity. Uploaded editions are
 the basis for a future separately verified standards update.
+
+## Current PO decision
+
+After clarification of the measurement endpoints the PO reconfirmed original
+entries in cm. This is source-specific user evidence, not an inference from
+the norm or the ratio. Source unit: cm; canonical fixture unit: mm; factor: 10.
+Repetitions A 95/122 mm and B 96/121 mm preserve both actual source readings.
+Do not overwrite the source, substitute paper repetition B, or treat this limited
+unit decision as approval of the entire dataset or its norm-conformity results.

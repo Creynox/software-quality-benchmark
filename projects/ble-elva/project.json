@@ -43,10 +43,10 @@
     "superseded_candidate": "suites/enzberg-nsn018-v0.1.json",
     "live_suite_executed": false,
     "completion_report": "docs/regular-suite-setup.md",
-    "sand_equivalent_source_unit": "UNCONFIRMED",
+    "sand_equivalent_source_unit": "cm",
     "sand_equivalent_fixture_unit": "mm",
-    "unit_decision_by": "PO retracted certainty, 2026-10-14",
-    "sand_equivalent_conversion_authorized": false,
+    "unit_decision_by": "PO reconfirmed original cm entries after method clarification, 2026-10-14",
+    "sand_equivalent_conversion_authorized": true,
     "sand_equivalent_method_reference": "DIN EN 933-8:2015-07, 8.5: record heights to nearest mm"
   }
 }

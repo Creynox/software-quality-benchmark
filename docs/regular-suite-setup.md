@@ -123,16 +123,14 @@ was performed; mocked authorization messages from tests are not live operations.
 
 No live benchmark, no merge, no GitHub Actions and no claim of full readiness.
 
-## PO clarification: physical sand-equivalent unit
+## Historical PO clarification: physical sand-equivalent unit (superseded)
 
 On 2026-10-14 the PO confirmed that the stored height 12.2 means 12.2 cm.
 The existing BLE page labels the direct `SandHeightMm` / `SuspensionHeightMm`
 values as mm and forwards them without conversion. Preserve the legacy source
 rows unchanged. The new fixture/oracle projection must explicitly convert cm
 to mm: repetition A 95/122 mm, repetition B 96/121 mm, mean of individual
-ratios 78.6038477%. Paper repetition 2 is not substituted. This resolves the
-physical-unit question; the earlier statements that it is unresolved are
-historical. Norm context, release expectations and runnable stage gates remain
+ratios 78.6038477%. Paper repetition 2 is not substituted. This initial clarification was subsequently retracted; see the current evidence below. Norm context, release expectations and runnable stage gates remain
 open; this is not full suite readiness.
 
 The independent conversion helper rejects unknown units, preserves the source
@@ -141,3 +139,21 @@ dictionaries and both repetitions, and proves ratio invariance in local tests.
 Unit follow-up validation: full project-venv suite **160 tests, 35.465 s, exit 0**.
 Unknown source units fail closed; cm/mm equivalence, exact 95/122 and 96/121
 projections, two-repetition retention and source immutability are covered.
+
+## Current correction: source unit remains unconfirmed
+
+The PO subsequently withdrew certainty about cm. The uploaded primary document
+DIN EN 933-8:2015-07 was inspected directly: section 6.5 specifies a metric ruler,
+section 8.5 (printed page 14 / PDF page 16) records both heights to the nearest mm.
+Section 9 specifies individual ratios to one decimal and the mean rounded to a
+whole number. Method units do not establish the historical entry convention.
+
+Accordingly the active profile now declares UNCONFIRMED and forbids conversion.
+The earlier factor-ten projection is a proposal only; source rows remain unchanged.
+The ratio is invariant when both heights use the same scale, so the stored
+percentage cannot independently settle cm versus mm. No live run or DB write.
+Future standard updates must use the available uploaded editions and verified
+applicability; the 2004/2007 versus TL SoB-StB 20 mismatch remains documented.
+
+See [unit evidence](sand-equivalent-unit-evidence.md). Last code test result
+remains 160 tests, exit 0; this correction changes metadata/documentation only.

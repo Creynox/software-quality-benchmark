@@ -10,7 +10,7 @@
 - LAB01 wurde zweimal real versucht; beide Nachanalysen INVALID_HARNESS, Reparaturen lokal getestet. Produkt-Persistenz-PASS bleibt offen (#11).
 - Suite-Verträge, strikte Aggregation, Datenhash-/Vollständigkeitsprüfung und expliziter Sessioncheck für befüllte Fixtures implementiert.
 - Alle vierzehn regulären Stufen weiterhin pending; noch keine vollständige Suite-Fixture, Stage-Guards, Scope-/Rollenabnahme oder echte Suite-Ausführung.
-- DB-Rohwerte sind maßgeblich. SÄ-Einheit durch PO als cm bestätigt; neue Fixture projiziert explizit auf mm. Beide STS-Teilsiebreihen vollständig gefunden. Normkontext und fachliche Entscheidungen bleiben offen. Keine synthetischen Ersatzmassen freigegeben.
+- DB-Rohwerte sind maßgeblich. SÄ-Methode verlangt mm; historische Eingabeeinheit wieder unbestätigt, Umrechnung gesperrt. Beide STS-Teilsiebreihen vollständig gefunden. Normkontext und fachliche Entscheidungen bleiben offen. Keine synthetischen Ersatzmassen freigegeben.
 - Die folgenden Tabellen dokumentieren den früheren MVP-Stand; sie sind keine aktuelle Lauf-/Sessionfreigabe. Aktueller Completion Report: `../../docs/regular-suite-setup.md`.
 
 ## Legende

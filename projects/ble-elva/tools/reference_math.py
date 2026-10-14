@@ -33,6 +33,21 @@ def sand_equivalent(repetitions):
                Decimal(0)) / Decimal(2)
 
 
+def sand_heights_mm(repetitions, source_unit):
+    """New canonical projection; legacy field names never establish source units.
+
+    Caller supplies the reviewed physical unit explicitly. Original dictionaries
+    remain unchanged; the actual two repetitions, not averaged heights, survive.
+    """
+    if source_unit not in ('cm', 'mm'):
+        raise ValueError('Reviewed height unit is required')
+    sand_equivalent(repetitions)  # Validate count and physical part/total inputs.
+    factor = Decimal(10) if source_unit == 'cm' else Decimal(1)
+    return [{'sand_height': number(row['sand_height']) * factor,
+             'suspension_height': number(row['suspension_height']) * factor}
+            for row in repetitions]
+
+
 def pooled_particle_shape(fractions):
     """For one measured combined fraction; not STS sieve-weighted mixture index."""
     if not fractions:

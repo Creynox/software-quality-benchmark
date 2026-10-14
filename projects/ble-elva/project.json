@@ -42,6 +42,9 @@
     "sampling_date": "2026-05-08",
     "superseded_candidate": "suites/enzberg-nsn018-v0.1.json",
     "live_suite_executed": false,
-    "completion_report": "docs/regular-suite-setup.md"
+    "completion_report": "docs/regular-suite-setup.md",
+    "sand_equivalent_source_unit": "cm",
+    "sand_equivalent_fixture_unit": "mm",
+    "unit_decision_by": "PO, 2026-10-14"
   }
 }

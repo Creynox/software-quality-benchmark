@@ -122,3 +122,22 @@ was performed; mocked authorization messages from tests are not live operations.
    immutable historical CORE/LAB artifacts and avoiding automatic retries.
 
 No live benchmark, no merge, no GitHub Actions and no claim of full readiness.
+
+## PO clarification: physical sand-equivalent unit
+
+On 2026-10-14 the PO confirmed that the stored height 12.2 means 12.2 cm.
+The existing BLE page labels the direct `SandHeightMm` / `SuspensionHeightMm`
+values as mm and forwards them without conversion. Preserve the legacy source
+rows unchanged. The new fixture/oracle projection must explicitly convert cm
+to mm: repetition A 95/122 mm, repetition B 96/121 mm, mean of individual
+ratios 78.6038477%. Paper repetition 2 is not substituted. This resolves the
+physical-unit question; the earlier statements that it is unresolved are
+historical. Norm context, release expectations and runnable stage gates remain
+open; this is not full suite readiness.
+
+The independent conversion helper rejects unknown units, preserves the source
+dictionaries and both repetitions, and proves ratio invariance in local tests.
+
+Unit follow-up validation: full project-venv suite **160 tests, 35.465 s, exit 0**.
+Unknown source units fail closed; cm/mm equivalence, exact 95/122 and 96/121
+projections, two-repetition retention and source immutability are covered.

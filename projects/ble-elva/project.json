@@ -34,5 +34,14 @@
     "classification": "INVALID_HARNESS",
     "persisted_product": false,
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
+  },
+  "regular_suite_setup": {
+    "status": "BLOCKED_DATA_REVIEW",
+    "active_candidate": "suites/enzberg-nsn014-v0.1.json",
+    "reference_plan": "NSN 014",
+    "sampling_date": "2026-05-08",
+    "superseded_candidate": "suites/enzberg-nsn018-v0.1.json",
+    "live_suite_executed": false,
+    "completion_report": "docs/regular-suite-setup.md"
   }
 }

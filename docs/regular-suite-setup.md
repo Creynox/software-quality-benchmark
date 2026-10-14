@@ -16,11 +16,13 @@ Abmagerung; not BS 0/1, BS 1/2 or KSM Kost. The visible original plan has ten
 positions. The original database is preserved and its mismatch is evidence,
 not a reason to silently change source records.
 
-The current NSN018 suite is a **draft contract**. All fourteen stages remain
+The current NSN014 suite is a **draft contract**. All fourteen stages remain
 `pending`; neither a case catalog nor a successful contract check constitutes
 runtime acceptance. The PO's preference is an example already entered personally
-in BLE. A switch to a more fully recorded earlier plan or manual completion of
-NSN018 is pending the PO's data decision.
+in BLE. The PO subsequently selected an already recorded earlier plan for joint
+comparison. NSN014 (08.05.2026) is now the active candidate; NSN018 is retained
+as a superseded reference investigation. No re-entry or synthetic substitute
+was requested for the new candidate.
 
 ## Verified data findings
 
@@ -40,8 +42,22 @@ were executed. The normal source is not a benchmark execution target.
 - Candidate NSN014 (08.05.2026) has ten samples marked `Vollstaendig`, ten sieve
   initial masses, fourteen particle-shape fraction rows, one sand-equivalent row,
   four boiling rows and eleven report entries. Its STS has six actual mass pairs
-  (`DataOrigin.Real`). This is a candidate for verification, not an approved
-  complete oracle: raw presence/status alone does not establish correctness.
+  (`DataOrigin.Real`). It matches the original ten-position plan, and the six raw STS mass ratios
+  round to the six visible report percentages. It is not yet an approved oracle:
+  sand-equivalent repetition 2 differs (DB h1 12.1, report 12.2); original unit
+  confirmation is pending. Main sieve partial points are placeholders. Correct FK traversal through
+  `lims_sample.probe_id` finds two actual LIMS partial series (268.5 g each);
+  their five summed masses exactly match the original sheet. An initial lookup
+  incorrectly equated Probe-ID and LIMS-Sample-ID; corrected before acceptance.
+  Metadata marks partial-sieve Completed while other work items remain Pending.
+  Preserve these source distinctions instead of treating status as proof.
+  Latest PO decision: stored DB inputs are authoritative; do not replace the
+  different sand-equivalent repetition with paper data or convert its unresolved
+  physical unit automatically.
+
+Stored STS assignment uses TL SoB-StB 2004/2007; the report names TL SoB 20.
+This is an open edition mismatch, not proved equivalence and not permission to
+create a replacement norm or change source assignments.
 
 Original PDF copies, hashes, visual renderings and constrained database
 projections remain in a private evidence directory outside Git. Hidden/stale PDF
@@ -77,14 +93,17 @@ Project venv: `D:\Entwicklung\Benchmark\.venv\Scripts\python.exe`.
 
 ```powershell
 python -m unittest discover -s tests -v
-python -m sqbf.cli suite-check --suite projects/ble-elva/suites/enzberg-nsn018-v0.1.json --dataset <private-candidate.json>
+python -m sqbf.cli suite-check --suite projects/ble-elva/suites/enzberg-nsn014-v0.1.json --dataset <private-candidate.json>
 ```
 
-Full suite: **154 tests, 35.724 s, exit 0**. Includes suite safety, exact
+Full suite: **158 tests, 35.542 s, exit 0**. Includes suite safety, exact
 aggregation, generator records, strict evidence boolean, incomplete data,
 approval invalidation, dataset mismatch, CLI redaction and populated/empty
-session regression cases. The unreviewed NSN018 candidate correctly produces
-`BLOCKED_SETUP / BLOCKED_DATA_REVIEW`, exit 2. No actual model or OAuth operation
+session regression cases. The unreviewed NSN014 candidate correctly produces
+`BLOCKED_SETUP / BLOCKED_DATA_REVIEW`, exit 2. Independent profile arithmetic checks mean-of-two-ratios sand equivalent,
+combined-fraction particle shape and rejection of missing/impossible inputs.
+Neither those calculations nor a report label establishes norm conformity.
+No actual model or OAuth operation
 was performed; mocked authorization messages from tests are not live operations.
 
 ## Remaining implementation and acceptance

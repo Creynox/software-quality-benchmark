@@ -2,12 +2,16 @@
 
 **Referenzen:** `BLE_Laborprozess_0-to-End_v0.2.md` und `BLE_Produktreferenz_2026.md` (SharePoint-Stände 06.10.2026); BLE Gate-1-Spezifikation: `Creynox/BLE#962`. Dies ist ein fachlicher **Plan**, keine automatisch ausführbare Graph-Engine oder bestandener Testlauf.
 
+## Aktueller Umsetzungsstand 14.10.2026
+
+Der PO hat die vollstaendige reguläre Serie mit WPK und mehreren Personas beauftragt. Aktiver Referenzkandidat ist **NSN014, 08.05.2026** (zehn Positionen), nach lesendem Abgleich mit Originalbericht. Datenreview und ausführbare Stufengates sind offen. Siehe `../suites/enzberg-nsn014-v0.1.json` und `../../../docs/regular-suite-setup.md`. Die nachstehende Taxonomie ersetzt keine Ausführungsabnahme.
+
 ## Szenarien / Reihenfolge
 
 | Test-ID | Sichtbare Benutzeraufgabe | Fixture / unabhängiger Oracle | Reife |
 |---|---|---|---|
 | LAB-00 | BLE öffnen, Anmeldung und sichtbare Navigation prüfen | Isolierte Webinstanz, Testkonto; Browser-Evidence | No-cost Mock-Smoke tatsächlich durchgeführt, **0 Aktionen**, kein fachlicher PASS |
-| LAB-01 | Enzberg STS 0-45 anlegen, richtige Editionen verknüpfen, speichern, erneut öffnen | Werk/Labor/Normreferenzen vorhanden; Produkt fehlt; unabhängiger Produkt-/Zuordnungscheck | JSON-Szenario vorhanden, echter Lauf fehlt |
+| LAB-01 | Enzberg STS 0-45 ohne neue Normedition anlegen, speichern, erneut öffnen; historisches Normenszenario v0.1 getrennt erhalten | Aktive STS-Klassifikation und Werk vorhanden; Produkt fehlt; unabhängiger Produkt-/Zuordnungscheck | Zwei echte Versuche INVALID_HARNESS; Reparaturen getestet, persistierter Produkt-PASS weiter offen (#11) |
 | LAB-02 | Wochen-/Probenahmeplan aus Werk, Produkt, Prüfrotation/Anforderung erstellen | Synthetisches Werk mit mehreren Produkten/Prüfregeln; persistierter Plan | Nur Katalog |
 | LAB-03 | Eingangsproben anhand Werk/Produkt/Datum identifizieren; Teilproben und Rückverfolgbarkeit | Erwartete Eimer/Proben, originale Plan-ID und eindeutige Probe-ID; getrennte Teilproben | Nur Katalog |
 | LAB-04 | Mehrere Proben **batchorientiert** über Siebung, Trocknen/Waschen, Kornform, Kochversuch, Teilsiebung, SÄ bearbeiten | Vorgegebene Messdaten, definierte erwartete Mess-/Prüfmodulbezüge; keine echte physische Prüfung | Nur Katalog |
@@ -28,15 +32,15 @@
 ## Was liegt wo?
 
 - **Core-Harness:** `sqbf/runner.py` (Browser, Screenshot-Aktions-Loop, Limits, Evidence).
-- **Agentenadapter:** `sqbf/providers.py` (gegenwärtig HTTP-API; subscription-basiert noch in #14 offen).
+- **Agentenadapter:** `sqbf/providers.py` und tool-loser `chatgpt_plan`-Pfad (#14 abgeschlossen); keine PAYG-Nutzung für reguläre Suite.
 - **BLE-Szenario:** `projects/ble-elva/scenarios/`, fachliche Einzelaufträge.
 - **BLE-Fixture:** `projects/ble-elva/fixtures/` (Kontrakt, nicht automatisch provisionierte DB).
 - **BLE-Fachquellen:** `projects/ble-elva/references/` (nur Controller/Design/Oracle; kein verdeckter Input für UI-Agent).
-- **Oracle:** eigenständig fachlich autorisierte Persistenz- und Statusprüfung, noch zu entwickeln.
+- **Oracle:** unabhängiger LAB01-/CORE-Oracle und Scope-Prüfer implementiert; vollständige Labor-/WPK-Stufenoracles noch offen.
 - **Suite/Graph:** spätere Verbindung von LAB-01 → LAB-02 → ... → LAB-06 mit Start-/Pass-/Blockierbedingungen. **Noch nicht implementiert.**
 - **Reports:** `sqbf/reporting.py`; lokal in `runs/`, nicht in Git.
 
-## Nächster einzelner Schritt
+## Historischer MVP-Plan (durch aktuellen PO-Auftrag erweitert)
 
 1. Mit Codex lokal die beiden Quellen sowie dieses Testkatalog-Dokument auf fachliche und technische Lücken prüfen und ausschließlich LAB-01 vorbereiten.
 2. Abo-basierten **Screenshot-only** Agentenadapter mit einem einzelnen Testbild und einer JSON-Aktion validieren (SQBF #14), ohne API-Keys oder Pay-as-you-go.

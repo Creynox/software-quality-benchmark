@@ -2,6 +2,17 @@
 
 **Stichtag:** 13.10.2026 · **Scope:** zuerst Workflow Produkt → Probenahmeplan → Probe → Messung → Bewertung → Freigabe/Bericht. **Keine Neuanlage von Normen** und keine vollständige Norminventur als Voraussetzung. Die Normenhistorie und korrekte Bewertungsgrundlagen bleiben Datenintegritätsgrenzen.
 
+## Aktuell: reguläre Suite, 14.10.2026
+
+**Gesamtstatus BLOCKED_DATA_REVIEW / Umsetzung läuft.** Der PO beauftragt die vollständige Enzberg-Serie einschließlich WPK und Rollen. Aktiver Kandidat ist NSN014 (08.05.2026), zehn bereits gespeicherte Proben; NSN018 ist nach Datenvergleich zurückgestellt.
+
+- Tool-loser ChatGPT-Plan-Provider und echter CORE-SMOKE-01-GO nachgewiesen; #14/#17/#18/#19 abgeschlossen.
+- LAB01 wurde zweimal real versucht; beide Nachanalysen INVALID_HARNESS, Reparaturen lokal getestet. Produkt-Persistenz-PASS bleibt offen (#11).
+- Suite-Verträge, strikte Aggregation, Datenhash-/Vollständigkeitsprüfung und expliziter Sessioncheck für befüllte Fixtures implementiert.
+- Alle vierzehn regulären Stufen weiterhin pending; noch keine vollständige Suite-Fixture, Stage-Guards, Scope-/Rollenabnahme oder echte Suite-Ausführung.
+- Original-/DB-Datenreview offen: u.a. Sandäquivalent-Wiederholung/Einheit und STS-Teilsiebungsquelle. Keine synthetischen Ersatzmassen freigegeben.
+- Die folgenden Tabellen dokumentieren den früheren MVP-Stand; sie sind keine aktuelle Lauf-/Sessionfreigabe. Aktueller Completion Report: `../../docs/regular-suite-setup.md`.
+
 ## Legende
 
 - **[x] bereits implementiert** bedeutet nicht automatisch auf diesem Commit getestet.
@@ -55,5 +66,5 @@
 
 - Erster Lauf kann **BLOCKED**, **INCOMPLETE** oder **INCONCLUSIVE** sein und bleibt ein nützlicher technischer Nachweis, ist aber **kein** fachlicher PASS.
 - **Kein** echtes Testkonto/Fixtures-Reset ohne bestätigte Isolation; keine produktiven Kundendaten oder Kundensendungen.
-- **Keine GitHub Actions, keine zusätzlichen API-Kosten und keine stillen Pay-as-you-go-Fallbacks**; Abo-Agentenintegration ist bis #14 noch ausstehend.
+- **Keine GitHub Actions, keine zusätzlichen API-Kosten und keine stillen Pay-as-you-go-Fallbacks**; Abo-Agentenintegration ist implementiert (#14 abgeschlossen); aktuelle Session, Kontingent und Modellverfügbarkeit bleiben Laufgates.
 - Git-Regeln: nur Feature-Branch/PR, keine direkten main-Commits, kein Merge ohne Abnahme.

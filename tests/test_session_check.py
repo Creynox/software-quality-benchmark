@@ -12,7 +12,8 @@ URL = "http://127.0.0.1:5080/"
 
 
 class SessionCheckTests(unittest.TestCase):
-    def run_check(self, fail_context=None, fail_stage=None, visible=True):
+    def run_check(self, fail_context=None, fail_stage=None, visible=True, expected_products=None,
+                  empty_visible=True, product_visible=True):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "state.json"
             state.write_text(json.dumps({"cookies": [{"value": "secret-canary", "expires": 1}]}))
@@ -24,7 +25,13 @@ class SessionCheckTests(unittest.TestCase):
                 context = MagicMock()
                 page = context.new_page.return_value
                 page.get_by_placeholder.return_value.is_visible.return_value = visible
-                page.get_by_text.return_value.is_visible.return_value = visible
+                def text_locator(text, **kwargs):
+                    locator = MagicMock()
+                    locator.count.return_value = 1
+                    locator.is_visible.return_value = (visible and (
+                        empty_visible if text == POLICY['empty_text'] else product_visible))
+                    return locator
+                page.get_by_text.side_effect = text_locator
                 response = MagicMock(status=200)
                 stage = 0
                 def navigate(url=None, **kwargs):
@@ -42,7 +49,7 @@ class SessionCheckTests(unittest.TestCase):
             manager = MagicMock()
             manager.__enter__.return_value = p
             with patch("playwright.sync_api.sync_playwright", return_value=manager):
-                result = check_session(URL, state, POLICY)
+                result = check_session(URL, state, POLICY, expected_products=expected_products)
             self.assertNotIn("secret-canary", json.dumps(result))
             for context in contexts:
                 context.close.assert_called_once()
@@ -76,6 +83,26 @@ class SessionCheckTests(unittest.TestCase):
     def test_missing_ui_does_not_pass(self):
         result, _ = self.run_check(visible=False)
         self.assertEqual(result["reason"], "MISSING_EXPECTED_UI")
+
+    def test_populated_fixture_requires_explicit_visible_products_and_no_empty_state(self):
+        result, _ = self.run_check(expected_products=['synthetic STS'], empty_visible=False)
+        self.assertEqual(result['status'], 'SESSION_RESTORED')
+        self.assertFalse(result['identity_verified'])
+        result, _ = self.run_check(expected_products=['synthetic STS'], empty_visible=False, product_visible=False)
+        self.assertEqual(result['status'], 'BLOCKED_SESSION')
+        result, _ = self.run_check(expected_products=['synthetic STS'], empty_visible=True)
+        self.assertEqual(result['status'], 'BLOCKED_SESSION')
+
+    def test_empty_fixture_default_is_not_silently_relaxed(self):
+        result, _ = self.run_check(empty_visible=False)
+        self.assertEqual(result['status'], 'BLOCKED_SESSION')
+
+    def test_invalid_populated_expectations_block_before_browser(self):
+        with patch('playwright.sync_api.sync_playwright') as browser:
+            for names in ([], ['duplicate', 'duplicate'], [None], 'synthetic STS'):
+                self.assertEqual(check_session(URL, 'unused', POLICY, expected_products=names)['reason'],
+                                 'INVALID_PRODUCT_EXPECTATION')
+            browser.assert_not_called()
 
     def test_missing_file_and_external_url_without_browser(self):
         with patch("playwright.sync_api.sync_playwright") as browser:

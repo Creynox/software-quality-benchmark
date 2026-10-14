@@ -5,11 +5,19 @@ from urllib.parse import urlsplit
 from .read_only import event_guard, request_allowed, validate_policy
 
 
-def check_session(url, storage_state, policy):
+def check_session(url, storage_state, policy, *, expected_products=None):
     validate_policy(policy)
     parsed = urlsplit(url)
     result = {"status": "BLOCKED_SESSION", "model_calls": 0, "ui_actions": 0,
               "checks": [], "identity_verified": False}
+    # A populated fixture needs an explicit controller-owned expectation. The
+    # original CORE empty-state contract remains the default and is never inferred.
+    if expected_products is not None and (
+            not isinstance(expected_products, list) or not expected_products
+            or len(expected_products) > 100
+            or any(not isinstance(name, str) or not name or len(name) > 500 for name in expected_products)
+            or len(set(expected_products)) != len(expected_products)):
+        return dict(result, reason="INVALID_PRODUCT_EXPECTATION")
     if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"
             or parsed.username or parsed.password or parsed.query or parsed.fragment
             or parsed.path != "/"):
@@ -52,7 +60,16 @@ def check_session(url, storage_state, policy):
                             if stage != "home":
                                 check["search_visible"] = page.get_by_placeholder(policy["search_placeholder"], exact=True).is_visible()
                                 check["empty_visible"] = page.get_by_text(policy["empty_text"], exact=True).is_visible()
-                                if not check["search_visible"] or not check["empty_visible"]:
+                                if expected_products is None:
+                                    expected_visible = check["empty_visible"]
+                                else:
+                                    check["expected_products_visible"] = all(
+                                        page.get_by_text(name, exact=True).count() == 1
+                                        and page.get_by_text(name, exact=True).is_visible()
+                                        for name in expected_products)
+                                    expected_visible = (not check["empty_visible"]
+                                                        and check["expected_products_visible"])
+                                if not check["search_visible"] or not expected_visible:
                                     return dict(result, reason="MISSING_EXPECTED_UI")
                     finally:
                         context.close()

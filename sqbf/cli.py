@@ -128,6 +128,9 @@ def main(argv=None) -> int:
     restart.add_argument('--fixture',required=True)
     restart.add_argument('--application-root',required=True)
     registry=sub.add_parser("list-runs",help="Search the local run index",allow_abbrev=False)
+    suites=sub.add_parser('suite-check',help='Validate fixed suite/dataset contracts without models or DB writes')
+    suites.add_argument('--suite',required=True)
+    suites.add_argument('--dataset',help='Private reviewed dataset JSON; never model credentials')
     registry.add_argument("--output",default="runs")
     for option in ["test-id","software-version","date"]:
         registry.add_argument("--"+option, help="Case-sensitive substring match")
@@ -183,6 +186,16 @@ def main(argv=None) -> int:
     execute.add_argument("--fixture-ready", action="store_true", help="Assert isolated fixture was prepared")
     execute.add_argument("--interactive-budget", action="store_true", help="Explicit manual run extension")
     args = parser.parse_args(argv)
+    if args.command=='suite-check':
+        from .suites import suite_check
+        try:
+            dataset=json.loads(Path(args.dataset).read_text(encoding='utf-8-sig')) if args.dataset else None
+            result=suite_check(args.suite,dataset)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            print('BLOCKED_SUITE_CONTRACT: missing or invalid suite/dataset; no runtime operation.')
+            return 2
+        print(json.dumps(result,ensure_ascii=False,indent=2))
+        return 0 if result['status']=='CONTRACT_READY' else 2
     if args.command == 'working-web':
         from .write_profile import load_write_profile
         start_working_web=load_write_profile('LAB-01-SINGLE-PRODUCT-v1','working_fixture').start_working_web

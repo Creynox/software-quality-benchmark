@@ -53,7 +53,7 @@ Real before-phase verifies zero probes; after-phase PASS has synthetic test
 evidence only. No probe saved. Create form inspected without clicking its save.
 
 Dotnet helper/verifier builds: exit0, zero warnings/errors. Full local Python
-suite: **200 tests, 22.115s, exit0**, including the final stable-login and evidence
+suite: **201 tests, 23.274s, exit0**, including the final origin guard, stable-login and evidence
 aggregation adjustments. A complete valid measurement can contain application
 FAIL results: `measurement_status=COMPLETE_VALID` remains distinct from task
 outcomes; unsupported/unverified trials never count as valid application failures.

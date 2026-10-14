@@ -17,6 +17,7 @@ def make_contract(fixture, position, sampling_date):
     if len(date) != 3 or len(sampling_date) != 10:
         raise ValueError('Exact reviewed sampling date required')
     return {'contract': 'NSN014-RECEIPT-v1', 'case_position': position['position_id'],
+            'origin': fixture['target_url'].rstrip('/'),
             'fields': {'Kunde': context['customer'], 'Projekt': context['project'],
                        'Werk / Standort': 'Enzberg (Enzberg)', 'Produkt': position['product'],
                        'Probencode': position['inputs']['sample_code'],
@@ -34,7 +35,8 @@ const classify=e=>{
  if(!e)return {kind:'blocked'};
  const path=location.pathname;
  const anchor=e.closest('a');
- if(anchor&&['/samples','/samples/create'].includes(new URL(anchor.href,location.href).pathname))return {kind:'navigation'};
+ if(anchor&&new URL(anchor.href,location.href).origin===location.origin
+   &&['/samples','/samples/create'].includes(new URL(anchor.href,location.href).pathname))return {kind:'navigation'};
  if(path==='/samples'&&e.closest('button')?.innerText.trim()==='Neue Probe'&&!window.__sqbfReceiptSaved)return {kind:'new'};
  if(path==='/samples/create'&&!window.__sqbfReceiptSaved){
   const button=e.closest('button');
@@ -97,7 +99,8 @@ def allow_operation(action, state, contract, *, controller_saved):
 
 
 def check_action(page, action, contract, *, controller_saved):
-    if urlsplit(page.url).path not in ('/samples','/samples/create'):
+    parsed=urlsplit(page.url)
+    if f'{parsed.scheme}://{parsed.netloc}' != contract['origin'] or parsed.path not in ('/samples','/samples/create'):
         raise ReadOnlyViolation('RECEIPT_PAGE_SCOPE_DENIED')
     state = page.evaluate(r"""({x,y,config})=>{__CLASSIFY__
 return {target:classify(Number.isFinite(x)&&Number.isFinite(y)?document.elementFromPoint(x,y):null),

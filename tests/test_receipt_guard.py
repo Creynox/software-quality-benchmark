@@ -1,6 +1,7 @@
 import importlib
 import unittest
 from html import escape
+from unittest.mock import MagicMock
 from sqbf.read_only import ReadOnlyViolation
 from test_suite_fixture import owned_fixture
 
@@ -64,3 +65,8 @@ class ReceiptGuardTests(unittest.TestCase):
         self.assertEqual(c['editable'],['Probencode','Entnahmedatum'])
         self.assertNotIn('password',str(c).lower())
         self.assertNotIn('tenant_id',c)
+
+    def test_other_ble_origin_is_rejected_before_dom_or_action(self):
+        page=MagicMock();page.url='http://127.0.0.1:5059/samples/create'
+        with self.assertRaises(ReadOnlyViolation):module.check_action(page,{'action':'done'},contract(),controller_saved=False)
+        page.evaluate.assert_not_called()

@@ -107,13 +107,19 @@ def aggregate(suite,records):
                 or record.get('oracle_gate')!='PASS' or record.get('evidence_verified') is not True
                 or cases[key]['implementation']!='implemented'):
             raise ValueError('PASS without independent gates/evidence')
+        if suite.get('benchmark_purpose') == 'ux_ui_process_stress' and record['result']=='FAIL' and (
+                record.get('technical_gate')!='PASS' or record.get('oracle_gate') not in ('PASS','FAIL')
+                or record.get('evidence_verified') is not True or cases[key]['implementation']!='implemented'):
+            raise ValueError('Application FAIL requires a valid measured trial and independent evidence')
         by_id[key]=record
     counts={result:sum(r['result']==result for r in records) for result in sorted(RESULTS)}
     missing=sorted(expected-set(by_id))
     valid=sum(r['result'] in ('PASS','FAIL') for r in records)
     overall=('INVALID' if counts['INVALID'] else 'FAIL' if counts['FAIL'] else
              'INCOMPLETE' if missing or counts['BLOCKED'] or counts['NOT_IMPLEMENTED'] or counts['INCONCLUSIVE'] else 'PASS')
+    measured=('INVALID' if counts['INVALID'] else 'COMPLETE_VALID' if valid==len(expected) and not missing else 'INCOMPLETE')
     return {'suite_id':suite['suite_id'],'version':suite['version'],'result':overall,
+            'measurement_status':measured,
             'required_cases':len(expected),'recorded_cases':len(by_id),'valid_cases':valid,
             'missing_cases':missing,'counts':counts,'passed_cases':counts['PASS'],
             'coverage':{'valid':valid,'required':len(expected)},

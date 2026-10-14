@@ -64,8 +64,8 @@ def check_session(url, storage_state, policy, *, expected_products=None):
                                     expected_visible = check["empty_visible"]
                                 else:
                                     check["expected_products_visible"] = all(
-                                        page.get_by_text(name, exact=True).count() == 1
-                                        and page.get_by_text(name, exact=True).is_visible()
+                                        page.locator('table tbody tr').filter(has=page.get_by_text(name, exact=True)).count() == 1
+                                        and page.locator('table tbody tr').filter(has=page.get_by_text(name, exact=True)).is_visible()
                                         for name in expected_products)
                                     expected_visible = (not check["empty_visible"]
                                                         and check["expected_products_visible"])

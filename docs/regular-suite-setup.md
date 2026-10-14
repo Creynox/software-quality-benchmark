@@ -242,3 +242,10 @@ Verified isolated target schema read-only: 118 selected column definitions,
 including actual product/tenant/material/classification fields. No Identity or
 credential table contents selected. This metadata supports upcoming fixture
 population without guessed schemas. No source5433 operation or DB mutation.
+
+## Start fixture accepted — 2026-10-15
+
+See [NSN014 fixture acceptance](nsn014-fixture-acceptance.md): new Web5082/PG55434,
+ten products/positions, zero probes and four independently verified actor sessions.
+Receipt guard and Oracle have local regressions; full stage Runner integration
+remains pending. No regular-suite live run yet.

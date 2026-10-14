@@ -55,7 +55,7 @@ def ask_extension():
     return None
 
 
-def save_session(url: str, output: Path, credentials_path=None, expected_username=None):
+def save_session(url: str, output: Path, credentials_path=None, expected_username=None, *, diagnostic_output=None):
     from playwright.sync_api import sync_playwright
 
     parsed = urlparse(url)
@@ -64,6 +64,13 @@ def save_session(url: str, output: Path, credentials_path=None, expected_usernam
     if output.exists():
         raise ValueError("Session file already exists; remove manually to replace")
     credentials = None
+    diagnostic = {'login_posts': 0, 'http_status': None, 'fields_match': None, 'error_code': None}
+    diagnostic_path = Path(diagnostic_output) if diagnostic_output else None
+    if diagnostic_path and not credentials_path:
+        raise ValueError('Guarded login diagnostics require explicit benchmark credentials')
+    if diagnostic_path:
+        from .artifact_privacy import create_private_file
+        create_private_file(diagnostic_path)
     if credentials_path:
         if parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("Automatic benchmark login requires a clean loopback HTTP URL")
@@ -74,9 +81,36 @@ def save_session(url: str, output: Path, credentials_path=None, expected_usernam
         browser = p.chromium.launch(headless=False)
         context = browser.new_context()
         page = context.new_page()
+        if credentials and diagnostic_path:
+            from urllib.parse import parse_qs, urlsplit
+            endpoint = url.rstrip('/') + '/account/login'
+            def guarded_login(route):
+                if route.request.method != 'POST':
+                    route.abort(); return
+                diagnostic['login_posts'] += 1
+                if diagnostic['login_posts'] != 1:
+                    diagnostic['error_code'] = 'LOGIN_FIELDS_CHANGED_OR_EXTRA_POST'
+                    route.abort(); return
+                values = parse_qs(route.request.post_data or '')
+                matched = (values.get('username') == [credentials['username']]
+                           and values.get('password') == [credentials['password']])
+                diagnostic['fields_match'] = matched
+                if diagnostic['login_posts'] != 1 or not matched:
+                    diagnostic['error_code'] = 'LOGIN_FIELDS_CHANGED_OR_EXTRA_POST'
+                    route.abort(); return
+                route.continue_()
+            context.route(endpoint, guarded_login)
+            def response_status(response):
+                if response.url == endpoint:
+                    diagnostic['http_status'] = response.status
+                    code = parse_qs(urlsplit(response.headers.get('location', '')).query).get('error', [None])[0]
+                    if code in ('invalid', 'environment'):
+                        diagnostic['error_code'] = 'LOGIN_' + code.upper()
+            page.on('response', response_status)
         page.goto(url, wait_until="domcontentloaded")
         if credentials:
             try:
+                page.wait_for_load_state('networkidle', timeout=15000)
                 page.locator('input[name="username"]').wait_for(state="visible")
                 # Blazor hydration can reset the first input during sequential
                 # fills. Set both ordinary form fields and requestSubmit in one
@@ -89,11 +123,20 @@ def save_session(url: str, output: Path, credentials_path=None, expected_usernam
                 page.wait_for_url(url, timeout=15000)
                 if urlparse(page.url).path == "/login":
                     raise ValueError()
+                if diagnostic_path and (diagnostic['login_posts'] != 1
+                        or diagnostic['fields_match'] is not True or diagnostic['error_code'] is not None
+                        or diagnostic['http_status'] not in (200, 302, 303)):
+                    raise ValueError()
             except Exception:
+                if diagnostic_path:
+                    diagnostic['error_code'] = diagnostic['error_code'] or 'LOGIN_TIMEOUT_OR_REDIRECT'
+                    diagnostic_path.write_text(json.dumps(diagnostic, indent=2), encoding='utf-8')
                 browser.close()
                 raise ValueError("BLOCKED_SESSION: benchmark login failed; no retry or state saved") from None
             finally:
                 credentials.clear()
+            if diagnostic_path:
+                diagnostic_path.write_text(json.dumps(diagnostic, indent=2), encoding='utf-8')
         else:
             print("Sign in manually in Chrome using the correct isolated benchmark account.")
             input("After sign-in has completed, press Enter to save local session state.")
@@ -136,6 +179,9 @@ def main(argv=None) -> int:
     reference.add_argument('--dataset',required=True)
     reference.add_argument('--unit-decision',required=True)
     reference.add_argument('--output',required=True,help='New private local JSON file; never overwrites')
+    fixture_check=sub.add_parser('suite-fixture-check',help='Model-free NSN014 fixture and four-persona acceptance; no login/model calls',allow_abbrev=False)
+    for name in ('fixture','suite','dataset','output'):
+        fixture_check.add_argument('--'+name,required=True)
     registry.add_argument("--output",default="runs")
     for option in ["test-id","software-version","date"]:
         registry.add_argument("--"+option, help="Case-sensitive substring match")
@@ -166,6 +212,7 @@ def main(argv=None) -> int:
     session.add_argument("--output", default=".secrets/ble-session.json")
     session.add_argument("--credentials", help="Explicit local user-only DPAPI benchmark credential file (Windows)")
     session.add_argument("--username", help="Required exact benchmark username for DPAPI login")
+    session.add_argument('--diagnostics',help='New private redacted login transport report; permits exactly one credential-matching POST')
     oracle = sub.add_parser("oracle", help="Read-only independent LAB-01 persistence oracle", allow_abbrev=False)
     oracle.add_argument("--phase", required=True, choices=["before", "after"])
     oracle.add_argument("--fixture", default="projects/ble-elva/fixtures/enzberg-product-core-v0.2.json")
@@ -192,6 +239,16 @@ def main(argv=None) -> int:
     execute.add_argument("--fixture-ready", action="store_true", help="Assert isolated fixture was prepared")
     execute.add_argument("--interactive-budget", action="store_true", help="Explicit manual run extension")
     args = parser.parse_args(argv)
+    if args.command=='suite-fixture-check':
+        from importlib import import_module
+        try:
+            report=import_module('projects.ble-elva.tools.suite_acceptance').write_acceptance(
+                args.fixture,args.suite,args.dataset,args.output)
+        except Exception:
+            print('BLOCKED_SUITE_FIXTURE: missing contract or private output; no fallback.')
+            return 2
+        print(json.dumps(report,indent=2))
+        return 0 if report['status']=='FIXTURE_GATES_VERIFIED' else 2
     if args.command=='reference-project':
         from importlib import import_module
         from .artifact_privacy import create_private_file
@@ -266,7 +323,7 @@ def main(argv=None) -> int:
 
     if args.command == "session":
         try:
-            save_session(args.url, Path(args.output), args.credentials, args.username)
+            save_session(args.url, Path(args.output), args.credentials, args.username, diagnostic_output=args.diagnostics)
         except (ValueError, EOFError, OSError):
             print("BLOCKED_SESSION: session creation failed; no automatic retry.")
             return 2

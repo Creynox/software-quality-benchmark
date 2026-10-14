@@ -13,7 +13,7 @@ URL = "http://127.0.0.1:5080/"
 
 class SessionCheckTests(unittest.TestCase):
     def run_check(self, fail_context=None, fail_stage=None, visible=True, expected_products=None,
-                  empty_visible=True, product_visible=True):
+                  empty_visible=True, product_visible=True, body_name_count=1, row_count=1):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "state.json"
             state.write_text(json.dumps({"cookies": [{"value": "secret-canary", "expires": 1}]}))
@@ -27,11 +27,14 @@ class SessionCheckTests(unittest.TestCase):
                 page.get_by_placeholder.return_value.is_visible.return_value = visible
                 def text_locator(text, **kwargs):
                     locator = MagicMock()
-                    locator.count.return_value = 1
+                    locator.count.return_value = body_name_count
                     locator.is_visible.return_value = (visible and (
                         empty_visible if text == POLICY['empty_text'] else product_visible))
                     return locator
                 page.get_by_text.side_effect = text_locator
+                row = page.locator.return_value.filter.return_value
+                row.count.return_value = row_count
+                row.is_visible.return_value = visible and product_visible
                 response = MagicMock(status=200)
                 stage = 0
                 def navigate(url=None, **kwargs):
@@ -96,6 +99,13 @@ class SessionCheckTests(unittest.TestCase):
     def test_empty_fixture_default_is_not_silently_relaxed(self):
         result, _ = self.run_check(empty_visible=False)
         self.assertEqual(result['status'], 'BLOCKED_SESSION')
+
+    def test_populated_check_uses_unique_table_row_not_duplicate_detail_name(self):
+        result, _ = self.run_check(expected_products=['synthetic STS'], empty_visible=False, body_name_count=2)
+        self.assertEqual(result['status'], 'SESSION_RESTORED')
+        for count in (0, 2):
+            result, _ = self.run_check(expected_products=['synthetic STS'], empty_visible=False, row_count=count)
+            self.assertEqual(result['status'], 'BLOCKED_SESSION')
 
     def test_invalid_populated_expectations_block_before_browser(self):
         with patch('playwright.sync_api.sync_playwright') as browser:

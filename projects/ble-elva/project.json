@@ -51,6 +51,22 @@
     "benchmark_purpose": "ux_ui_process_stress",
     "normative_conformity_scoring": false,
     "source_replay_approved_by": "PO, 2026-10-14",
-    "standard_policy": "Existing entered assignments unchanged; normative testing deferred"
+    "standard_policy": "Existing entered assignments unchanged; normative testing deferred",
+    "fixture_preparation": {
+      "status": "FIXTURE_GATES_VERIFIED",
+      "target_url": "http://127.0.0.1:5082/",
+      "postgres_port": 55434,
+      "start_state": "10 products, 1 plan, 10 items; zero probes/LIMS/reports",
+      "personas": {
+        "laboratory_lead": "Laborleiter",
+        "laboratory_staff": "Mitarbeiter",
+        "wpk_lead": "Laborleiter (separate account)",
+        "plant_lead": "Viewer"
+      },
+      "runtime_build": "c51ea2229b3513aa59e659774fe8ce44cdd81859",
+      "acceptance_command": "sqbf.cli suite-fixture-check",
+      "executor_integration": "pending",
+      "normative_conformity_scoring": false
+    }
   }
 }

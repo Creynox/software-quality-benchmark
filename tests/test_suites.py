@@ -41,7 +41,11 @@ class SuiteTests(unittest.TestCase):
         result = aggregate(implemented, records)
         self.assertEqual(result['valid_cases'], 14)
         self.assertEqual(result['result'], 'FAIL')
+        self.assertEqual(result['measurement_status'], 'COMPLETE_VALID')
         self.assertIsNone(result['score'])
+        for field,value in [('technical_gate','INVALID'),('oracle_gate','UNVERIFIED'),('evidence_verified',False)]:
+            invalid=copy.deepcopy(records);invalid[0][field]=value
+            with self.assertRaises(ValueError):aggregate(implemented,invalid)
 
     def test_ux_source_approval_is_not_normative_approval(self):
         data = {'schema_version': 1, 'dataset_id': 'UX', 'benchmark_purpose': 'ux_ui_process_stress',

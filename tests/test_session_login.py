@@ -9,6 +9,30 @@ from sqbf.session_credentials import load_credentials
 
 
 class SessionLoginTests(unittest.TestCase):
+    def test_private_diagnostic_blocks_changed_or_extra_post_without_cookie_save(self):
+        from urllib.parse import urlencode
+        for failure in ('changed', 'extra'):
+            with tempfile.TemporaryDirectory() as directory:
+                p = MagicMock(); browser=p.chromium.launch.return_value
+                context=browser.new_context.return_value; page=context.new_page.return_value
+                page.url='http://127.0.0.1:5082/'
+                manager=MagicMock(); manager.__enter__.return_value=p
+                route=MagicMock(); route.request.method='POST'
+                route.request.post_data=urlencode({'username':'benchmark-user','password':'secret-canary' if failure=='extra' else 'changed-canary'})
+                def intercept(*args, **kwargs):
+                    guard=context.route.call_args.args[1]; guard(route)
+                    if failure=='extra': guard(route)
+                page.wait_for_url.side_effect=intercept
+                diag=Path(directory)/'diagnostic.json'
+                with patch('playwright.sync_api.sync_playwright',return_value=manager), \
+                     patch('sqbf.session_credentials.load_credentials',return_value={'username':'benchmark-user','password':'secret-canary'}):
+                    with self.assertRaises(ValueError): save_session(page.url,Path(directory)/'state.json',
+                        'unused','benchmark-user',diagnostic_output=diag)
+                report=json.loads(diag.read_text())
+                self.assertNotIn('canary',str(report)); self.assertNotIn('benchmark-user',str(report))
+                self.assertEqual(report['error_code'],'LOGIN_FIELDS_CHANGED_OR_EXTRA_POST')
+                context.storage_state.assert_not_called(); route.abort.assert_called_once()
+
     def test_atomic_form_submission_survives_input_reset_canary(self):
         from playwright.sync_api import sync_playwright
         from urllib.parse import parse_qs

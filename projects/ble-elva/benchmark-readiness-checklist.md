@@ -1,3 +1,11 @@
+## Current regular-suite scope — PO decision 2026-10-14
+
+Active suite: NSN014 v0.2; UX/UI/process stress using current entered DB data and
+unchanged norms. Norm certification/update is deferred; edition discrepancy is
+not a readiness blocker. Source replay approved; fixture/adapters/role/runtime
+gates still pending. Application failure is valid evidence, not a reason to
+repair during a run. Safety gates remain mandatory. Historical notes follow.
+
 # BLE/ELVA – Benchmark-V1-Readiness und Arbeitscheckliste
 
 **Stichtag:** 13.10.2026 · **Scope:** zuerst Workflow Produkt → Probenahmeplan → Probe → Messung → Bewertung → Freigabe/Bericht. **Keine Neuanlage von Normen** und keine vollständige Norminventur als Voraussetzung. Die Normenhistorie und korrekte Bewertungsgrundlagen bleiben Datenintegritätsgrenzen.

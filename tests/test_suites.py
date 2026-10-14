@@ -26,6 +26,34 @@ def record(key, result='PASS'):
 
 
 class SuiteTests(unittest.TestCase):
+    def test_current_ux_stress_contract_excludes_norm_certification_without_readiness_shortcut(self):
+        path = Path('projects/ble-elva/suites/enzberg-nsn014-v0.2.json')
+        contract = validate_suite(json.loads(path.read_text(encoding='utf-8')))
+        self.assertFalse(contract['normative_conformity_scoring'])
+        self.assertFalse(contract['automatic_retry'])
+        self.assertTrue(all(case['implementation'] == 'pending' for case in contract['cases']))
+        for scoring in (True, None, 'false'):
+            invalid = copy.deepcopy(contract); invalid['normative_conformity_scoring'] = scoring
+            with self.assertRaises(ValueError): validate_suite(invalid)
+        implemented = copy.deepcopy(contract)
+        for case in implemented['cases']: case['implementation'] = 'implemented'
+        records = [record(case['case_id'], 'FAIL') for case in implemented['cases']]
+        result = aggregate(implemented, records)
+        self.assertEqual(result['valid_cases'], 14)
+        self.assertEqual(result['result'], 'FAIL')
+        self.assertIsNone(result['score'])
+
+    def test_ux_source_approval_is_not_normative_approval(self):
+        data = {'schema_version': 1, 'dataset_id': 'UX', 'benchmark_purpose': 'ux_ui_process_stress',
+                'normative_conformity_scoring': False, 'positions': [
+                    {'position_id': '1', 'input_status': 'verified', 'inputs': {'mass_g': 10},
+                     'expected_status': 'verified', 'expected': {'raw_persistence': 10}}]}
+        data['approval'] = {'status': 'approved', 'approved_by': 'PO', 'approved_at': '2026-10-14',
+                            'scope': 'UX_UI_PROCESS_SOURCE_REPLAY', 'content_sha256': canonical_hash(data)}
+        self.assertEqual(check_dataset(data)['status'], 'DATASET_APPROVED')
+        data['approval']['scope'] = 'NORMATIVE_CERTIFICATION'
+        self.assertEqual(check_dataset(data)['status'], 'BLOCKED_DATA_REVIEW')
+
     def test_contract_requires_explicit_safety_boundaries(self):
         for field, value in [('automatic_retry', True), ('provider', 'openai'),
                              ('physical_operations', 'real'), ('real_delivery', True)]:

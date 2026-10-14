@@ -1,0 +1,267 @@
+{
+  "schema_version": 1,
+  "suite_id": "ENZBERG-NSN014",
+  "version": "0.2",
+  "dataset_id": "enzberg-nsn014-ux-source-v1",
+  "provider": "chatgpt_plan",
+  "automatic_retry": false,
+  "physical_operations": "simulated",
+  "real_delivery": false,
+  "reference": {
+    "plan": "NSN 014",
+    "sampling_date": "2026-05-08",
+    "authority": "PO: use current entered DB data for UX/UI/process gap discovery, 2026-10-14",
+    "positions": [
+      "STS 0/45 Werk Enzberg",
+      "KSM Abmagerung Werk Enzberg",
+      "Betonsplitt 2/8 Werk Enzberg",
+      "Betonsplitt 8/16 Werk Enzberg",
+      "Asphaltsplitt 2/16 Werk Enzberg",
+      "Asphaltsplitt 16/32 Werk Enzberg",
+      "BS 0/2 Gemisch Werk Enzberg",
+      "BS 0/2 abgemagert Werk Enzberg",
+      "SP Edelsplitt 2/8 Werk Enzberg",
+      "SP Edelsplitt 8/16 Werk Enzberg"
+    ]
+  },
+  "personas": {
+    "laboratory_lead": "Laborleiter",
+    "laboratory_staff": "Mitarbeiter",
+    "restricted_viewer": "Viewer",
+    "wpk_lead": "functional persona; exact security-role mapping pending",
+    "plant_lead": "functional persona; exact security-role mapping pending"
+  },
+  "cases": [
+    {
+      "case_id": "NSN014-PLAN",
+      "persona": "laboratory_lead",
+      "task": "Read the designated plan and confirm exactly the ten specified positions and sampling date.",
+      "oracle_contract": "Exact plan position/order/date projection; no mutation.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage plan",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-RECEIPT",
+      "persona": "laboratory_staff",
+      "task": "Register the ten designated laboratory samples with unique codes and the fixed sampling date.",
+      "oracle_contract": "Exactly ten samples, owner/tenant/product links and standard snapshots; no duplicates.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage receipt",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-PLAN"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-PREPARATION",
+      "persona": "laboratory_staff",
+      "task": "Document the approved simulated laboratory splits for each sample.",
+      "oracle_contract": "Exact split masses, units, sources and parent links; no invented physical performance.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage preparation",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-RECEIPT"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-SIEVE",
+      "persona": "laboratory_staff",
+      "task": "Capture the approved original sieve measurements for each specified sample.",
+      "oracle_contract": "Persisted raw masses and independent recomputed sieve results, within approved rounding.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage sieve",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-PREPARATION"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-SHAPE",
+      "persona": "laboratory_staff",
+      "task": "Capture the specified particle-shape measurements for the applicable samples.",
+      "oracle_contract": "Persisted total/poor-shaped masses and independently recomputed indices.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage shape",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-SIEVE"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-BOILING",
+      "persona": "laboratory_staff",
+      "task": "Capture the specified boiling/marl measurements for the applicable samples.",
+      "oracle_contract": "Persisted approved original masses and independent calculated results.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage boiling",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-SHAPE"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-SE",
+      "persona": "laboratory_staff",
+      "task": "Capture the two specified STS sand-equivalent repetitions with approved units.",
+      "oracle_contract": "Both persisted repetitions and independently recomputed index/rounding.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage sand_equivalent",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-BOILING"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-ASSESS",
+      "persona": "laboratory_lead",
+      "task": "Inspect completeness, displayed assessments and explanation of warnings using the existing data and standard context. Record missing or confusing UI; do not certify normative correctness.",
+      "oracle_contract": "Persisted/displayed assessment and warning state traceable to current data; normative conformity is not scored.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage assessment",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-SE"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-RELEASE",
+      "persona": "laboratory_lead",
+      "task": "In the disposable fixture, exercise available release/hold controls as a software workflow and inspect feedback, actor and stored state. Never treat the exercise as a normative or real-world release.",
+      "oracle_contract": "Saved workflow state, reason and actor match the performed UI action; absent/denied controls are findings, not invented success.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage release",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-ASSESS"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-WPK",
+      "persona": "wpk_lead",
+      "task": "Inspect plan-versus-completed coverage for the ten positions and identify missing information, navigation and workflow gaps.",
+      "oracle_contract": "Displayed planned/completed/due state compared with the recorded fixture; regulatory compliance is not asserted.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage wpk",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-RELEASE"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-ANALYSIS",
+      "persona": "plant_lead",
+      "task": "Explain what the current UI makes possible and what information or workflow support is missing for this plan.",
+      "oracle_contract": "Findings grounded in visible evidence and current persisted records; no normative conclusion or invented multi-plan trend.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage analysis",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-WPK"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-REPORT",
+      "persona": "laboratory_lead",
+      "task": "Attempt the available report workflow and inspect values, status, readability and navigation. Record failures and stale/missing content.",
+      "oracle_contract": "Generated report values/status/owner traceable to fixture and performed workflow; normative certification is excluded.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage report",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-ANALYSIS"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-DELIVERY",
+      "persona": "laboratory_lead",
+      "task": "Demonstrate delivery only to the controlled local test sink.",
+      "oracle_contract": "Exactly the approved sink event; no external email or real recipient.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage delivery",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-REPORT"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN014-RIGHTS",
+      "persona": "restricted_viewer",
+      "task": "Inspect the permitted plan/results; do not change or approve laboratory data.",
+      "oracle_contract": "Denied write/approve rights, exact plant scope and unchanged protected data.",
+      "fixture_contract": "NSN014-UX-v1 disposable isolated clone; stage rights",
+      "expected": "UX/process contract: observable action outcome and independently persisted state; application failure is an admissible benchmark finding, normative conformity excluded.",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN014-DELIVERY"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    }
+  ],
+  "required_position_ids": [
+    "P01",
+    "P02",
+    "P03",
+    "P04",
+    "P05",
+    "P06",
+    "P07",
+    "P08",
+    "P09",
+    "P10"
+  ],
+  "benchmark_purpose": "ux_ui_process_stress",
+  "normative_conformity_scoring": false,
+  "standard_policy": "Reproduce existing entered standard assignments unchanged; edition differences are context, not a readiness blocker or conformity verdict.",
+  "failure_policy": {
+    "application_failure": "record FAIL with evidence; never repair during the test",
+    "safety_or_session_failure": "BLOCKED; no action/model call after failed gate",
+    "harness_failure": "INVALID, not a product failure",
+    "automatic_retry": false,
+    "downstream_cases": "Use independently verified fixture checkpoints where supported; never pretend missing prerequisite actions succeeded."
+  },
+  "stress_definition": "Bounded realistic workflow friction, validation, navigation, persistence, reporting and role behaviour; no throughput/DoS or unbounded destructive load."
+}

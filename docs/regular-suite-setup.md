@@ -208,3 +208,37 @@ standard assignment is modified. Full suite stays BLOCKED_DATA_REVIEW; no stage
 is marked implemented solely because projection/session helpers are tested.
 Remaining work: populated disposable fixture, per-role gates, stage write guards,
 DB persistence adapters and bounded workflow/report acceptance.
+
+## Current PO scope: UX/UI/process stress, not normative certification
+
+The PO explicitly selected the currently entered DB data and existing standard
+assignments unchanged. Active contract: `enzberg-nsn014-v0.2.json`. The private
+source-replay dataset is approved for this limited purpose with content-bound
+SHA-256; this is not approval of normative conformity, mathematical perfection
+of historical stored outputs, role/runtime gates or actual full-suite readiness.
+
+No norm update is required before these tests. Assessment/release/WPK/report
+cases observe software workflow, controls, feedback, persistence and gaps. A
+release interaction in a disposable test fixture is not a real-world normative
+release. An application FAIL is a valid, useful result with independent evidence;
+we must not fix the product during its measured test. Safety/session failure is
+BLOCKED; harness failure is INVALID. No automatic retries or unbounded load.
+
+Missing functionality belongs to application findings once a safe test adapter
+exists, whereas an unimplemented adapter remains pending and cannot invent a
+finding. Independent fixture checkpoints should cover later stages safely when
+an earlier product failure prevents the end-to-end path; each missing prerequisite
+must remain explicit. No direct DB access for executor/reviewer.
+
+The old normative-choice question is resolved. Full suite-check correctly still
+returns BLOCKED_SETUP for 14 pending test adapters, with DATASET_APPROVED for
+source replay. Next implementation dependency is the separate populated fixture
+and safe stage/role/persistence adapters, not further norm correction.
+
+Scope validation: full project-venv suite **173 tests, 20.251s, exit 0**.
+Actual UX-source projection exit 0; suite-check exit 2 (correct pending adapter
+block), with DATASET_APPROVED, 14 pending cases and zero model calls/DB writes.
+Verified isolated target schema read-only: 118 selected column definitions,
+including actual product/tenant/material/classification fields. No Identity or
+credential table contents selected. This metadata supports upcoming fixture
+population without guessed schemas. No source5433 operation or DB mutation.

@@ -36,8 +36,8 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "BLOCKED_DATA_REVIEW",
-    "active_candidate": "suites/enzberg-nsn014-v0.1.json",
+    "status": "IN_IMPLEMENTATION",
+    "active_candidate": "suites/enzberg-nsn014-v0.2.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
     "superseded_candidate": "suites/enzberg-nsn018-v0.1.json",
@@ -47,6 +47,10 @@
     "sand_equivalent_fixture_unit": "mm",
     "unit_decision_by": "PO reconfirmed original cm entries after method clarification, 2026-10-14",
     "sand_equivalent_conversion_authorized": true,
-    "sand_equivalent_method_reference": "DIN EN 933-8:2015-07, 8.5: record heights to nearest mm"
+    "sand_equivalent_method_reference": "DIN EN 933-8:2015-07, 8.5: record heights to nearest mm",
+    "benchmark_purpose": "ux_ui_process_stress",
+    "normative_conformity_scoring": false,
+    "source_replay_approved_by": "PO, 2026-10-14",
+    "standard_policy": "Existing entered assignments unchanged; normative testing deferred"
   }
 }

@@ -19,6 +19,9 @@ def validate_suite(suite):
     if (suite.get('schema_version')!=1 or not suite.get('suite_id')
             or not suite.get('version') or not suite.get('dataset_id')):
         raise ValueError('Missing versioned suite identity')
+    if suite.get('benchmark_purpose') == 'ux_ui_process_stress':
+        if suite.get('normative_conformity_scoring') is not False or not suite.get('standard_policy'):
+            raise ValueError('UX stress suite must explicitly exclude normative scoring and preserve standard context')
     required=suite.get('required_position_ids')
     if (not isinstance(required,list) or not required
             or any(not isinstance(key,str) or not key for key in required)
@@ -66,6 +69,9 @@ def check_dataset(dataset):
                       for p in positions))
     approved=(approval.get('status')=='approved' and approval.get('content_sha256')==digest
               and approval.get('approved_by')=='PO' and bool(approval.get('approved_at')) and complete)
+    if dataset.get('benchmark_purpose') == 'ux_ui_process_stress':
+        approved = (approved and dataset.get('normative_conformity_scoring') is False
+                    and approval.get('scope') == 'UX_UI_PROCESS_SOURCE_REPLAY')
     return {'status':'DATASET_APPROVED' if approved else 'BLOCKED_DATA_REVIEW',
             'content_sha256':digest,'dataset_id':dataset['dataset_id'],'complete':complete}
 

@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "FOLLOWUP_FIXTURE_CLONE_READY_PROBE_AND_RUN_APPROVAL_PENDING",
+    "status": "FOLLOWUP_READY_NEW_RUN_APPROVAL_PENDING",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -94,12 +94,12 @@
     ],
     "setup_history": "docs/regular-suite-setup.md",
     "readiness": {
-      "status": "READY_FOR_SINGLE_SUITE_RUN",
+      "status": "ALL_GATES_PASSED_EXCEPT_BUDGET_APPROVAL_FOR_CLONE_FIXTURE",
       "checked_at": "2026-10-15",
       "sqbf_commit": "f4ecc0d",
       "model_calls": 0,
       "database_writes": 0,
-      "local_tests": 305,
+      "local_tests": 345,
       "gates": [
         "clean SQBF source",
         "plan workflow and permissions",
@@ -194,10 +194,18 @@
     },
     "provider_probe": {
       "tool": "suite-provider-probe",
-      "status": "NOT_EXECUTED_OAUTH_WINDOW_EXPIRED_TWICE",
-      "requests": 2,
-      "model_requests_made": 0,
-      "data": "generated synthetic image only"
+      "status": "PROBE_PASS",
+      "executed": "2026-10-15",
+      "model_requests_made": 2,
+      "executor": "gpt-6-luna OK",
+      "reviewer": "gpt-6.1-sol OK",
+      "valid_hours": 12,
+      "data": "generated synthetic image only",
+      "earlier_attempts": "two OAuth windows expired before any request"
+    },
+    "reviewer_policy": {
+      "consecutive_failure_limit": 3,
+      "ux_layer": "best effort; objective results never depend on it"
     }
   }
 }

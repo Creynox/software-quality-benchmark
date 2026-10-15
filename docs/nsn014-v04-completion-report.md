@@ -400,3 +400,20 @@ Das ist gewollt: Die Freigabe wird erst mit der neuen Einzellauf-Freigabe einget
 
 1. Die Probe: Browser-Bestätigung innerhalb von 5 Minuten nach dem Start.
 2. Eine **neue ausdrückliche Einzellauf-Freigabe** mit Suite-Version, Commit, Manifest, Provider, Budget und Datengrenze. Danach erstelle ich die freigegebene Manifest-Kopie und wiederhole die Readiness unmittelbar vor dem Start.
+
+## 14. Provider-Probe bestanden (15.10.2026)
+
+Im dritten Versuch hat die Browser-Anmeldung innerhalb des Fensters geklappt. Die Probe hat genau zwei synthetische Anfragen gesendet (generiertes Farbblock-Bild, keine BLE-Daten): **PROBE_PASS**.
+
+| | Modell | Ergebnis | Dauer | Tokens (gesamt) |
+|---|---|---|---|---|
+| Executor-Schema | gpt-6-luna | akzeptiert, gültige Aktion | 2,8 s | 294 |
+| Review-Schema | gpt-6.1-sol | akzeptiert, gültiges Review mit null-Werten und Befund | 4,7 s | 729 |
+
+Beide Modelle stehen im Modellkatalog. Das gespeicherte Ergebnis ist an Modelle und Schema-Hashes gebunden und gilt 12 Stunden.
+
+**Folgerung für Lauf 1:** Das strikte Review-Schema wird akzeptiert. Die Hypothese „Provider lehnt das Schema ab“ ist damit **widerlegt**; die Ursache des ersten Reviewer-Ausfalls bleibt unbewiesen (denkbar sind Eingaben dieser Anfrage, z. B. die Screenshots oder der Aufgabentext). Deshalb schaltet sich der Reviewer erst nach **drei aufeinanderfolgenden** Fehlern ab (`e151761`); jeder Fehler wird mit festem Code vermerkt, und ein Erfolg setzt den Zähler zurück. Ein einzelner Ausfall entfernt also nicht mehr die ganze UX-Ebene, und die Fehlercodes zeigen beim nächsten Lauf die Ursache.
+
+**Readiness** (`run-suite`, v0.4.1, neue Fixture, `--provider-probe`): Alle Gates bestanden, darunter Plan-Produkte (zehn von zehn anlegbar), Probe (`PROBE_PASSED`, UX-Ebene abgesichert), Sessions, Scopes, Runtime und Stufenverträge. Blockiert ist nur `BUDGET_APPROVAL_MISSING`, mit `other_gates: PASSED` und 0 Modellaufrufen. 345 lokale Tests OK.
+
+**Verbleibender Freigabepunkt:** eine neue ausdrückliche Einzellauf-Freigabe mit Suite-Version, Commit, Manifest, Provider, Budget und Datengrenze. Mit ihr trage ich die Budgetfreigabe in eine Manifest-Kopie ein und wiederhole die Readiness unmittelbar vor dem Start.

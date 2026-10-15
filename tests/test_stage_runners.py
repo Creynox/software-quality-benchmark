@@ -148,7 +148,7 @@ class InspectionResultTests(unittest.TestCase):
         failed=outcome(review=review('FAIL').data)
         value,view=self.inspect(failed)
         self.assertEqual((value['result'],value['oracle_gate'],value['ux_verdict']),('PASS','PASS','FAIL'))
-        self.assertEqual(view.call_args.args[3],'/quality/wpk')
+        self.assertEqual(view.call_args.args[3],'/beprobung/'+PLAN);self.assertIn('/quality/wpk',view.call_args.args[4])
         value,_=self.inspect(outcome('REJECTED',rejected_action_code='X'))
         self.assertEqual((value['result'],value['reason']),('INCONCLUSIVE','AGENT_ACTION_REJECTED:X'))
 

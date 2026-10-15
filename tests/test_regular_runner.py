@@ -175,7 +175,7 @@ class RegularRunnerTests(unittest.TestCase):
         f=fixture();f['suite_copy']['mapping']={'plan_id':'11111111-1111-4111-8111-111111111111'}
         probes=module.route_probes(suite(),f)
         self.assertEqual({(persona,path) for persona,path,_ in probes},{
-            ('laboratory_staff','/samples'),('laboratory_lead','/samples'),('wpk_lead','/quality/wpk'),
+            ('laboratory_staff','/samples'),('laboratory_lead','/samples'),('wpk_lead','/beprobung/11111111-1111-4111-8111-111111111111'),
             ('plant_lead','/analytics'),('plant_lead','/beprobung/11111111-1111-4111-8111-111111111111')})
         staff=next(stages for persona,_,stages in probes if persona=='laboratory_staff')
         self.assertEqual(len(staff),6)

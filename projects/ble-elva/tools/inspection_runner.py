@@ -139,10 +139,14 @@ def _technical_stop(outcome):
     return dict(outcome,result='BLOCKED' if outcome['technical_gate']=='BLOCKED' else 'INVALID')
 
 
+# The suite keeps every persona's existing BLE permissions. The WPK account is a
+# Laborleiter without fpc.view, so the FPC area (/quality/wpk) is access-denied for it;
+# its plan-versus-completed task starts on the designated plan. /quality/wpk stays a
+# permitted navigation target, so a visible denial there is a UX observation.
 ENTRY_PATHS={
     'NSN014-RECEIPT':lambda fixture:'/samples',
     'NSN014-ASSESS':lambda fixture:'/samples',
-    'NSN014-WPK':lambda fixture:'/quality/wpk',
+    'NSN014-WPK':lambda fixture:'/beprobung/'+fixture['suite_copy']['mapping']['plan_id'],
     'NSN014-ANALYSIS':lambda fixture:'/analytics',
     'NSN014-RIGHTS':lambda fixture:'/beprobung/'+fixture['suite_copy']['mapping']['plan_id'],
 }

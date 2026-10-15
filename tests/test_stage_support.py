@@ -70,3 +70,44 @@ class StageSupportTests(unittest.TestCase):
         self.assertEqual(module.ux_verdicts([{'review':review()},{'review':review(verdict='FAIL')}]),'FAIL')
         self.assertEqual(module.ux_verdicts([{'review':review(),'pdf_reviews':[review()]}]),'PASS')
         self.assertEqual(module.ux_verdicts([{'review':review(),'pdf_reviews':[review(verdict='INCONCLUSIVE')]}]),'INCONCLUSIVE')
+
+
+class ReviewerBestEffortTests(unittest.TestCase):
+    class Budget:
+        pass
+
+    class Evidence:
+        def __init__(self):
+            self.events = []
+
+        def event(self, kind, **fields):
+            self.events.append((kind, fields))
+
+    def test_reviewer_failure_is_recorded_once_and_switches_the_reviewer_off(self):
+        from sqbf.providers import ModelResponse
+        evidence, budget, calls = self.Evidence(), self.Budget(), []
+
+        class Failure(RuntimeError):
+            code = 'PROVIDER_HTTP_400'
+
+        def ask(model, prompt, images, budget_, actor):
+            calls.append(actor)
+            raise Failure('provider text that must never be stored')
+        self.assertEqual(module.ask_review(ask, 'r', 'p', [b'x'], budget, evidence, persona='lead'), (None, 'PROVIDER_HTTP_400'))
+        self.assertEqual(module.ask_review(ask, 'r', 'p', [b'x'], budget, evidence), (None, 'REVIEWER_DISABLED_AFTER_FAILURE'))
+        self.assertEqual(calls, ['reviewer'])
+        self.assertEqual(evidence.events, [('reviewer_call_failed', {'error_code': 'PROVIDER_HTTP_400', 'persona': 'lead'})])
+        self.assertNotIn('provider text', str(evidence.events))
+        plain = self.Budget()
+        self.assertEqual(module.ask_review(lambda *a: (_ for _ in ()).throw(ValueError('x')), 'r', 'p', [], plain, evidence),
+                         (None, 'REVIEWER_CALL_FAILED'))
+        good = self.Budget()
+        self.assertEqual(module.ask_review(lambda *a: ModelResponse({'verdict': 'PASS'}, {}), 'r', 'p', [], good, evidence),
+                         ({'verdict': 'PASS'}, None))
+
+    def test_only_the_resource_ceiling_still_stops_the_run(self):
+        from sqbf.calibration import ResourceStop
+        budget = self.Budget()
+        with self.assertRaises(ResourceStop):
+            module.ask_review(lambda *a: (_ for _ in ()).throw(ResourceStop('SUITE_CALL_CEILING')), 'r', 'p', [], budget, self.Evidence())
+        self.assertFalse(hasattr(budget, 'reviewer_error'))

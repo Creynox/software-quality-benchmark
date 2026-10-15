@@ -18,7 +18,7 @@ from .measurement_guard import make_contract, event_guard, check_action, transpo
 from .measurement_oracle import collect_inputs, verify_inputs
 from .receipt_oracle import collect_receipts
 from .allocation_oracle import collect_allocations, verify_allocations
-from .stage_support import StallDetector, classify_rejection, incomplete_reason, review_prompt, ux_verdicts
+from .stage_support import StallDetector, ask_review, classify_rejection, incomplete_reason, review_prompt, ux_verdicts
 from sqbf.suites import canonical_hash
 from sqbf.no_write_oracle import snapshot
 
@@ -88,15 +88,17 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
             if action['action']=='type' and state.get('focused') in contract['fields']:filled.add(state['focused'])
             budget.action();apply_action(page,action);actions.append(action);page.wait_for_timeout(500)
         if images:
-            review=ask_calibrated(reviewer,review_prompt(
+            review,review_error=ask_review(ask_calibrated,reviewer,review_prompt(
                 'Independently review this laboratory data-entry attempt from screenshots and visible actions only. '
                 'The source values are test instructions, not proof of persistence. No database/hidden facts. '
                 'Separate agent difficulty, missing prerequisite, application UX and unproven persistence. '
                 'No normative conformity verdict. Return the configured strict review schema.',
                 '\n'+task+'\n'+json.dumps({'visible_actions':actions,'unverified_executor_statement':outcome.get('executor_statement'),
                                             'controller_stop':None if outcome['status'] in ('DONE','BLOCKED') else incomplete_reason(outcome)},
-                                           ensure_ascii=False)),[images[i] for i in sorted(set((0,len(images)//2,len(images)-1)))],budget,'reviewer')
-            outcome['review']=review.data
+                                           ensure_ascii=False)),[images[i] for i in sorted(set((0,len(images)//2,len(images)-1)))],budget,evidence,
+                position=position['position_id'],module=kind)
+            outcome['review']=review
+            if review_error:outcome['review_error']=review_error
         outcome['save_scopes_attempted']=sorted(saved)
     except ResourceStop:
         outcome.update(status='INCONCLUSIVE',stop_reason=budget.stop_reason)

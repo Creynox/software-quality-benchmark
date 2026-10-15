@@ -175,3 +175,31 @@ class ExtendedProfileTests(unittest.TestCase):
         now[0] = 10800
         with self.assertRaises(ResourceStop): budget.remaining()
         self.assertEqual(budget.report()['stop_reason'], 'SUITE_TIME_CEILING')
+
+
+class WorkerFailureCodeTests(unittest.TestCase):
+    def run_main(self, error):
+        import io
+        from contextlib import redirect_stdout
+        from sqbf import bounded
+        out = io.StringIO()
+        with patch.object(bounded, 'restore_model', side_effect=error), patch.object(bounded.sys, 'argv', ['bounded', 'model']), \
+             patch.object(bounded.sys, 'stdin', io.StringIO(json.dumps({'provider': {}}))), redirect_stdout(out):
+            code = bounded.main()
+        return code, out.getvalue()
+
+    def test_failed_worker_reports_only_an_allowlisted_code_never_provider_text(self):
+        code, out = self.run_main(RuntimeError('ChatGPT plan request failed with HTTP 400'))
+        self.assertEqual((code, json.loads(out)), (2, {'error_code': 'PROVIDER_HTTP_400'}))
+        for error in (KeyError('access_token-canary'), RuntimeError('Bearer canary'), ValueError('prompt canary')):
+            self.assertEqual(self.run_main(error), (2, ''))
+
+    def test_parent_accepts_only_a_fixed_shape_short_identifier(self):
+        from sqbf.bounded import WorkerFailed, _worker_error_code
+        self.assertEqual(_worker_error_code('{"error_code": "PROVIDER_HTTP_400"}\n'), 'PROVIDER_HTTP_400')
+        for stdout in ('', 'not json', '[]', '{"error_code": "x y"}', '{"error_code": 5}', '{"error_code": "A", "text": "secret"}',
+                       '{"error_code": "' + 'A' * 65 + '"}'):
+            self.assertIsNone(_worker_error_code(stdout), stdout)
+        error = WorkerFailed('RESPONSE_SCHEMA_MISMATCH')
+        self.assertEqual((error.code, str(error)), ('RESPONSE_SCHEMA_MISMATCH', 'Owned worker failed; stopped without retry'))
+        self.assertIsInstance(error, RuntimeError)

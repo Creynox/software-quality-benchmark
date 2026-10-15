@@ -278,3 +278,39 @@ class MeasurementClassificationTests(unittest.TestCase):
         self.assertEqual((value['result'],value['oracle_gate'],value['fail_classes']),('FAIL','FAIL',['PERSISTED_VALUE_DEVIATION']))
         self.assertEqual([(p['position_id'],p['result']) for p in value['position_results']],[('P1','FAIL'),('P2','INCOMPLETE')])
         self.assertEqual(value['missing_prerequisites'],[{'position_id':'P3','kind':'sand'}]);self.assertEqual(value['unvisited_deviations'],['P3'])
+
+
+class ReviewerFailureDoesNotInvalidateTheStageTests(unittest.TestCase):
+    def test_failed_review_keeps_the_executor_result_and_the_stage_continues(self):
+        class Failure(RuntimeError):
+            code = 'PROVIDER_HTTP_400'
+        b, page = browser('/samples');evidence = MagicMock();evidence.path = Path('.')
+        calls = []
+        def ask(model, prompt, images, budget_, actor):
+            calls.append(actor)
+            if actor == 'reviewer':raise Failure('x')
+            return act('done', reason='seen')
+        with patch.object(inspection, 'ask_calibrated', side_effect=ask), \
+             patch.object(inspection, 'check_action', return_value={'kind': 'blocked'}), patch.object(inspection, 'apply_action'):
+            value = inspection.run_view(b, fixture(), 'plant_lead', '/samples', ['/samples'], 'task', {}, object(), object(), budget(), evidence)
+        self.assertEqual((value['status'], value['technical_gate'], value['review_error']), ('DONE', 'PASS', 'PROVIDER_HTTP_400'))
+        self.assertIsNone(value['review']);self.assertEqual(calls, ['executor', 'reviewer'])
+        self.assertEqual(inspection.ux_verdicts([value]), 'NOT_EVALUATED')
+
+    def test_measurement_position_survives_a_failed_review_and_does_not_retry_it(self):
+        class Failure(RuntimeError):
+            code = 'RESPONSE_SCHEMA_MISMATCH'
+        f = fixture();p = position();p.update(sample_code='S1', product='Stone')
+        b, page = browser('/samples/' + PLAN)
+        calls = []
+        def ask(model, prompt, images, budget_, actor):
+            calls.append(actor)
+            if actor == 'reviewer':raise Failure('x')
+            return act('blocked', reason='unavailable')
+        shared = budget()
+        with patch.object(measurement, 'ask_calibrated', side_effect=ask), patch.object(measurement, 'check_action'):
+            first = measurement.run_position(b, f, p, PLAN, 'sand', {}, object(), object(), shared, MagicMock())
+            second = measurement.run_position(b, f, p, PLAN, 'sand', {}, object(), object(), shared, MagicMock())
+        self.assertEqual((first['status'], first['technical_gate'], first['review_error']), ('BLOCKED', 'PASS', 'RESPONSE_SCHEMA_MISMATCH'))
+        self.assertEqual(second['review_error'], 'REVIEWER_DISABLED_AFTER_FAILURE')
+        self.assertEqual(calls.count('reviewer'), 1)

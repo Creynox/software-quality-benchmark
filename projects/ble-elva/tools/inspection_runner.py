@@ -21,7 +21,7 @@ from .measurement_oracle import collect_inputs
 from .persona_scope import check_persona
 from .receipt_oracle import collect_receipts,verify_receipts
 from .report_oracle import collect_reports, verify_reports, expected_numbers
-from .stage_support import StallDetector, classify_rejection, incomplete_reason, review_prompt, ux_verdicts
+from .stage_support import StallDetector, ask_review, classify_rejection, incomplete_reason, review_prompt, ux_verdicts
 
 INSTRUCTIONS='''Use only screenshots, the task and prior visible actions. Return one strict JSON UI action.
 No tools, code, files, DOM, DB, APIs, browser shortcuts, hidden URLs or passwords.
@@ -102,25 +102,27 @@ def run_view(browser,fixture,persona,entry,paths,task,policy,executor,reviewer,b
             actions.append(action);page.wait_for_timeout(500)
         if images:
             selected=[images[i] for i in sorted(set((0,len(images)//2,len(images)-1)))]
-            review=ask_calibrated(reviewer,review_prompt('Independently review the requested UI workflow from these images and visible actions only. '
+            review,review_error=ask_review(ask_calibrated,reviewer,review_prompt('Independently review the requested UI workflow from these images and visible actions only. '
                 'No DB facts. Separate agent difficulty, UI defects and unsupported assertions. '
                 'No normative conformity or release verdict. Return the configured strict review schema.',
                 '\n'+task+'\n'+json.dumps({'visible_actions':actions,'unverified_executor_statement':outcome.get('executor_statement'),
                                             'controller_stop':None if outcome['status'] in ('DONE','BLOCKED') else incomplete_reason(outcome)},
-                                           ensure_ascii=False)),selected,budget,'reviewer')
-            outcome['review']=review.data
+                                           ensure_ascii=False)),selected,budget,evidence,persona=persona)
+            outcome['review']=review
+            if review_error:outcome['review_error']=review_error
         if pdf_images:
             outcome['pdf_reviews']=[]
             for offset in range(0,len(pdf_images),3):
                 expected={k:str(v) for k,v in expected_numbers(report_position).items()}
-                batch=ask_calibrated(reviewer,review_prompt(
+                batch,batch_error=ask_review(ask_calibrated,reviewer,review_prompt(
                     'Review only these rendered PDF pages for identity, readable layout and visible values inconsistent with the supplied source test inputs. '
                     'These inputs are instructions, not DB persistence evidence. Do not require every field on each page batch; other pages are reviewed separately. '
                     'No normative conformity, release or signature claim. Return the configured strict review schema.',
                     '\n'+json.dumps({'task':task,'pages':list(range(offset+1,min(offset+4,len(pdf_images)+1))),
                                      'total_pages':len(pdf_images),'source_expected_display_inputs':expected},ensure_ascii=False)),
-                    pdf_images[offset:offset+3],budget,'reviewer')
-                outcome['pdf_reviews'].append(dict(batch.data,pages=list(range(offset+1,min(offset+4,len(pdf_images)+1)))))
+                    pdf_images[offset:offset+3],budget,evidence,persona=persona)
+                if batch is not None:outcome['pdf_reviews'].append(dict(batch,pages=list(range(offset+1,min(offset+4,len(pdf_images)+1)))))
+                else:outcome['review_error']=batch_error
     except ResourceStop:
         outcome.update(status='INCONCLUSIVE',stop_reason=budget.stop_reason)
     except (ReadOnlyViolation,ActionValidationError) as error:

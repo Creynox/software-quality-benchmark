@@ -11,16 +11,25 @@ from ctypes import wintypes
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
 import time
 
-from .providers import ChatGPTPlanCredential, ChatGPTPlanModel, ModelResponse
+from .providers import ChatGPTPlanCredential, ChatGPTPlanModel, ModelResponse, safe_error_code
 
 
 class BudgetExceeded(RuntimeError):
     pass
+
+
+class WorkerFailed(RuntimeError):
+    """Owned worker failed. `code` is a fixed diagnostic code or None; never provider text."""
+
+    def __init__(self, code=None):
+        super().__init__("Owned worker failed; stopped without retry")
+        self.code = code
 
 
 class Budget:
@@ -131,6 +140,16 @@ def _resume_owned_process(process):
     raise RuntimeError("Cannot resume the owned worker after job assignment")
 
 
+def _worker_error_code(stdout):
+    # Only a fixed-shape, short identifier from safe_error_code is accepted from a failed worker.
+    try:
+        data = json.loads(stdout)
+        code = data.get("error_code") if isinstance(data, dict) and set(data) == {"error_code"} else None
+        return code if isinstance(code, str) and re.fullmatch(r"[A-Za-z0-9_]{1,64}", code) else None
+    except (ValueError, TypeError):
+        return None
+
+
 def invoke_worker(mode: str, payload: dict, timeout: float):
     if timeout <= 0:
         raise BudgetExceeded("No time remains for the worker")
@@ -163,7 +182,7 @@ def invoke_worker(mode: str, payload: dict, timeout: float):
             process.wait(timeout=5)
             raise BudgetExceeded("Owned worker exceeded its hard wall-clock deadline") from None
         if process.returncode:
-            raise RuntimeError("Owned worker failed; stopped without retry")
+            raise WorkerFailed(_worker_error_code(stdout))
         result = json.loads(stdout)
         if not isinstance(result, dict):
             raise RuntimeError("Invalid worker response")
@@ -239,8 +258,12 @@ def main():
             raise ValueError("Unknown worker mode")
         print(json.dumps(output))
         return 0
-    except Exception:
-        # Never forward provider exceptions, raw payloads, stderr, or tokens.
+    except Exception as error:
+        # Never forward provider exceptions, raw payloads, stderr, or tokens. Only a fixed
+        # diagnostic code for this repository's own constant provider messages is reported.
+        code = safe_error_code(error)
+        if code:
+            print(json.dumps({"error_code": code}))
         return 2
 
 

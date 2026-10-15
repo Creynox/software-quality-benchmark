@@ -7,6 +7,7 @@ breach: only the affected task ends, unless the session itself became invalid.
 """
 import hashlib
 
+from sqbf.calibration import ResourceStop
 from sqbf.models import ActionValidationError
 
 SCORING_VERSION = 'nsn014-objective-v1'
@@ -141,3 +142,23 @@ def ux_verdicts(outcomes):
     if 'FAIL' in verdicts:
         return 'FAIL'
     return 'PASS' if all(v == 'PASS' for v in verdicts) else 'INCONCLUSIVE'
+
+
+def ask_review(ask, reviewer, prompt, images, budget, evidence, **context):
+    """Best-effort UX review: returns (data, None) or (None, error_code).
+
+    A failed reviewer request is recorded and the reviewer is switched off for the rest of
+    the run (no retry, no further spend); objective results never depend on it. Only the
+    resource ceiling still stops the run.
+    """
+    if getattr(budget, 'reviewer_error', None):
+        return None, 'REVIEWER_DISABLED_AFTER_FAILURE'
+    try:
+        return ask(reviewer, prompt, images, budget, 'reviewer').data, None
+    except ResourceStop:
+        raise
+    except Exception as error:
+        code = getattr(error, 'code', None) or 'REVIEWER_CALL_FAILED'
+        budget.reviewer_error = code
+        evidence.event('reviewer_call_failed', error_code=code, **context)
+        return None, code

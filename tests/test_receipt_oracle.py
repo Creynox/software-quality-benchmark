@@ -69,3 +69,54 @@ class ReceiptOracleTests(unittest.TestCase):
     def test_invalid_read_projection_controlled_block(self):
         records,d,f=data();del records['samples'][0]['tenant_id']
         self.assertEqual(module.verify_receipts(records,d,f,phase='after')['status'],'BLOCKED_RECEIPT_EVIDENCE')
+
+
+def plan_rows(f):
+    return [{'product_id':product,'is_active':True,'use_area_set':True,'product_level_set':True,'owner_ok':True,
+             'standard_assignments':2} for product in f['suite_copy']['mapping']['positions'].values()]
+
+
+class PlanProductPreconditionTests(unittest.TestCase):
+    def test_every_plan_product_must_be_one_ble_can_carry_a_sample_for(self):
+        _,_,f=data();rows=plan_rows(f)
+        ok=module.verify_plan_products(rows,f)
+        self.assertEqual((ok['status'],ok['positions_checked'],ok['blocked_positions']),('PLAN_PRODUCTS_CREATABLE',10,[]))
+        for column,value,reason in (('is_active',False,'PRODUCT_INACTIVE'),('use_area_set',False,'USE_AREA_MISSING'),
+                                    ('product_level_set',False,'PRODUCT_LEVEL_MISSING'),('owner_ok',False,'OWNER_SCOPE_MISMATCH'),
+                                    ('standard_assignments',0,'NO_STANDARD_ASSIGNMENT')):
+            rows=plan_rows(f);rows[5][column]=value
+            blocked=module.verify_plan_products(rows,f)
+            self.assertEqual(blocked['status'],'PLAN_PRODUCTS_BLOCKED')
+            self.assertEqual(blocked['blocked_positions'],[{'position_id':'P6','reasons':[reason]}])
+        rows=plan_rows(f);rows[1]['is_active']=False;rows[1]['use_area_set']=False
+        self.assertEqual(module.verify_plan_products(rows,f)['blocked_positions'],
+                         [{'position_id':'P2','reasons':['PRODUCT_INACTIVE','USE_AREA_MISSING']}])
+
+    def test_missing_duplicate_or_malformed_rows_block_instead_of_passing(self):
+        _,_,f=data()
+        for rows in (plan_rows(f)[:-1],plan_rows(f)*2,[{'product_id':'x'}]):
+            self.assertEqual(module.verify_plan_products(rows,f)['status'],'BLOCKED_PLAN_PRODUCT_EVIDENCE')
+        rows=plan_rows(f)+[dict(plan_rows(f)[0],product_id=str(UUID(int=777)))]
+        self.assertEqual(module.verify_plan_products(rows,f)['reason'],'UNEXPECTED_PLAN_PRODUCT_COUNT')
+        self.assertEqual(module.verify_plan_products(plan_rows(f)[:-1],f)['reason'],'PLAN_PRODUCT_MISSING')
+
+    def test_collector_uses_the_select_only_role_and_returns_flags_without_names(self):
+        import json
+        from unittest.mock import patch
+        _,_,f=data();f['fixture_data'].update(tenant_id=str(UUID(int=1)),plant_id=str(UUID(int=2)))
+        calls=[]
+        def run(command,**kwargs):
+            calls.append((command,kwargs['input']))
+            identity=json.dumps({'database':f['database']['name'],'role':f['database']['oracle_role'],'read_only':'on'})
+            from subprocess import CompletedProcess
+            return CompletedProcess(command,0,stdout=identity+'\n'+json.dumps(plan_rows(f))+'\n')
+        with patch.object(module,'verify_docker_identity',return_value={'container_id':'c'*64}):
+            rows=module.collect_plan_products(f,run=run)
+        command,sql=calls[0]
+        self.assertIn(f['database']['oracle_role'],command);self.assertIn('READ ONLY',sql);self.assertNotIn('p.name',sql)
+        self.assertNotRegex(sql,r'(?i)\b(insert|update|delete)\b');self.assertIn(str(UUID(int=2)),sql);self.assertEqual(len(rows),10)
+        def wrong_role(command,**kwargs):
+            from subprocess import CompletedProcess
+            return CompletedProcess(command,0,stdout=json.dumps({'database':'x','role':'y','read_only':'off'})+'\n[]\n')
+        with patch.object(module,'verify_docker_identity',return_value={'container_id':'c'*64}):
+            with self.assertRaises(ValueError):module.collect_plan_products(f,run=wrong_role)

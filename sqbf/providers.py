@@ -358,3 +358,33 @@ class VisionModel:
         else:
             text = "\n".join(block["text"] for block in result["content"] if block["type"] == "text")
         return ModelResponse(data=parse_json_object(text), usage=result.get("usage") or {})
+
+
+_PROVIDER_ERROR_CODES = (
+    (RuntimeError, r"ChatGPT plan request failed with HTTP (\d{3})", lambda m: "PROVIDER_HTTP_" + m.group(1)),
+    (RuntimeError, r"ChatGPT plan request failed \(([a-z_]{1,40})\)", lambda m: "PROVIDER_FAILED_" + m.group(1)),
+    (RuntimeError, r"ChatGPT plan request failed due to a network or timeout error", lambda m: "PROVIDER_NETWORK_OR_TIMEOUT"),
+    (RuntimeError, r"ChatGPT plan response refused or reported an error", lambda m: "PROVIDER_REFUSAL_OR_ERROR_EVENT"),
+    (RuntimeError, r"ChatGPT plan response was incomplete", lambda m: "PROVIDER_INCOMPLETE"),
+    (RuntimeError, r"ChatGPT plan response exceeded the local size limit", lambda m: "PROVIDER_RESPONSE_TOO_LARGE"),
+    (RuntimeError, r"ChatGPT plan stream ended without response\.completed", lambda m: "PROVIDER_STREAM_INCOMPLETE"),
+    (RuntimeError, r"Malformed ChatGPT plan .*", lambda m: "PROVIDER_STREAM_MALFORMED"),
+    (RuntimeError, r"ChatGPT plan response attempted a tool call", lambda m: "PROVIDER_TOOL_CALL"),
+    (ValueError, r"ChatGPT plan response was not valid JSON", lambda m: "RESPONSE_NOT_JSON"),
+    (ValueError, r"ChatGPT plan response must be a JSON object", lambda m: "RESPONSE_NOT_OBJECT"),
+    (ValueError, r"Structured response .*", lambda m: "RESPONSE_SCHEMA_MISMATCH"),
+)
+
+
+def safe_error_code(error: BaseException):
+    """Map this module's own constant failure messages to a fixed diagnostic code.
+
+    Anything else, including foreign exceptions whose text could carry payload or token
+    fragments, returns None so the isolated worker stays silent as before.
+    """
+    for kind, pattern, code in _PROVIDER_ERROR_CODES:
+        if type(error) is kind:
+            match = re.fullmatch(pattern, str(error))
+            if match:
+                return code(match)
+    return None

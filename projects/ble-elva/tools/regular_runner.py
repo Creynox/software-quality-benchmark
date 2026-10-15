@@ -28,7 +28,7 @@ from .calculation_oracle import collect_report_calculations, persisted_basis, ve
 from .measurement_guard import make_contract
 from .measurement_oracle import collect_inputs, verify_inputs, KINDS, PERSISTED_NAMES
 from .report_oracle import collect_reports, verify_reports, expected_numbers
-from .receipt_oracle import collect_receipts, verify_receipts
+from .receipt_oracle import collect_receipts, verify_receipts, collect_plan_products, verify_plan_products
 from .suite_acceptance import check_fixture
 from .persona_scope import check_persona
 from .measurement_runner import run_measurements, required_saves
@@ -246,6 +246,9 @@ def check_ready(suite,dataset,fixture,projection,allocation):
         if (start['status']!='RECEIPT_START_VERIFIED' or collect_inputs(fixture)
                 or collect_allocations(fixture) or collect_reports(fixture)):
             return dict(blocked,reason='UNUSED_START_STATE_NOT_VERIFIED')
+        plan_products=verify_plan_products(collect_plan_products(fixture),fixture)
+        if plan_products['status']!='PLAN_PRODUCTS_CREATABLE':
+            return dict(blocked,reason='PLAN_PRODUCT_PRECONDITION_FAILED',plan_products=plan_products)
         policy=Scenario.load('projects/ble-elva/scenarios/core-smoke-01.json',fixture['target_url']).read_only_policy
         form=check_receipt_form(fixture,dataset,policy)
         if form['status']!='RECEIPT_UI_CONTRACT_VERIFIED':return dict(blocked,reason='RECEIPT_UI_CONTRACT_FAILED',form=form)
@@ -257,7 +260,7 @@ def check_ready(suite,dataset,fixture,projection,allocation):
             return dict(blocked,reason='BUDGET_APPROVAL_MISSING',other_gates='PASSED',budget_approval=budget,
                         request_estimate=estimate)
         return {'status':'READY_FOR_SINGLE_SUITE_RUN','model_calls':0,'database_writes':0,
-                'budget_approval':budget,'source':source,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
+                'budget_approval':budget,'plan_products':plan_products,'source':source,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
                 'fixture_gates':gates,'dependencies':dependencies,'native_receipt_form':form,'entry_routes':routes,
                 'active_runtime':runtime,'request_estimate':estimate,'persona_context':persona_context(suite,fixture),
                 'fresh_subscription_authorization_required_at_execution':True,'current_provider_catalog_checked':False,
@@ -535,7 +538,8 @@ def case_matrix(records):
                 if type(value) is int:scores[name].append(value)
         rows.append({'case_id':record['case_id'],'persona':record.get('persona'),
             'objective_status':objective_status(record['result']),'technical_gate':record.get('technical_gate'),
-            'oracle_gate':record.get('oracle_gate'),'reason':record.get('reason') or record.get('stop_reason'),
+            'oracle_gate':record.get('oracle_gate'),'reason':record.get('reason') or record.get('stop_reason') or record.get('error_code'),
+            'review_errors':sorted({i['review_error'] for i in [record]+record.get('positions',[]) if i.get('review_error')}),
             'fail_classes':record.get('fail_classes',[]),'position_results':record.get('position_results',[]),
             'missing_prerequisites':record.get('missing_prerequisites',[]),
             'ux_verdict':record.get('ux_verdict','NOT_EVALUATED'),
@@ -611,7 +615,8 @@ def completion_text(manifest,records):
             'P1 objektive BLE-Abweichungen (fachlich bestätigen, dann BLE-Issue):']
     lines+=['- '+text(r['case_id'])+': '+text(r['fail_classes']) for r in failed] or ['- keine']
     lines+=['P2 Harness-/Voraussetzungsstopps vor einem Retest beheben:']
-    lines+=['- '+text(r['case_id'])+': '+text(r['reason']) for r in matrix if r['objective_status'] in ('INVALID_HARNESS','BLOCKED')] or ['- keine']
+    lines+=['- '+text(r['case_id'])+': '+text(r['reason'] or 'Grund nicht erfasst') for r in matrix if r['objective_status'] in ('INVALID_HARNESS','BLOCKED')] or ['- keine']
+    lines+=['- UX-Review ausgefallen in '+text(r['case_id'])+': '+text(', '.join(r['review_errors'])) for r in matrix if r['review_errors']]
     lines+=['P3 kritische/major UX-Befunde:']+(['- '+e for e in priority] or ['- keine'])
     lines+=['P4 weitere UX-Befunde (minor/info):']+(['- '+e for e in minor] or ['- keine'])
     lines+=['','## 6. Retest-Benchmark','',

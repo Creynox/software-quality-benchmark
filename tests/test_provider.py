@@ -55,3 +55,21 @@ class ProviderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SafeProviderErrorCodeTests(unittest.TestCase):
+    def test_only_the_modules_own_constant_messages_map_to_codes(self):
+        from sqbf.providers import safe_error_code
+        cases = [(RuntimeError('ChatGPT plan request failed with HTTP 400'), 'PROVIDER_HTTP_400'),
+                 (RuntimeError('ChatGPT plan request failed (invalid_request_error)'), 'PROVIDER_FAILED_invalid_request_error'),
+                 (RuntimeError('ChatGPT plan request failed due to a network or timeout error'), 'PROVIDER_NETWORK_OR_TIMEOUT'),
+                 (RuntimeError('ChatGPT plan response exceeded the local size limit'), 'PROVIDER_RESPONSE_TOO_LARGE'),
+                 (RuntimeError('ChatGPT plan stream ended without response.completed'), 'PROVIDER_STREAM_INCOMPLETE'),
+                 (ValueError('ChatGPT plan response was not valid JSON'), 'RESPONSE_NOT_JSON'),
+                 (ValueError('Structured response has invalid type at $.scores.clarity'), 'RESPONSE_SCHEMA_MISMATCH')]
+        for error, code in cases:
+            self.assertEqual(safe_error_code(error), code)
+        for error in (RuntimeError('Bearer abc.def.ghi'), RuntimeError('ChatGPT plan request failed with HTTP 400; token=x'),
+                      KeyError('access_token'), ValueError('prompt text'), RuntimeError('ChatGPT plan request failed with HTTP 4000'),
+                      type('Sub', (RuntimeError,), {})('ChatGPT plan request failed with HTTP 400')):
+            self.assertIsNone(safe_error_code(error))

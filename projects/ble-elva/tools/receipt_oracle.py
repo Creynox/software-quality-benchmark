@@ -82,3 +82,59 @@ def verify_receipts(records, dataset, fixture, *, phase):
                     limitations=['No normative certification; related module/result persistence is checked by separate stages.'])
     except (KeyError, TypeError, ValueError, AttributeError):
         return dict(result,reason='INCOMPLETE_OR_CONTRADICTORY_PROJECTION')
+
+
+def collect_plan_products(fixture, *, run=subprocess.run):
+    """Flags BLE's sample creation checks per product of the plan; no names, no values."""
+    validate_target(fixture)
+    target = verify_docker_identity(fixture, run=run)
+    db = fixture['database']
+    data = fixture['fixture_data']
+    sql = """BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+SET LOCAL statement_timeout='5s';
+SELECT json_build_object('database',current_database(),'role',current_user,'read_only',current_setting('transaction_read_only'));
+SELECT coalesce(json_agg(json_build_object('product_id',p.id,'is_active',p.is_active,
+ 'use_area_set',p.use_area IS NOT NULL,'product_level_set',p.product_level IS NOT NULL,
+ 'owner_ok',(p.tenant_id::text='__TENANT__' AND p.plant_id::text='__PLANT__' AND p.laboratory_id IS NULL),
+ 'standard_assignments',(SELECT count(*) FROM product_norm_version_assignments a WHERE a.product_id=p.id)) ORDER BY p.id),'[]'::json)
+FROM workspace_products p WHERE p.id IN (SELECT product_id FROM sampling_plan_items);
+ROLLBACK;""".replace('__TENANT__', str(data['tenant_id'])).replace('__PLANT__', str(data['plant_id']))
+    result = run(['docker','exec','-i',target['container_id'],'psql','-X','-q','-At',
+        '-U',db['oracle_role'],'-d',db['name'],'-v','ON_ERROR_STOP=1'],
+        input=sql,capture_output=True,text=True,check=True,timeout=10)
+    rows = list(map(json.loads, result.stdout.splitlines()))
+    if len(rows) != 2 or rows[0] != {'database':db['name'],'role':db['oracle_role'],'read_only':'on'}:
+        raise ValueError('Read-only Oracle identity mismatch')
+    return rows[1]
+
+
+def verify_plan_products(rows, fixture):
+    """Every plan product must be one BLE can carry a new sample for (live run 3d9c2706 precondition).
+
+    BLE refuses the whole plan-wide creation if one product is inactive or lacks use area or
+    level, so this is a fixture precondition, not product behaviour under test.
+    """
+    blocked = {'status': 'BLOCKED_PLAN_PRODUCT_EVIDENCE', 'model_calls': 0, 'database_writes': 0}
+    try:
+        by_product = {row['product_id']: row for row in rows}
+        if len(by_product) != len(rows):
+            return dict(blocked, reason='DUPLICATE_PRODUCT_ROW')
+        issues = []
+        for position, product in sorted(fixture['suite_copy']['mapping']['positions'].items()):
+            row = by_product.get(product)
+            if row is None:
+                return dict(blocked, reason='PLAN_PRODUCT_MISSING', position_id=position)
+            reasons = [name for name, bad in (
+                ('PRODUCT_INACTIVE', row['is_active'] is not True),
+                ('USE_AREA_MISSING', row['use_area_set'] is not True),
+                ('PRODUCT_LEVEL_MISSING', row['product_level_set'] is not True),
+                ('OWNER_SCOPE_MISMATCH', row['owner_ok'] is not True),
+                ('NO_STANDARD_ASSIGNMENT', not row['standard_assignments'])) if bad]
+            if reasons:
+                issues.append({'position_id': position, 'reasons': reasons})
+        if len(by_product) != len(fixture['suite_copy']['mapping']['positions']):
+            return dict(blocked, reason='UNEXPECTED_PLAN_PRODUCT_COUNT')
+        return {'status': 'PLAN_PRODUCTS_BLOCKED' if issues else 'PLAN_PRODUCTS_CREATABLE', 'positions_checked': len(by_product),
+                'blocked_positions': issues, 'model_calls': 0, 'database_writes': 0}
+    except (KeyError, TypeError, AttributeError):
+        return dict(blocked, reason='INCOMPLETE_PLAN_PRODUCT_EVIDENCE')

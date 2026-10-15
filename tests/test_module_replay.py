@@ -32,13 +32,15 @@ class PlanTests(unittest.TestCase):
 
     def test_insert_statement_is_guarded_escaped_and_touches_only_the_activation_table(self):
         planned = module.plan_rows(SOURCE_ROWS, {SRC_PRODUCT: NEW_PRODUCT}, CATALOG)
-        sql = module.insert_sql(planned)
+        sql = module.insert_sql(planned, 'sqbf_oracle_ro')
         self.assertIn("TARGET_NOT_EMPTY", sql);self.assertIn("ROWCOUNT_MISMATCH", sql);self.assertIn("it''s a comment", sql)
         self.assertEqual(re.findall(r'(?i)\b(insert into|update|delete from|truncate|drop|alter)\b[^;]{0,40}', sql)[0], 'INSERT INTO')
         self.assertEqual(len(re.findall(r'(?i)\binsert into\b', sql)), 1);self.assertNotRegex(sql, r'(?i)\b(delete|truncate|drop|alter)\b')
         self.assertIn('public.lims_product_test_modules', sql)
+        self.assertEqual(re.findall(r'(?i)\bgrant\b[^;]*;', sql), ['GRANT SELECT ON public.lims_product_test_modules TO sqbf_oracle_ro;'])
+        with self.assertRaises(module.ReplayError):module.insert_sql(planned, "x; DROP ROLE y")
         bad = dict(planned[0], product_id="x'; DROP TABLE y;--")
-        with self.assertRaises(module.ReplayError):module.insert_sql([bad])
+        with self.assertRaises(module.ReplayError):module.insert_sql([bad], 'sqbf_oracle_ro')
         self.assertTrue(sql.startswith('BEGIN;') and sql.rstrip().endswith('COMMIT;'))
 
 
@@ -57,7 +59,7 @@ class CollectTests(unittest.TestCase):
 
     def test_replay_reports_counts_by_module_without_values(self):
         fixture = {'suite_copy': {'mapping': {'products': {SRC_PRODUCT: NEW_PRODUCT}}},
-                   'database': {'container': 'c', 'bootstrap_user': 'u', 'name': 'n'}}
+                   'database': {'container': 'c', 'bootstrap_user': 'u', 'name': 'n', 'oracle_role': 'sqbf_oracle_ro'}}
         calls = []
         def run(command, **kwargs):
             body = kwargs['input'];calls.append(body)

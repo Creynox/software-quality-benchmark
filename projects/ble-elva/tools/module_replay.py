@@ -65,7 +65,12 @@ def plan_rows(source_rows, product_map, catalog):
     return planned
 
 
-def insert_sql(planned):
+ROLE = re.compile(r'[a-z][a-z0-9_]{0,62}')
+
+
+def insert_sql(planned, oracle_role):
+    if not ROLE.fullmatch(oracle_role):
+        raise ReplayError('ORACLE_ROLE_INVALID')
     for row in planned:
         if not (UUID_PATTERN.fullmatch(row['id']) and UUID_PATTERN.fullmatch(row['product_id']) and UUID_PATTERN.fullmatch(row['test_module_id'])):
             raise ReplayError('ID_INVALID')
@@ -73,7 +78,9 @@ def insert_sql(planned):
     return ("BEGIN;\nDO $$ BEGIN IF (SELECT count(*) FROM public." + TABLE + ")<>0 THEN RAISE EXCEPTION 'TARGET_NOT_EMPTY'; END IF; END $$;\n"
             "INSERT INTO public." + TABLE + " (" + ','.join(COLUMNS) + ") SELECT " + ','.join('r.' + c for c in COLUMNS)
             + " FROM json_populate_recordset(NULL::public." + TABLE + ", '" + payload + "'::json) r;\n"
-            "DO $$ BEGIN IF (SELECT count(*) FROM public." + TABLE + ")<>" + str(len(planned)) + " THEN RAISE EXCEPTION 'ROWCOUNT_MISMATCH'; END IF; END $$;\nCOMMIT;")
+            "DO $$ BEGIN IF (SELECT count(*) FROM public." + TABLE + ")<>" + str(len(planned)) + " THEN RAISE EXCEPTION 'ROWCOUNT_MISMATCH'; END IF; END $$;\n"
+            # The SELECT-only oracle must be able to read the table the protected baseline now covers.
+            "GRANT SELECT ON public." + TABLE + " TO " + oracle_role + ";\nCOMMIT;")
 
 
 def replay(fixture, *, run=subprocess.run):
@@ -84,7 +91,7 @@ def replay(fixture, *, run=subprocess.run):
         raise ReplayError('NO_SOURCE_ACTIVATIONS')
     planned = plan_rows(source_rows, product_map, collect_target_catalog(fixture, run=run))
     db = fixture['database']
-    _psql(run, db['container'], db['bootstrap_user'], db['name'], insert_sql(planned), readonly=False)
+    _psql(run, db['container'], db['bootstrap_user'], db['name'], insert_sql(planned, db['oracle_role']), readonly=False)
     per_module = {}
     for row in source_rows:
         per_module[row['module_code']] = per_module.get(row['module_code'], 0) + 1

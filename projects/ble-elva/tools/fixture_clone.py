@@ -210,6 +210,7 @@ def stop_occupant(occupant, run, *, runtime_fn=None, sleep=time.sleep):
 def clone_fixture(source_path, source_controller_credentials, output_dir, *, product_position='P06',
                   run=subprocess.run, popen=subprocess.Popen, sleep=time.sleep, environ=None,
                   source_stopped=False, expected_tree_sha256=None, occupant_path=None, purpose='fixture', replay_modules=True,
+                  session_seed_path=None,
                   override_reason='plan product inactive in approved source data; BLE refuses plan-wide sample creation (run 3d9c2706)'):
     """Perform all phases; returns the new manifest path. Stops at the first failed phase.
 
@@ -347,7 +348,8 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
         'created_at': datetime.now(timezone.utc).isoformat()}
     runtime_root = output / 'runtime'
     shutil.copytree(Path(source['suite_copy']['application_root']), runtime_root, ignore=shutil.ignore_patterns('logs'))
-    seed = {name: actor['storage_state'] for name, actor in occupant['personas'].items()} if occupant is not None else None
+    seed_source = json.loads(Path(session_seed_path).read_text(encoding='utf-8-sig')) if session_seed_path else occupant
+    seed = {name: actor['storage_state'] for name, actor in seed_source['personas'].items()} if seed_source is not None else None
     manifest = build_manifest(source, identity, container_id, runtime_root, prepared, evidence, session_seed=seed)
     manifest['read_only_oracle'] = copy.deepcopy(new_fixture['read_only_oracle'])
     credential = load_credentials(source_controller_credentials, controller)

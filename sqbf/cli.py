@@ -194,6 +194,7 @@ def main(argv=None) -> int:
     clone.add_argument('--expected-tree-sha256',help='Byte-tree checksum recorded when the stopped source was cloned before')
     clone.add_argument('--occupant-fixture',help='Manifest of the fixture holding ports 5082/55434; stopped and kept after the copy is verified')
     clone.add_argument('--purpose',default='fixture',choices=['fixture','scratch'])
+    clone.add_argument('--session-seed-fixture',help='Manifest whose session files are the newest (the renewal guard allows one login per stale file)')
     suite_run=sub.add_parser('run-suite',help='Check suite readiness; live execution requires --execute',allow_abbrev=False)
     for name in ('suite','dataset','fixture','projection','allocations'):
         suite_run.add_argument('--'+name,required=True)
@@ -288,7 +289,7 @@ def main(argv=None) -> int:
         try:
             report=(({'status':'CLONE_CREATED','manifest':str(tool.clone_fixture(args.source_fixture,args.controller_credentials,args.output_dir,
                         source_stopped=args.source_stopped,expected_tree_sha256=args.expected_tree_sha256,occupant_path=args.occupant_fixture,
-                        purpose=args.purpose))})
+                        purpose=args.purpose,session_seed_path=args.session_seed_fixture))})
                     if args.execute else tool.plan_clone(args.source_fixture,source_stopped=args.source_stopped,occupant_path=args.occupant_fixture))
         except tool.CloneError as error:
             print('BLOCKED_FIXTURE_CLONE: phase='+error.phase+' reason='+error.reason+'; no retry/rollback, inspect clone-state.json.')

@@ -19,6 +19,8 @@ BASE = {name: {'count': 0, 'hash': 'e' * 32} for name in OTHER_TABLES}
 BASE.update(workspace_products={'count': 10, 'hash': 'a' * 32}, norm_versions={'count': 16, 'hash': 'b' * 32})
 MODULES_BEFORE = {'count': 0, 'hash': 'm0'}
 MODULES_AFTER = {'count': 51, 'hash': 'm1'}
+RULES_BEFORE = {'count': 28, 'hash': 'r0'}
+RULES_AFTER = {'count': 65, 'hash': 'r1'}
 ROW = {'id': PRODUCT, 'name': 'Synthetic product six', 'is_active': False, 'use_area': 'Asphalt'}
 
 
@@ -41,7 +43,8 @@ def source(runtime_root):
 
 def replay(docker):
     docker.replayed = True;docker.log.append('replay')
-    return {'table': 'lims_product_test_modules', 'rows': 51, 'per_module': {'AGGREGATE_SIEVE_ANALYSIS': 10}}
+    return {'tables': {'lims_product_test_modules': {'rows': 51, 'table_rows_after': 51},
+                       'workspace_sampling_rules': {'rows': 37, 'table_rows_after': 65}}}
 
 
 class FakeDocker:
@@ -86,6 +89,7 @@ class FakeDocker:
             return ok()
         tables = copy.deepcopy(BASE)
         tables['lims_product_test_modules'] = dict(MODULES_AFTER if self.replayed and container != self.source else MODULES_BEFORE)
+        tables['workspace_sampling_rules'] = dict(RULES_AFTER if self.replayed and container != self.source else RULES_BEFORE)
         if self.updated and container != self.source:
             tables['workspace_products']['hash'] = 'd' * 32
         if self.corrupt_clone and container != self.source:
@@ -176,6 +180,7 @@ class CloneFlowTests(unittest.TestCase):
                 tables['workspace_products'] = {'count': 10, 'hash': 'd' * 32}
             if 'lims_product_test_modules' in fixture['read_only_oracle']['expected_counts']:
                 tables['lims_product_test_modules'] = dict(MODULES_AFTER)
+                tables['workspace_sampling_rules'] = dict(RULES_AFTER)
             return {'tables': tables}
         runtime_info = {'pid': 4242, 'assembly': 'asm', 'sha256': 's' * 64}
         def runtime_fn(url, root, config, **kwargs):
@@ -185,7 +190,7 @@ class CloneFlowTests(unittest.TestCase):
              patch.object(module, 'verify_runtime', side_effect=runtime_fn), \
              patch.object(module, 'load_credentials', return_value={'username': 'u', 'password': 'p'}), \
              patch.object(module, 'check_private_directory'), patch.object(module.shutil, 'copytree', side_effect=lambda a, b, **k: Path(b).mkdir()), \
-             patch.object(module.module_replay, 'replay', side_effect=lambda fixture, run=None: replay(docker)):
+             patch.object(module.module_replay, 'replay_all', side_effect=lambda fixture, run=None: replay(docker)):
             popen = MagicMock(return_value=process)
             try:
                 result = module.clone_fixture(path, 'controller.dpapi', output, run=docker, popen=popen, sleep=lambda s: None, environ={'PATH': 'p'})
@@ -209,11 +214,14 @@ class CloneFlowTests(unittest.TestCase):
         self.assertEqual(manifest['suite_copy']['prepared_state_sha256'], canonical_hash(manifest['suite_copy']['prepared_tables']))
         phases = [p['phase'] for p in json.loads((output / 'clone-state.json').read_text(encoding='utf-8'))['phases']]
         self.assertEqual(phases, ['source_hashed', 'source_stopped', 'volume_cloned', 'container_started',
-                                  'clone_verified_identical', 'override_applied', 'modules_replayed', 'web_started'])
-        self.assertEqual(manifest['suite_copy']['clone']['all_changed_tables'], ['lims_product_test_modules', 'workspace_products'])
+                                  'clone_verified_identical', 'override_applied', 'config_replayed', 'web_started'])
+        self.assertEqual(manifest['suite_copy']['clone']['all_changed_tables'],
+                         ['lims_product_test_modules', 'workspace_products', 'workspace_sampling_rules'])
         self.assertEqual(manifest['read_only_oracle']['expected_counts']['lims_product_test_modules'], 51)
+        self.assertEqual(manifest['read_only_oracle']['expected_counts']['workspace_sampling_rules'], 65)
         self.assertEqual(manifest['suite_copy']['prepared_tables']['lims_product_test_modules'], MODULES_AFTER)
-        self.assertEqual(manifest['suite_copy']['clone']['module_replay']['rows'], 51)
+        self.assertEqual(manifest['suite_copy']['prepared_tables']['workspace_sampling_rules'], RULES_AFTER)
+        self.assertEqual(manifest['suite_copy']['clone']['module_replay']['tables']['workspace_sampling_rules']['rows'], 37)
         self.assertEqual(popen.call_args.kwargs['env']['ConnectionStrings__DefaultConnection'].count('Database=' + manifest['database']['name']), 1)
         self.assertFalse(any('workspace_products' in str(c) and 'DELETE' in str(c) for c in docker.log))
         self.assertTrue(all(enc == 'utf-8' for _, enc, _ in docker.encodings))
@@ -273,6 +281,7 @@ class StoppedSourceCloneTests(unittest.TestCase):
                 tables['workspace_products'] = {'count': 10, 'hash': 'd' * 32}
             if 'lims_product_test_modules' in fixture['read_only_oracle']['expected_counts']:
                 tables['lims_product_test_modules'] = dict(MODULES_AFTER)
+                tables['workspace_sampling_rules'] = dict(RULES_AFTER)
             return {'tables': tables}
         def runtime_fn(url, root, config, **kwargs):
             return {'pid': 5151 if Path(root).parent.name == 'out' else occupant_pid, 'assembly': 'asm', 'sha256': 's' * 64}
@@ -281,7 +290,7 @@ class StoppedSourceCloneTests(unittest.TestCase):
              patch.object(module, 'verify_runtime', side_effect=runtime_fn), \
              patch.object(module, 'load_credentials', return_value={'username': 'u', 'password': 'p'}), \
              patch.object(module, 'check_private_directory'), patch.object(module.shutil, 'copytree', side_effect=lambda a, b, **k: Path(b).mkdir()), \
-             patch.object(module.module_replay, 'replay', side_effect=lambda fixture, run=None: replay(docker)):
+             patch.object(module.module_replay, 'replay_all', side_effect=lambda fixture, run=None: replay(docker)):
             try:
                 result = module.clone_fixture(src_path, 'c.dpapi', output, run=docker, popen=MagicMock(return_value=process), sleep=lambda s: None,
                                               environ={'PATH': 'p'}, source_stopped=True, expected_tree_sha256=expected,
@@ -297,7 +306,7 @@ class StoppedSourceCloneTests(unittest.TestCase):
         self.assertEqual(order, ['docker volume create', 'docker run --rm', 'taskkill', 'docker stop -t', 'docker run -d', 'rename', 'update'])
         phases = [p['phase'] for p in json.loads((output / 'clone-state.json').read_text(encoding='utf-8'))['phases']]
         self.assertEqual(phases, ['volume_cloned', 'occupant_stopped', 'container_started', 'clone_verified_identical', 'override_applied',
-                                  'modules_replayed', 'web_started'])
+                                  'config_replayed', 'web_started'])
         manifest = json.loads(result.read_text(encoding='utf-8'));evidence = manifest['suite_copy']['clone']
         self.assertEqual((evidence['source_started_for_clone'], evidence['occupant_stopped'], evidence['purpose']), (False, 'occupant-fixture', 'scratch'))
         self.assertEqual(evidence['override']['changed_tables'], ['workspace_products'])

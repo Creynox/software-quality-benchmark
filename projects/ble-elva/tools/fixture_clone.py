@@ -311,17 +311,19 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
     changed_expected = ['workspace_products']
     if replay_modules:
         try:
-            replay_evidence = module_replay.replay(new_fixture, run=run)
+            replay_evidence = module_replay.replay_all(new_fixture, run=run)
         except module_replay.ReplayError as error:
             raise CloneError('module_replay', str(error)) from None
         after_replay = table_hashes(run, identity['container'], controller, identity['database'], phase='replay_hash')
-        if changed_tables(after, after_replay) != [module_replay.TABLE]:
+        replayed = sorted(replay_evidence['tables'])
+        if changed_tables(after, after_replay) != replayed:
             raise CloneError('module_replay', 'UNEXPECTED_DIFFERENCE')
-        if after_replay[module_replay.TABLE]['count'] != replay_evidence['rows']:
-            raise CloneError('module_replay', 'ROWCOUNT_MISMATCH')
-        expected_counts[module_replay.TABLE] = replay_evidence['rows']
-        changed_expected = sorted(['workspace_products', module_replay.TABLE])
-        done('modules_replayed', rows=replay_evidence['rows'], changed_tables=[module_replay.TABLE])
+        for table, evidence_row in replay_evidence['tables'].items():
+            if after_replay[table]['count'] != evidence_row['table_rows_after']:
+                raise CloneError('module_replay', 'ROWCOUNT_MISMATCH')
+            expected_counts[table] = evidence_row['table_rows_after']
+        changed_expected = sorted(['workspace_products'] + replayed)
+        done('config_replayed', tables={t: e['rows'] for t, e in replay_evidence['tables'].items()}, changed_tables=replayed)
     new_fixture['read_only_oracle'] = copy.deepcopy(new_fixture['read_only_oracle'])
     new_fixture['read_only_oracle']['expected_counts'].update(expected_counts)
     snap = snapshot(new_fixture, enforce_counts=False)['tables']

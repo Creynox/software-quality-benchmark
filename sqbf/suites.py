@@ -6,6 +6,7 @@ Unsupported cases remain in the coverage denominator; a score never hides a gate
 import hashlib
 import json
 from pathlib import Path
+from .calibration import validate_policy
 
 RESULTS = {'PASS','FAIL','BLOCKED','NOT_IMPLEMENTED','INVALID','INCONCLUSIVE'}
 
@@ -30,6 +31,9 @@ def validate_suite(suite):
     cases=suite.get('cases')
     if not isinstance(cases,list) or not cases:raise ValueError('Suite requires explicit cases')
     seen=set()
+    calibration = suite.get('resource_policy') is not None
+    if calibration:
+        validate_policy(suite['resource_policy'])
     for case in cases:
         key=case.get('case_id')
         if not isinstance(key,str) or not key or key in seen:raise ValueError('Duplicate/missing case identity')
@@ -37,13 +41,21 @@ def validate_suite(suite):
             raise ValueError('Case must specify persona, task, fixture, independent oracle and expectations')
         if case.get('implementation') not in ('implemented','pending'):
             raise ValueError('Unknown implementation state')
+        if calibration and case.get('persona') not in suite.get('personas', {}):
+            raise ValueError('Case persona must map to an independently verified account')
         if not isinstance(case.get('depends_on'),list) or not set(case['depends_on'])<=seen:
             raise ValueError('Dependencies must reference earlier cases; no cycle or implicit prerequisite')
-        if type(case.get('max_minutes')) is not int or not 1<=case['max_minutes']<=25:
+        if calibration:
+            if any(k in case for k in ('max_minutes', 'max_actions', 'max_model_calls')):
+                raise ValueError('Calibration task marks must not retain conflicting hard task limits')
+            marks = case.get('observation_marks', {})
+            if any(type(marks.get(k)) is not int or marks[k] < 1 for k in ('seconds', 'actions')):
+                raise ValueError('Positive time/action observation marks required')
+        elif type(case.get('max_minutes')) is not int or not 1<=case['max_minutes']<=25:
             raise ValueError('Individual case time budget missing/outside fixed bound')
-        if type(case.get('max_actions')) is not int or not 1<=case['max_actions']<=150:
+        if not calibration and (type(case.get('max_actions')) is not int or not 1<=case['max_actions']<=150):
             raise ValueError('Individual case action budget missing/outside fixed bound')
-        if type(case.get('max_model_calls')) is not int or not 2<=case['max_model_calls']<=152:
+        if not calibration and (type(case.get('max_model_calls')) is not int or not 2<=case['max_model_calls']<=152):
             raise ValueError('Individual case model budget missing/outside fixed bound')
         seen.add(key)
     if suite.get('automatic_retry') is not False or suite.get('provider')!='chatgpt_plan':
@@ -102,6 +114,8 @@ def aggregate(suite,records):
         key=record.get('case_id')
         if key not in expected or key in by_id:raise ValueError('Unknown/duplicate case evidence')
         if record.get('result') not in RESULTS:raise ValueError('Unknown structured result')
+        if record.get('stop_reason') in ('SUITE_TIME_CEILING', 'SUITE_CALL_CEILING') and record['result'] != 'INCONCLUSIVE':
+            raise ValueError('Resource ceiling is incomplete measurement, not an application verdict')
         # PASS requires independent technical and functional evidence, not DONE.
         if record['result']=='PASS' and (record.get('technical_gate')!='PASS'
                 or record.get('oracle_gate')!='PASS' or record.get('evidence_verified') is not True

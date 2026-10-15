@@ -1,6 +1,10 @@
 # Regular BLE benchmark setup — 2026-10-14
 
-Status: **IN PROGRESS / BLOCKED_DATA_REVIEW**, not a completed benchmark environment.
+Current status (2026-10-15): **IN IMPLEMENTATION / BLOCKED_SESSION**.
+Active contract: `enzberg-nsn014-v0.3.json`, twelve pending stage adapters.
+The source-replay dataset is approved; historical data-review blockers below are
+superseded. Fixture preparation previously passed, but today's saved staff
+session redirects to `/login`. No regular live suite has run.
 
 ## PO scope and reference
 
@@ -16,13 +20,15 @@ Abmagerung; not BS 0/1, BS 1/2 or KSM Kost. The visible original plan has ten
 positions. The original database is preserved and its mismatch is evidence,
 not a reason to silently change source records.
 
-The current NSN014 suite is a **draft contract**. All fourteen stages remain
+The current NSN014 suite is a **draft contract**. All twelve active stages remain
 `pending`; neither a case catalog nor a successful contract check constitutes
 runtime acceptance. The PO's preference is an example already entered personally
 in BLE. The PO subsequently selected an already recorded earlier plan for joint
 comparison. NSN014 (08.05.2026) is now the active candidate; NSN018 is retained
 as a superseded reference investigation. No re-entry or synthetic substitute
-was requested for the new candidate.
+was requested during reference selection. The PO subsequently selected prepared
+products/plan with fresh agent-created samples and re-entry of existing raw inputs
+in the disposable fixture; source records remain unchanged.
 
 ## Verified data findings
 
@@ -249,3 +255,23 @@ See [NSN014 fixture acceptance](nsn014-fixture-acceptance.md): new Web5082/PG554
 ten products/positions, zero probes and four independently verified actor sessions.
 Receipt guard and Oracle have local regressions; full stage Runner integration
 remains pending. No regular-suite live run yet.
+
+## Calibration and task boundaries — 2026-10-15
+
+See [current calibration completion report](nsn014-calibration-contract.md).
+The current PO choice ends at assessment and available PDF output. Release,
+signature and delivery are separate future agent tasks. v0.2 remains historical;
+v0.3 maps every task to one of the four actual test accounts.
+
+Ten minutes and sixty UI actions per task are observation marks, not application
+failure thresholds. The provisional global ceiling is two hours / 1,000 combined
+executor and reviewer requests. These are maximums, not an expected consumption
+or allocation target. Calls and tokens are separate units. Resource exhaustion
+is INCONCLUSIVE; source, session and safety gates still stop immediately.
+
+The accounting helper and its isolated worker bridge are locally tested; stage
+adapters still need to use them. No existing CORE/LAB limit was increased.
+The re-bound v0.3 fixture manifest is a new private file; the original remains.
+Today's fresh read-only check returned BLOCKED_SESSION for the staff account
+(`/` redirected to `/login`), with no model requests, UI inputs or database writes.
+No automatic re-login was performed during this contract-only check.

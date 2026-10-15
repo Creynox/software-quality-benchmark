@@ -37,7 +37,7 @@
   },
   "regular_suite_setup": {
     "status": "IN_IMPLEMENTATION",
-    "active_candidate": "suites/enzberg-nsn014-v0.2.json",
+    "active_candidate": "suites/enzberg-nsn014-v0.3.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
     "superseded_candidate": "suites/enzberg-nsn018-v0.1.json",
@@ -66,7 +66,23 @@
       "runtime_build": "c51ea2229b3513aa59e659774fe8ce44cdd81859",
       "acceptance_command": "sqbf.cli suite-fixture-check",
       "executor_integration": "pending",
-      "normative_conformity_scoring": false
+      "normative_conformity_scoring": false,
+      "latest_session_gate": {
+        "status": "BLOCKED_SESSION",
+        "checked_at": "2026-10-15",
+        "actor": "laboratory_staff",
+        "reason": "Saved session redirects home to /login; no login retried",
+        "historical_fixture_acceptance": "FIXTURE_GATES_VERIFIED on earlier check; not current session proof"
+      }
+    },
+    "execution_policy": {
+      "mode": "calibration",
+      "suite_seconds_ceiling": 7200,
+      "suite_model_calls_ceiling": 1000,
+      "task_observation_seconds": 600,
+      "task_observation_actions": 60,
+      "active_endpoint": "evaluation/PDF; release/signature/delivery excluded",
+      "runtime_integration": "pending; accounting component locally tested only"
     }
   }
 }

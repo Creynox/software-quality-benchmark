@@ -279,8 +279,9 @@ def main(argv=None) -> int:
             suite=json.loads(Path(args.suite).read_text(encoding='utf-8-sig'))
             report=load_suite_profile(suite.get('adapter_contract')).provider_probe(
                 suite,args.output,args.executor_model,args.reviewer_model,execute=args.execute)
-        except Exception:
-            print('BLOCKED_PROVIDER_PROBE: invalid input, OAuth or private evidence; no fallback/retry.')
+        except Exception as error:
+            # Class name only; messages may carry provider or credential text.
+            print('BLOCKED_PROVIDER_PROBE: invalid input, OAuth or private evidence; no fallback/retry. error_type=' + type(error).__name__)
             return 2
         print(json.dumps(report,indent=2))
         return 0 if report['status'] in ('PROBE_PLAN_ONLY','PROBE_RECORDED') and report.get('verdict','PROBE_PASS')=='PROBE_PASS' else 2

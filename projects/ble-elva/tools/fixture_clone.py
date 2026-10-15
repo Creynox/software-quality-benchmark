@@ -172,9 +172,47 @@ def web_environment(base_env, connection):
     return env
 
 
+def preflight_stopped(fixture, run):
+    """Source container is stopped and kept: stage and baseline are validated, never started."""
+    validate_target(fixture)
+    copy_ = fixture['suite_copy']
+    if copy_.get('stage') != 'persona_sessions_verified' or copy_.get('measured_samples_preseeded') is not False:
+        raise CloneError('preflight', 'SOURCE_STAGE_NOT_ACCEPTED')
+    if canonical_hash(copy_['prepared_tables']) != copy_['prepared_state_sha256']:
+        raise CloneError('preflight', 'PREPARED_HASH_MISMATCH')
+    info = json.loads(_run(run, ['docker', 'inspect', fixture['database']['container']], phase='preflight'))[0]
+    if (info['State']['Status'] != 'exited' or info['State']['ExitCode'] != 0 or info['Id'] != fixture['database']['container_id']
+            or info['Name'] != '/' + fixture['database']['container']):
+        raise CloneError('preflight', 'SOURCE_NOT_A_CLEANLY_STOPPED_CONTAINER')
+
+
+def stop_occupant(occupant, run, *, runtime_fn=None, sleep=time.sleep):
+    """Stop (never remove) the fixture that currently holds ports 5082/55434 after proving its identity."""
+    runtime_fn = runtime_fn or verify_runtime
+    validate_target(occupant)
+    copy_ = occupant['suite_copy']
+    runtime = runtime_fn(occupant['target_url'], copy_['application_root'], occupant['identity_scope_check'])
+    if runtime['pid'] != copy_['web_pid'] or any(runtime[k] != copy_['runtime'][k] for k in ('assembly', 'sha256')):
+        raise CloneError('stop_occupant', 'WEB_PROCESS_NOT_THE_RECORDED_ONE')
+    _run(run, ['taskkill', '/PID', str(runtime['pid']), '/T', '/F'], phase='stop_occupant', errors='replace')
+    sleep(2)
+    _run(run, ['docker', 'stop', '-t', '120', occupant['database']['container']], phase='stop_occupant')
+    info = json.loads(_run(run, ['docker', 'inspect', occupant['database']['container']], phase='stop_occupant'))[0]
+    if info['State']['Status'] != 'exited' or info['State']['ExitCode'] != 0:
+        raise CloneError('stop_occupant', 'NOT_CLEANLY_STOPPED')
+    return {'container': occupant['database']['container'], 'exit_code': info['State']['ExitCode']}
+
+
 def clone_fixture(source_path, source_controller_credentials, output_dir, *, product_position='P06',
-                  run=subprocess.run, popen=subprocess.Popen, sleep=time.sleep, environ=None):
-    """Perform all phases; returns the new manifest path. Stops at the first failed phase."""
+                  run=subprocess.run, popen=subprocess.Popen, sleep=time.sleep, environ=None,
+                  source_stopped=False, expected_tree_sha256=None, occupant_path=None, purpose='fixture',
+                  override_reason='plan product inactive in approved source data; BLE refuses plan-wide sample creation (run 3d9c2706)'):
+    """Perform all phases; returns the new manifest path. Stops at the first failed phase.
+
+    source_stopped: the source container is already stopped and is never started; the byte copy must match
+    expected_tree_sha256 (the checksum recorded when the source was stopped) before anything else is touched.
+    occupant_path: manifest of the fixture holding the ports; it is stopped (kept) after the copy is verified.
+    """
     import os
     environ = os.environ if environ is None else environ
     source_path = Path(source_path).resolve(strict=True)
@@ -184,7 +222,10 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
         raise CloneError('preflight', 'OUTPUT_INSIDE_GIT')
     if output.exists():
         raise CloneError('preflight', 'OUTPUT_EXISTS')
-    runtime = preflight(source, run)
+    runtime = None if source_stopped else preflight(source, run)
+    if source_stopped:
+        preflight_stopped(source, run)
+    occupant = json.loads(Path(occupant_path).read_text(encoding='utf-8-sig')) if occupant_path else None
     db = source['database']
     controller = db['bootstrap_user']
     product_id = source['suite_copy']['mapping']['positions'][product_position]
@@ -196,19 +237,28 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
         state['phases'].append(dict(phase=phase, at=datetime.now(timezone.utc).isoformat(), **detail))
         (output / 'clone-state.json').write_text(json.dumps(state, indent=2), encoding='utf-8')
 
-    before = table_hashes(run, db['container'], controller, db['name'], phase='source_hash')
-    done('source_hashed', tables=len(before))
-    # The only processes touched are the verified source web process and the source container (stopped, kept).
-    _run(run, ['taskkill', '/PID', str(runtime['pid']), '/T', '/F'], phase='stop_web', errors='replace')
-    sleep(2)
-    _run(run, ['docker', 'stop', '-t', '120', db['container']], phase='stop_source')
-    info = json.loads(_run(run, ['docker', 'inspect', db['container']], phase='stop_source'))[0]
-    if info['State']['Status'] != 'exited' or info['State']['ExitCode'] != 0:
-        raise CloneError('stop_source', 'NOT_CLEANLY_STOPPED')
-    done('source_stopped', exit_code=info['State']['ExitCode'])
     identity = new_identity(source)
-    volume_checksum = clone_volume(run, db['volume'], identity['volume'], db['image'])
-    done('volume_cloned', volume=identity['volume'], tree_sha256=volume_checksum)
+    before = None
+    if source_stopped:
+        volume_checksum = clone_volume(run, db['volume'], identity['volume'], db['image'])
+        if expected_tree_sha256 is not None and volume_checksum != expected_tree_sha256:
+            raise CloneError('volume', 'SOURCE_VOLUME_CHANGED_SINCE_IT_WAS_STOPPED')
+        done('volume_cloned', volume=identity['volume'], tree_sha256=volume_checksum, source_started=False)
+        if occupant is not None:
+            done('occupant_stopped', **stop_occupant(occupant, run, sleep=sleep))
+    else:
+        before = table_hashes(run, db['container'], controller, db['name'], phase='source_hash')
+        done('source_hashed', tables=len(before))
+        # The only processes touched are the verified source web process and the source container (stopped, kept).
+        _run(run, ['taskkill', '/PID', str(runtime['pid']), '/T', '/F'], phase='stop_web', errors='replace')
+        sleep(2)
+        _run(run, ['docker', 'stop', '-t', '120', db['container']], phase='stop_source')
+        info = json.loads(_run(run, ['docker', 'inspect', db['container']], phase='stop_source'))[0]
+        if info['State']['Status'] != 'exited' or info['State']['ExitCode'] != 0:
+            raise CloneError('stop_source', 'NOT_CLEANLY_STOPPED')
+        done('source_stopped', exit_code=info['State']['ExitCode'])
+        volume_checksum = clone_volume(run, db['volume'], identity['volume'], db['image'])
+        done('volume_cloned', volume=identity['volume'], tree_sha256=volume_checksum)
     container_id = _run(run, ['docker', 'run', '-d', '--name', identity['container'], '-e', 'POSTGRES_USER=' + controller,
                               '-e', 'POSTGRES_DB=' + identity['database'], '-p', '127.0.0.1:55434:5432',
                               '-v', identity['volume'] + ':/var/lib/postgresql/data', db['image']], phase='new_container').strip()
@@ -230,7 +280,14 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
                                    volume=identity['volume'])
     verify_docker_identity(new_fixture)
     cloned = table_hashes(run, identity['container'], controller, identity['database'], phase='clone_hash')
-    if cloned != before:
+    if before is None:
+        # Stopped source: identity is proven by the matching byte-tree checksum and the prepared baseline of the 22 protected tables.
+        baseline = source['suite_copy']['prepared_tables']
+        current = snapshot(new_fixture, enforce_counts=False)['tables']
+        if set(current) != set(baseline) or any(current[t] != v for t, v in baseline.items()):
+            raise CloneError('verify', 'CLONE_NOT_IN_PREPARED_STATE')
+        before = cloned
+    elif cloned != before:
         raise CloneError('verify', 'CLONE_DIFFERS_FROM_SOURCE ' + ','.join(changed_tables(before, cloned)))
     done('clone_verified_identical', tables=len(cloned))
     row_before = row_json(run, identity['container'], controller, identity['database'], product_id, phase='override')
@@ -252,13 +309,15 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
         'source_fixture_id': source['fixture_id'], 'source_container': db['container'], 'source_volume': db['volume'],
         'source_prepared_state_sha256': source['suite_copy']['prepared_state_sha256'],
         'source_lease': 'retained unchanged in the source fixture directory (consumed by run 3d9c2706-7e58-4979-8515-6fbc6cac9a1e)',
+        'purpose': purpose, 'source_started_for_clone': not source_stopped,
+        'occupant_stopped': occupant['fixture_id'] if occupant is not None else None,
         'volume_tree_sha256': volume_checksum, 'public_tables_compared': len(before),
         'override': {'position_id': product_position, 'product_name': row_before['name'], 'table': 'workspace_products',
                      'column': 'is_active', 'from': False, 'to': True, 'statement_sha256': canonical_hash(statement),
                      'row_sha256_before': canonical_hash(row_before), 'row_sha256_after': canonical_hash(row_after),
                      'changed_tables': ['workspace_products'], 'changed_columns': ['is_active'],
                      'other_tables_identical': True, 'reference_values_changed': False,
-                     'reason': 'plan product inactive in approved source data; BLE refuses plan-wide sample creation (run 3d9c2706)'},
+                     'reason': override_reason},
         'created_at': datetime.now(timezone.utc).isoformat()}
     runtime_root = output / 'runtime'
     shutil.copytree(Path(source['suite_copy']['application_root']), runtime_root, ignore=shutil.ignore_patterns('logs'))
@@ -289,9 +348,16 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
     return path
 
 
-def plan_clone(source_path, *, run=subprocess.run, product_position='P06'):
+def plan_clone(source_path, *, run=subprocess.run, product_position='P06', source_stopped=False, occupant_path=None):
     """Read-only preflight: proves the source is unchanged and names what would be stopped."""
     source = json.loads(Path(source_path).resolve(strict=True).read_text(encoding='utf-8-sig'))
+    if source_stopped:
+        preflight_stopped(source, run)
+        occupant = json.loads(Path(occupant_path).read_text(encoding='utf-8-sig')) if occupant_path else None
+        return {'status': 'CLONE_PREFLIGHT_PASSED', 'model_calls': 0, 'database_writes': 0, 'source_fixture_id': source['fixture_id'],
+                'source_state': 'stopped, never started', 'would_stop_occupant': occupant['database']['container'] if occupant else None,
+                'override': {'position_id': product_position, 'column': 'workspace_products.is_active', 'to': True},
+                'source_retained': ['volume', 'runtime directory', 'credentials', 'sessions', 'consumed lease']}
     runtime = preflight(source, run)
     return {'status': 'CLONE_PREFLIGHT_PASSED', 'model_calls': 0, 'database_writes': 0, 'source_fixture_id': source['fixture_id'],
             'would_stop_web_pid': runtime['pid'], 'would_stop_container': source['database']['container'],

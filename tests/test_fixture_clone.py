@@ -44,6 +44,7 @@ class FakeDocker:
         self.corrupt_clone, self.exit_code, self.checksum_mismatch = corrupt_clone, exit_code, checksum_mismatch
         self.row_active = row_active
         self.encodings = []
+        self.ids, self.status = {}, {}
 
     def __call__(self, args, input=None, capture_output=True, text=True, timeout=None, encoding=None, errors=None):
         self.encodings.append((args[0], encoding, errors))
@@ -54,7 +55,8 @@ class FakeDocker:
         if args[:2] == ['docker', 'stop']:
             return ok()
         if args[:2] == ['docker', 'inspect']:
-            return ok(json.dumps([{'State': {'Status': 'exited', 'ExitCode': self.exit_code}}]))
+            return ok(json.dumps([{'Id': self.ids.get(args[2], 'a' * 64), 'Name': '/' + args[2],
+                                   'State': {'Status': self.status.get(args[2], 'exited'), 'ExitCode': self.exit_code}}]))
         if args[:3] == ['docker', 'run', '--rm']:
             return ok('1' * 64 + '  -\n' + ('2' if self.checksum_mismatch else '1') * 64 + '  -\n')
         if args[:3] == ['docker', 'run', '-d']:
@@ -229,3 +231,71 @@ class CloneCommandTests(unittest.TestCase):
                 self.assertEqual(main(args + ['--execute']), 0);clone.assert_called_once()
             with patch.object(module, 'clone_fixture', side_effect=module.CloneError('volume', 'COPY_CHECKSUM_MISMATCH')):
                 self.assertEqual(main(args + ['--execute']), 2)
+
+
+class StoppedSourceCloneTests(unittest.TestCase):
+    TREE = '1' * 64
+
+    def run_stopped(self, *, expected=TREE, occupant_pid=7777, source_status='exited', checksum_mismatch=False, with_occupant=True):
+        folder = tempfile.mkdtemp()
+        runtime = Path(folder) / 'old-runtime';runtime.mkdir()
+        src = source(runtime);src['database'].update(container_id='a' * 64)
+        src_path = Path(folder) / 'source.json';src_path.write_text(json.dumps(src), encoding='utf-8')
+        occ = source(Path(folder) / 'occ-runtime');occ['database'].update(container='sqbf-nsn014-fedcba987654', name='sqbf_nsn014_fedcba987654',
+                                                                         volume='sqbf-nsn014-fedcba987654-data', container_id='b' * 64)
+        occ['suite_copy']['web_pid'] = 7777;occ['fixture_id'] = 'occupant-fixture'
+        occ_path = Path(folder) / 'occupant.json';occ_path.write_text(json.dumps(occ), encoding='utf-8')
+        docker = FakeDocker(src['database']['container'], checksum_mismatch=checksum_mismatch)
+        docker.ids = {src['database']['container']: 'a' * 64, occ['database']['container']: 'b' * 64}
+        docker.status = {src['database']['container']: source_status}
+        process = MagicMock();process.pid = 5151
+        def snap(fixture, **kwargs):
+            tables = copy.deepcopy(BASE)
+            if fixture['database']['container'] != src['database']['container'] and docker.updated:
+                tables['workspace_products'] = {'count': 10, 'hash': 'd' * 32}
+            return {'tables': tables}
+        def runtime_fn(url, root, config, **kwargs):
+            return {'pid': 5151 if Path(root).parent.name == 'out' else occupant_pid, 'assembly': 'asm', 'sha256': 's' * 64}
+        output = Path(folder) / 'out'
+        with patch.object(module, 'snapshot', side_effect=snap), patch.object(module, 'verify_docker_identity'), \
+             patch.object(module, 'verify_runtime', side_effect=runtime_fn), \
+             patch.object(module, 'load_credentials', return_value={'username': 'u', 'password': 'p'}), \
+             patch.object(module, 'check_private_directory'), patch.object(module.shutil, 'copytree', side_effect=lambda a, b, **k: Path(b).mkdir()):
+            try:
+                result = module.clone_fixture(src_path, 'c.dpapi', output, run=docker, popen=MagicMock(return_value=process), sleep=lambda s: None,
+                                              environ={'PATH': 'p'}, source_stopped=True, expected_tree_sha256=expected,
+                                              occupant_path=occ_path if with_occupant else None, purpose='scratch')
+            except module.CloneError as error:
+                result = error
+        return result, docker, output
+
+    def test_stopped_source_is_copied_verified_and_only_then_is_the_occupant_stopped(self):
+        result, docker, output = self.run_stopped()
+        self.assertIsInstance(result, Path, result)
+        order = [e for e in docker.log if e in ('docker volume create', 'docker run --rm', 'taskkill', 'docker stop -t', 'docker run -d', 'rename', 'update')]
+        self.assertEqual(order, ['docker volume create', 'docker run --rm', 'taskkill', 'docker stop -t', 'docker run -d', 'rename', 'update'])
+        phases = [p['phase'] for p in json.loads((output / 'clone-state.json').read_text(encoding='utf-8'))['phases']]
+        self.assertEqual(phases, ['volume_cloned', 'occupant_stopped', 'container_started', 'clone_verified_identical', 'override_applied', 'web_started'])
+        manifest = json.loads(result.read_text(encoding='utf-8'));evidence = manifest['suite_copy']['clone']
+        self.assertEqual((evidence['source_started_for_clone'], evidence['occupant_stopped'], evidence['purpose']), (False, 'occupant-fixture', 'scratch'))
+        self.assertEqual(evidence['override']['changed_tables'], ['workspace_products'])
+
+    def test_a_changed_source_volume_stops_before_anything_running_is_touched(self):
+        result, docker, _ = self.run_stopped(expected='9' * 64)
+        self.assertEqual((result.phase, result.reason), ('volume', 'SOURCE_VOLUME_CHANGED_SINCE_IT_WAS_STOPPED'))
+        self.assertNotIn('taskkill', docker.log);self.assertNotIn('docker run -d', docker.log)
+
+    def test_a_running_source_or_a_foreign_occupant_is_refused(self):
+        result, docker, _ = self.run_stopped(source_status='running')
+        self.assertEqual((result.phase, result.reason), ('preflight', 'SOURCE_NOT_A_CLEANLY_STOPPED_CONTAINER'));self.assertNotIn('docker volume create', docker.log)
+        result, docker, _ = self.run_stopped(occupant_pid=1)
+        self.assertEqual((result.phase, result.reason), ('stop_occupant', 'WEB_PROCESS_NOT_THE_RECORDED_ONE'))
+        self.assertNotIn('taskkill', docker.log);self.assertNotIn('docker run -d', docker.log)
+
+    def test_plan_only_preflight_for_a_stopped_source_never_starts_anything(self):
+        folder = tempfile.mkdtemp();src = source(Path(folder) / 'rt');src['database'].update(container_id='a' * 64)
+        path = Path(folder) / 's.json';path.write_text(json.dumps(src), encoding='utf-8')
+        docker = FakeDocker(src['database']['container']);docker.ids = {src['database']['container']: 'a' * 64}
+        report = module.plan_clone(path, run=docker, source_stopped=True)
+        self.assertEqual((report['status'], report['source_state'], report['database_writes']), ('CLONE_PREFLIGHT_PASSED', 'stopped, never started', 0))
+        self.assertEqual(docker.log, ['docker inspect ' + src['database']['container']])

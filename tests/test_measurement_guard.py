@@ -11,7 +11,7 @@ module=importlib.import_module('projects.ble-elva.tools.measurement_guard')
 def position():
     return {'position_id':'P01','allocations':[{'target_process':'Kornform','target_sieve_mm':'4','actual_amount_g':'100'}],'measurements':{
         'wash':[{'container_g':'100','container_wet_g':'300','container_dry_g':'290','container_washed_g':'280'}],
-        'sand':[{'sand_height_mm':'95','suspension_height_mm':'122'},{'sand_height_mm':'96','suspension_height_mm':'121'}],
+        'sand':[{'sand_height':'95','suspension_height':'122'},{'sand_height':'96','suspension_height':'121'}],
         'boiling':[{'marl_g':'0.5'}],'boiling_repetitions':[{'order':1,'minutes':'10','initial_g':'100','final_g':'99.5'}],
         'shape':[{'fraction':'4 mm','total_g':'100','poor_g':'3'}],
         'sieves':[{'input_g':'2000','points':[{'sieve_mm':'8','partial':False,'retained_g':'200'}]}],

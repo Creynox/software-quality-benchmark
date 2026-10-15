@@ -48,8 +48,8 @@ def expected_numbers(position):
     if len(raw['boiling'])==1:
         expected.update(boiling_initial_g=raw['boiling'][0]['initial_g'],boiling_final_g=raw['boiling'][0]['final_g'])
     if len(raw['sand'])==2:
-        a,b=raw['sand'];expected.update(sand_a_mm=a['sand_height_mm'],suspension_a_mm=a['suspension_height_mm'],
-                                       sand_b_mm=b['sand_height_mm'],suspension_b_mm=b['suspension_height_mm'])
+        a,b=raw['sand'];expected.update(sand_a_mm=a['sand_height'],suspension_a_mm=a['suspension_height'],
+                                       sand_b_mm=b['sand_height'],suspension_b_mm=b['suspension_height'])
     return expected
 
 

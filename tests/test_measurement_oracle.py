@@ -16,12 +16,13 @@ def inputs():
         f['suite_copy']['mapping']['positions'][key]=product
         groups={k:[] for k in module.KINDS}
         groups['wash']=[{'container_g':'100','container_wet_g':'250','container_dry_g':'240','container_washed_g':'230'}]
-        if i==1:groups['sand']=[{'sand_height_mm':'95','suspension_height_mm':'122'},{'sand_height_mm':'96','suspension_height_mm':'121'}]
+        if i==1:groups['sand']=[{'sand_height':'95','suspension_height':'122'},{'sand_height':'96','suspension_height':'121'}]
         projection['positions'].append({'position_id':key,'sample_code':code,'measurements':groups})
         for kind,rows in sorted(groups.items()):
             for j,row in enumerate(rows):
                 row=dict(row)
                 if kind in ('sand','partial_series'):row['order']=j+1
+                if kind=='sand':row={{'sand_height':'sand_height_mm','suspension_height':'suspension_height_mm'}.get(k,k):v for k,v in row.items()}
                 records.append({'sample_code':code,'product_id':product,'kind':kind,'inputs':row})
     f['suite_copy']['measurement_reference_sha256']=canonical_hash(projection)
     return f,projection,records
@@ -51,6 +52,12 @@ class MeasurementOracleTests(unittest.TestCase):
         self.assertEqual(module.verify_inputs(r,p,f,kinds={'sand'})['status'],'FAIL')
         f,p,r=inputs();next(row for row in r if row['kind']=='sand')['inputs']['sand_height_mm']='9.5'
         self.assertEqual(module.verify_inputs(r,p,f,kinds={'sand'})['status'],'FAIL')
+        f,p,r=inputs();next(row for row in r if row['kind']=='sand')['inputs']['sand_height']='95'
+        self.assertEqual(module.verify_inputs(r,p,f,kinds={'sand'})['status'],'BLOCKED_MEASUREMENT_EVIDENCE')
+        # Persisted unit-suffixed names and reference names describe the same millimetre values.
+        f,p,r=inputs()
+        self.assertEqual(module.verify_inputs(r,p,f,kinds={'sand'})['status'],'PASS')
+        self.assertIn('sand_height_mm',str([row['inputs'] for row in r if row['kind']=='sand']))
 
     def test_wrong_sample_product_nonfinite_or_unknown_scope_blocks(self):
         for column,value in [('product_id',str(UUID(int=999))),('sample_code','OTHER')]:

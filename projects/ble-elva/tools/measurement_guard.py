@@ -42,8 +42,9 @@ def make_contract(fixture,probe_id,position,kind):
     elif kind=='sand':
         if len(raw['sand'])!=2:raise ValueError('Two recorded sand repetitions required')
         for letter,row in zip(('A','B'),raw['sand']):
-            fields['Sandhöhe:'+letter]=number(row['sand_height_mm'])
-            fields['Suspensionshöhe:'+letter]=number(row['suspension_height_mm'])
+            # Reference projection heights are already millimetres.
+            fields['Sandhöhe:'+letter]=number(row['sand_height'])
+            fields['Suspensionshöhe:'+letter]=number(row['suspension_height'])
     elif kind=='boiling':
         for row in raw['boiling_repetitions']:
             order=str(row['order'])

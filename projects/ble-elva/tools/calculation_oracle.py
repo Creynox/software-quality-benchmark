@@ -16,7 +16,7 @@ from decimal import Decimal, InvalidOperation
 
 from sqbf.no_write_oracle import snapshot
 from sqbf.oracle import verify_docker_identity
-from .measurement_oracle import KINDS
+from .measurement_oracle import KINDS, normalize_inputs
 from .suite_fixture import validate_target
 
 STORED_TOLERANCE = Decimal('0.0005')   # one rounding to 3 decimals
@@ -56,7 +56,8 @@ def persisted_basis(input_records):
     for row in input_records:
         if row['kind'] not in KINDS:
             raise ValueError('Unknown persisted measurement kind')
-        basis.setdefault(row['sample_code'], {kind: [] for kind in KINDS})[row['kind']].append(row['inputs'])
+        basis.setdefault(row['sample_code'], {kind: [] for kind in KINDS})[row['kind']].append(
+            normalize_inputs(row['kind'], row['inputs']))
     for measurements in basis.values():
         for kind in ('sand', 'boiling_repetitions', 'partial_series'):
             if any('order' in r for r in measurements[kind]):
@@ -90,8 +91,8 @@ def expected_calculations(measurements):
     out = {}
     sand = measurements.get('sand') or []
     if len(sand) == 2:
-        a = _percent(sand[0]['sand_height_mm'], sand[0]['suspension_height_mm'])
-        b = _percent(sand[1]['sand_height_mm'], sand[1]['suspension_height_mm'])
+        a = _percent(sand[0]['sand_height'], sand[0]['suspension_height'])
+        b = _percent(sand[1]['sand_height'], sand[1]['suspension_height'])
         out.update(se_a=a, se_b=b, se_mean=(a + b) / 2)
     if measurements.get('shape'):
         out['shape_index'] = None  # sieve-line weighted: NOT_COVERED

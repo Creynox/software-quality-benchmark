@@ -13,6 +13,7 @@ def persisted(kind,inputs,code='SYNTHETIC-1'):
 
 def scenario():
     f=owned_fixture();f['suite_copy']['mapping']={'positions':{'P1':str(UUID(int=101))}}
+    # Persisted view vocabulary (unit-suffixed sand heights), as collect_inputs returns it.
     rows=[persisted('sand',{'order':2,'sand_height_mm':'96','suspension_height_mm':'121'}),
           persisted('sand',{'order':1,'sand_height_mm':'95','suspension_height_mm':'122'}),
           persisted('shape',{'fraction':'4 mm','total_g':'100','poor_g':'3'}),
@@ -35,6 +36,7 @@ class CalculationOracleTests(unittest.TestCase):
     def test_persisted_basis_groups_by_sample_and_keeps_repetition_order(self):
         _,basis,_,_=scenario()
         self.assertEqual([r['order'] for r in basis['SYNTHETIC-1']['sand']],[1,2])
+        self.assertEqual(basis['SYNTHETIC-1']['sand'][0],{'order':1,'sand_height':'95','suspension_height':'122'})
         with self.assertRaises(ValueError):module.persisted_basis([persisted('unknown',{})])
 
     def test_method_formulas_are_recomputed_from_raw_inputs(self):

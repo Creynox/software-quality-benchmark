@@ -24,10 +24,10 @@ from sqbf.smoke_runner import ACTION_SCHEMA
 from sqbf.no_write_oracle import snapshot
 from sqbf.scope_check import verify_runtime
 from .allocation_oracle import collect_allocations, verify_allocations
-from .calculation_oracle import collect_report_calculations, persisted_basis, verify_calculations
+from .calculation_oracle import collect_report_calculations, persisted_basis, verify_calculations, expected_calculations
 from .measurement_guard import make_contract
-from .measurement_oracle import collect_inputs, verify_inputs, KINDS
-from .report_oracle import collect_reports, verify_reports
+from .measurement_oracle import collect_inputs, verify_inputs, KINDS, PERSISTED_NAMES
+from .report_oracle import collect_reports, verify_reports, expected_numbers
 from .receipt_oracle import collect_receipts, verify_receipts
 from .suite_acceptance import check_fixture
 from .persona_scope import check_persona
@@ -107,6 +107,55 @@ def route_probes(suite,fixture):
     return [(persona,path,stages) for (persona,path),stages in routes.items()]
 
 
+def _measurement_tasks(case_kinds,projection,allocation):
+    allocated={p['position_id']:p['allocations'] for p in allocation['positions']}
+    for source in projection['positions']:
+        position=dict(source,allocations=allocated[source['position_id']])
+        for kind in case_kinds:
+            rawkind={'sieve':'sieves','partial':'partial_series'}.get(kind,kind)
+            if kind=='allocations':
+                if not any(r['actual_amount_g'] is not None for r in position['allocations']):continue
+            elif not position['measurements'][rawkind]:continue
+            yield position,kind
+
+
+def stage_contracts(suite,projection,allocation,fixture):
+    """Model-free build of every stage contract from the approved reference.
+
+    Builds each measurement field contract, each report expectation and each
+    recomputation, and round-trips the reference through the persisted-view
+    vocabulary into the measurement Oracle. A schema mismatch here would
+    otherwise surface only during a live run, as a controller error or a false FAIL.
+    """
+    placeholder='00000000-0000-0000-0000-000000000000';step='measurement_contracts'
+    try:
+        tasks=0
+        for key,kinds in CASE_KINDS.items():
+            for position,kind in _measurement_tasks(kinds,projection,allocation):
+                make_contract(fixture,placeholder,position,kind);tasks+=1
+        step='report_expectations'
+        for position in projection['positions']:expected_numbers(position)
+        step='vocabulary_roundtrip'
+        inverse={kind:{v:k for k,v in names.items()} for kind,names in PERSISTED_NAMES.items()}
+        records=[]
+        for position in projection['positions']:
+            product=fixture['suite_copy']['mapping']['positions'][position['position_id']]
+            for kind in sorted(KINDS):
+                for order,row in enumerate(position['measurements'][kind],start=1):
+                    row={inverse.get(kind,{}).get(k,k):v for k,v in row.items()}
+                    if kind in ('sand','partial_series'):row=dict(row,order=order)
+                    records.append({'sample_code':position['sample_code'],'product_id':product,'kind':kind,'inputs':row})
+        roundtrip=verify_inputs(records,projection,fixture,kinds=KINDS)
+        if roundtrip['status']!='PASS':return {'status':'BLOCKED_STAGE_CONTRACTS','step':step,'oracle':roundtrip.get('reason') or roundtrip['status']}
+        step='recomputation'
+        basis=persisted_basis(records)
+        computed=sum(len(expected_calculations(measurements)) for measurements in basis.values())
+        return {'status':'STAGE_CONTRACTS_VERIFIED','measurement_tasks':tasks,'report_positions':len(projection['positions']),
+                'vocabulary_roundtrip':'PASS','roundtrip_checks':roundtrip['checks'],'recomputed_result_groups':computed}
+    except (KeyError,ValueError,TypeError,AttributeError) as error:
+        return {'status':'BLOCKED_STAGE_CONTRACTS','step':step,'error_type':type(error).__name__}
+
+
 def estimate_requests(suite,projection,allocation,fixture):
     """Lower bound of model requests for one complete attempt; not a forecast.
 
@@ -117,20 +166,13 @@ def estimate_requests(suite,projection,allocation,fixture):
     least one PDF review batch per position.
     """
     placeholder='00000000-0000-0000-0000-000000000000'
-    allocated={p['position_id']:p['allocations'] for p in allocation['positions']}
     per_case={}
     for case in suite['cases']:
         key=case['case_id'];requests=0
         if key in CASE_KINDS:
-            for source in projection['positions']:
-                position=dict(source,allocations=allocated[source['position_id']])
-                for kind in CASE_KINDS[key]:
-                    rawkind={'sieve':'sieves','partial':'partial_series'}.get(kind,kind)
-                    if kind=='allocations':
-                        if not any(r['actual_amount_g'] is not None for r in position['allocations']):continue
-                    elif not position['measurements'][rawkind]:continue
-                    contract=make_contract(fixture,placeholder,position,kind)
-                    requests+=2*len(contract['fields'])+max(1,len(required_saves(contract)))+2+1
+            for position,kind in _measurement_tasks(CASE_KINDS[key],projection,allocation):
+                contract=make_contract(fixture,placeholder,position,kind)
+                requests+=2*len(contract['fields'])+max(1,len(required_saves(contract)))+2+1
         elif key=='NSN014-REPORT':requests=len(projection['positions'])*7
         elif key=='NSN014-PLAN':requests=4
         else:requests=3
@@ -165,6 +207,8 @@ def check_ready(suite,dataset,fixture,projection,allocation):
             return dict(blocked,reason='REFERENCE_INPUT_CHANGED')
         if fixture['suite_copy'].get('suite_sha256')!=canonical_hash(suite):
             return dict(blocked,reason='SUITE_NOT_BOUND_TO_FIXTURE')
+        contracts=stage_contracts(suite,projection,allocation,fixture)
+        if contracts['status']!='STAGE_CONTRACTS_VERIFIED':return dict(blocked,reason='STAGE_CONTRACT_BUILD_FAILED',stage_contracts=contracts)
         estimate=estimate_requests(suite,projection,allocation,fixture)
         if not estimate['fits_ceiling']:return dict(blocked,reason='REQUEST_CEILING_BELOW_MINIMUM',request_estimate=estimate)
         dependencies={name:importlib.metadata.version(name) for name in ('playwright','pypdf','PyMuPDF')}
@@ -190,7 +234,7 @@ def check_ready(suite,dataset,fixture,projection,allocation):
         routes=check_entry_routes(fixture,policy,route_probes(suite,fixture))
         if routes['status']!='ENTRY_ROUTES_VERIFIED':return dict(blocked,reason='ENTRY_ROUTE_CONTRACT_FAILED',entry_routes=routes)
         return {'status':'READY_FOR_SINGLE_SUITE_RUN','model_calls':0,'database_writes':0,
-                'source':source,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,
+                'source':source,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
                 'fixture_gates':gates,'dependencies':dependencies,'native_receipt_form':form,'entry_routes':routes,
                 'active_runtime':runtime,'request_estimate':estimate,'persona_context':persona_context(suite,fixture),
                 'fresh_subscription_authorization_required_at_execution':True,'current_provider_catalog_checked':False,

@@ -13,6 +13,16 @@ from .suite_fixture import validate_target
 
 VIEW='sqbf_measurement_inputs_v1'
 KINDS={'wash','shape','boiling','boiling_repetitions','sand','sieves','preparation','partial_series'}
+# The persisted view names sand heights with their unit; the approved reference
+# projection (already in millimetres) does not. Consumers use the projection names.
+PERSISTED_NAMES={'sand':{'sand_height_mm':'sand_height','suspension_height_mm':'suspension_height'}}
+
+
+def normalize_inputs(kind,inputs):
+    names=PERSISTED_NAMES.get(kind)
+    if not names:return inputs
+    if any(k in inputs for k in names.values()):raise ValueError('Ambiguous persisted input names')
+    return {names.get(k,k):v for k,v in inputs.items()}
 
 
 def view_sql(fixture):
@@ -128,7 +138,7 @@ def verify_inputs(records, projection, fixture, *, kinds):
             if code not in codes or row['product_id']!=fixture['suite_copy']['mapping']['positions'][codes[code]['position_id']]:
                 return dict(blocked,reason='WRONG_SAMPLE_PRODUCT_RELATION')
             if row['kind'] not in KINDS:raise ValueError()
-            if row['kind'] in kinds:actual[code][row['kind']].append(row['inputs'])
+            if row['kind'] in kinds:actual[code][row['kind']].append(normalize_inputs(row['kind'],row['inputs']))
         mismatches=[];checked=0
         for code,position in codes.items():
             for kind in kinds:

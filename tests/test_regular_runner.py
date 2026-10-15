@@ -158,6 +158,19 @@ class RegularRunnerTests(unittest.TestCase):
         s['resource_policy']['hard_model_calls']=10
         self.assertFalse(module.estimate_requests(s,projection,allocation,f)['fits_ceiling'])
 
+    def test_stage_contracts_round_trip_the_reference_through_every_oracle_vocabulary(self):
+        from test_measurement_oracle import inputs
+        f,projection,_=inputs();s=suite()
+        s['required_position_ids']=[p['position_id'] for p in projection['positions']]
+        allocation={'positions':[{'position_id':p['position_id'],'allocations':[]} for p in projection['positions']]}
+        result=module.stage_contracts(s,projection,allocation,f)
+        self.assertEqual((result['status'],result['vocabulary_roundtrip']),('STAGE_CONTRACTS_VERIFIED','PASS'),result)
+        self.assertEqual(result['measurement_tasks'],11)  # ten wash modules and one sand module
+        broken=copy.deepcopy(projection);broken['positions'][0]['measurements']['sand'][0]={'sand_height_mm':'95','suspension_height_mm':'122'}
+        f['suite_copy']['measurement_reference_sha256']=canonical_hash(broken)
+        result=module.stage_contracts(s,broken,allocation,f)
+        self.assertEqual((result['status'],result['step'],result['error_type']),('BLOCKED_STAGE_CONTRACTS','measurement_contracts','KeyError'))
+
     def test_route_probes_cover_every_persona_entry_once(self):
         f=fixture();f['suite_copy']['mapping']={'plan_id':'11111111-1111-4111-8111-111111111111'}
         probes=module.route_probes(suite(),f)

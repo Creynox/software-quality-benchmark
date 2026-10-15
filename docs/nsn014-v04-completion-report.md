@@ -364,3 +364,39 @@ nullbare Werte). Das ist nur eine Hypothese. Behoben bzw. verbessert:
    Freigabe für die Wiederverwendung dieser Fixture (Lease entfernen) oder für eine neue Fixture, dazu eine neue Einzellauf-Freigabe.
 3. **Vorab-Probe des Providers (optional, empfohlen):** zwei Mini-Anfragen (Executor- und Review-Schema, leeres Bild) vor dem Lauf, um das
    Review-Schema zu bestätigen. Sie sind noch nicht implementiert und würden separat freigegeben.
+
+
+## 13. Vorbereitung des Folgelaufs (15.10.2026, nach Lauf 1)
+
+Auf PO-Freigabe: neue isolierte Fixture als Klon mit aktivem P06, und zwei synthetische Provider-Anfragen. Es wurde **kein** weiterer Live-Lauf gestartet.
+
+**Einordnung P06.** Die Inaktivität war am 14.10. bereits als „Kontext, noch kein Messurteil“ in `docs/nsn014-fixture-acceptance.md` festgehalten (zehn Planpositionen, neun aktive Produkte). Die Readiness hat sie aber nicht als Voraussetzung der Plan-Anlage geprüft. Das ist seit `65cd318` ein Gate. Die historische Inaktivität bleibt als eigene UX-Beobachtung erhalten und ist kein bestätigter BLE-Fehler.
+
+**Neue Fixture (Klon).** `suite-fixture-clone` (Commits `1ec5835`, `d7e5709`) hat das Volume der unveränderten Fixture byteweise kopiert und mit einer Prüfsumme über alle Dateien verglichen. Der Klon läuft als Container `sqbf-nsn014-4e460e296674` auf 127.0.0.1:55434 mit eigenem Web auf 5082.
+
+- **Identität des Klons:** Rollen, Rechte, Views, Identitäten und alle vorbereiteten Zeilen sind identisch. Der Hash über **alle 426 öffentlichen Tabellen** ist vor und nach dem Klonen gleich.
+- **Override:** Genau eine Spalte einer Zeile ist verändert, nämlich `workspace_products.is_active` von P06 (`false` auf `true`). Der Hash aller übrigen 425 Tabellen ist unverändert. Messwerte, Normzuordnungen, Planpositionen, Berechtigungen und Referenzen sind nicht geändert. Die Zeilen-Hashes vor und nach dem Update und der Hash des Statements stehen im privaten Manifest (`suite_copy.clone`).
+- **Neues Manifest:** Neuer Fixture-Startzustands-Hash `15b88c88…` (vorher `5f1e231b…`), neue Fixture-ID und Fixture-Version 0.3. Das Manifest trägt **keine** Budgetfreigabe.
+- **Quelle bleibt erhalten:** Der alte Container ist sauber gestoppt (Exit 0), nicht gelöscht. Volume, Runtime, Zugangsdaten, Sessions und die verbrauchte Lease sind unverändert. Der alte Web-Prozess wurde nach Identitätsprüfung beendet (PID gegen das Manifest geprüft). Der geschützte `ble-postgres` auf 5433 blieb unberührt.
+- **Sessions:** Vier neue Anmeldungen, genau eine je Persona. Alle vier Sessions stellen wieder her (sie sehen jetzt zehn aktive Produkte), die signierte Identität, die Rolle und der Enzberg-Scope sind bestätigt, und die geschützten Daten sind unverändert. Es wurde keine Anmeldung wiederholt.
+- **Lease:** Die neue Fixture hat keine Lease; die Lease der alten bleibt als Beleg.
+
+**Nachweise.** 344 lokale Tests OK (vorher 323). Modellfreie `run-suite`-Readiness mit v0.4.1 und dem neuen Manifest: Alle Gates bestanden, die Readiness bleibt nur an der fehlenden Budgetfreigabe **BLOCKED** (`BUDGET_APPROVAL_MISSING`, `other_gates: PASSED`). Dazu zählen:
+
+- sauberer Quellstand,
+- Plan-Produkte, Sessions und Scopes,
+- Runtime-Identität,
+- Stufenverträge,
+- Plan-Formular und Routen,
+- leerer Startzustand.
+
+Das ist gewollt: Die Freigabe wird erst mit der neuen Einzellauf-Freigabe eingetragen.
+
+**Provider-Vorabprüfung.** Das Werkzeug `suite-provider-probe` ist gebaut und getestet: zwei synthetische Anfragen, ein generiertes Farbblock-Bild, keine BLE-Daten, kein Retry, und ein gespeichertes Ergebnis mit festen Codes. `run-suite --provider-probe` blockiert bei einer fehlgeschlagenen oder veralteten Probe. Zwei Ausführungsversuche sind beide am Browser-Anmeldefenster (300 s) gescheitert, bevor ein Modell aufgerufen wurde. Die Probe ist deshalb **noch nicht ausgeführt**; Reviewer- und Executor-Schema sind **nicht bestätigt**, und der UX-Benchmark gilt bis dahin nicht als bereit.
+
+**Nachgebessert beim Klonen.** Die ersten Subprozess-Ausgaben liefen mit der Standard-Codepage; Dekodierfehler (von der deutschen `taskkill`-Ausgabe) betrafen keine Prüfausgabe, und alle Prüfungen waren nicht leer und bestanden. Seit `d7e5709` werden Docker- und psql-Ausgaben strikt als UTF-8 gelesen.
+
+**Fehlt noch für einen validen vollständigen Lauf:**
+
+1. Die Probe: Browser-Bestätigung innerhalb von 5 Minuten nach dem Start.
+2. Eine **neue ausdrückliche Einzellauf-Freigabe** mit Suite-Version, Commit, Manifest, Provider, Budget und Datengrenze. Danach erstelle ich die freigegebene Manifest-Kopie und wiederhole die Readiness unmittelbar vor dem Start.

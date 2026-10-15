@@ -107,7 +107,7 @@ Runtime, leeren Start, Plan-Formular und Einstiegsrouten):
 ```powershell
 & $python -m sqbf.cli run-suite --suite projects/ble-elva/suites/enzberg-nsn014-v0.4.json `
   --fixture <privates-plan-flow-manifest.json> --dataset <privat>\dataset-ux-source-v1.json `
-  --projection <privat>eference-projection-ux-v1.json --allocations <privat>llocation-reference-v1.json
+  --projection <privat>\reference-projection-ux-v1.json --allocations <privat>\allocation-reference-v1.json
 ```
 
 Live-Lauf nur mit ausdrücklicher PO-Ausführungsfreigabe für genau diesen Lauf: derselbe Befehl
@@ -116,6 +116,27 @@ einmalige Fixture-Lease, kein Retry; bei abgelaufener Session höchstens eine ko
 Erneuerung je Persona. Ergebnis: `run.json`, `cases.json`, `accounting.json` und deutscher
 `completion-report.md` im privaten Lauf-Ordner. Details:
 [Abschlussbericht](../../docs/nsn014-v04-completion-report.md).
+
+## NSN014: Fixture-Klon und Provider-Probe
+
+Beide Befehle laufen ohne `--execute` nur als Plan bzw. lesende Vorprüfung.
+
+```powershell
+# Klon einer unveränderten, verbrauchten Fixture mit genau einem dokumentierten Override (P06 aktiv):
+& $python -m sqbf.cli suite-fixture-clone --source-fixture <manifest> --controller-credentials <controller-credentials.dpapi.json> `
+  --output-dir <neuer-privater-Ordner> [--execute]
+# Danach vier gefuehrte Anmeldungen (je Persona eine) und die Readiness:
+& $python -m sqbf.cli suite-sessions --fixture <neuer-Ordner>\fixture-clone.json --output <...>\fixture-clone-sessions.json --report <...>\sessions-report.json
+
+# Zwei synthetische Anfragen (Executor- und Review-Schema), frische OAuth, kein Retry:
+& $python -m sqbf.cli suite-provider-probe --suite projects/ble-elva/suites/enzberg-nsn014-v0.4.1.json [--execute]
+& $python -m sqbf.cli run-suite ... --provider-probe <provider-probe-....json>
+```
+
+Der Klon stoppt (löscht nicht) den Quell-Container und beendet das Quell-Web nach Identitätsprüfung, kopiert das Volume
+mit Prüfsumme, vergleicht den Hash aller öffentlichen Tabellen und setzt danach nur `is_active` des genannten
+Plan-Produkts. Es gibt keinen automatischen Rollback und keinen Retry; `clone-state.json` hält jede Phase fest. Die OAuth-Anmeldung
+der Probe muss innerhalb von 300 s im Browser bestätigt werden.
 
 ## Evidenz und Aufbewahrung
 

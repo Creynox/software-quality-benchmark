@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "LIVE_RUN_1_INVALID_HARNESS_FOLLOWUP_APPROVAL_REQUIRED",
+    "status": "FOLLOWUP_FIXTURE_CLONE_READY_PROBE_AND_RUN_APPROVAL_PENDING",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -137,8 +137,8 @@
       ]
     },
     "live_run_authorization": {
-      "status": "CONSUMED",
-      "detail": "One run approved and executed 2026-10-15; a follow-up run needs a new explicit PO approval, a decision on P06 and a fixture/lease decision"
+      "status": "MISSING",
+      "detail": "Previous approval consumed by run 3d9c2706; a new explicit approval is required"
     },
     "budget_candidate": {
       "suite": "suites/enzberg-nsn014-v0.4.1.json",
@@ -171,6 +171,33 @@
         ],
         "bounded_valid_measurement": false
       }
-    ]
+    ],
+    "fixture_clone": {
+      "status": "CREATED_AND_VERIFIED",
+      "created_at": "2026-10-15",
+      "fixture_id": "nsn014-ux-4e460e296674",
+      "source_fixture_id": "nsn014-ux-536fe4e42888",
+      "method": "byte copy of the PostgreSQL volume with file checksum comparison",
+      "public_tables_compared": 426,
+      "override": {
+        "position": "P06",
+        "column": "workspace_products.is_active",
+        "from": false,
+        "to": true,
+        "other_tables_identical": true,
+        "reference_values_changed": false
+      },
+      "sessions": "SESSIONS_VERIFIED, one login per persona",
+      "lease": "none on the clone; consumed lease retained at the source",
+      "budget_approval_recorded": false,
+      "readiness": "all gates passed except BUDGET_APPROVAL_MISSING (other_gates PASSED), 0 model calls"
+    },
+    "provider_probe": {
+      "tool": "suite-provider-probe",
+      "status": "NOT_EXECUTED_OAUTH_WINDOW_EXPIRED_TWICE",
+      "requests": 2,
+      "model_requests_made": 0,
+      "data": "generated synthetic image only"
+    }
   }
 }

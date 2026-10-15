@@ -16,6 +16,12 @@ def _invalid(data, code):
             'images':[],'extracted_text_not_returned':True}
 
 
+def _squash(text):
+    """Identity tokens are compared without whitespace: BLE's report layout wraps the sample code after a hyphen
+    ("ENZBERG-20260508- NSN-014-02"), so text extraction inserts a space inside the code (dry run 15.10.2026)."""
+    return ''.join(text.split())
+
+
 def inspect_pdf(path,required_text):
     from pypdf import PdfReader
     from pypdf.errors import PyPdfError
@@ -33,7 +39,8 @@ def inspect_pdf(path,required_text):
         text=' '.join(' '.join((page.extract_text() or '').split()) for page in reader.pages)
     except (PyPdfError,ValueError,KeyError,TypeError,OSError):
         return _invalid(data,'PDF_UNREADABLE')
-    matches=all(' '.join(token.split()) in text for token in required_text)
+    squashed=_squash(text)
+    matches=all(_squash(token) in squashed for token in required_text)
     images=[]
     try:
         with pymupdf.open(path) as doc:

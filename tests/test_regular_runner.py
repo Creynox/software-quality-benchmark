@@ -188,11 +188,12 @@ class RegularRunnerTests(unittest.TestCase):
         self.assertNotIn('secret',json.dumps(context))
 
     def test_final_calculation_mismatch_revokes_go(self):
-        manifest={'verdict':'GO'};f=fixture()
+        manifest={'verdict':'GO','side_effect_contract_sha256':module.stage_effects.contract_hash(module.stage_effects.load_contract(module.CASE_IDS))}
+        f=fixture();f['suite_copy']['mapping']={'plan_id':'11111111-1111-4111-8111-111111111111'}
         passing={'status':'PASS'}
         with patch.object(module,'collect_receipts'),patch.object(module,'collect_inputs',return_value=[]), \
              patch.object(module,'collect_allocations'),patch.object(module,'collect_reports'), \
-             patch.object(module,'collect_report_calculations'),patch.object(module,'static_state',return_value={'unchanged':True,'audit_only_tables':[],'changed_tables':[]}), \
+             patch.object(module,'collect_report_calculations'),patch.object(module,'static_state',return_value={'unchanged':True,'audit_only_tables':[],'changed_tables':[],'audit_only':[]}), \
              patch.object(module,'verify_receipts',return_value=passing),patch.object(module,'verify_inputs',return_value=passing), \
              patch.object(module,'verify_allocations',return_value=passing),patch.object(module,'verify_reports',return_value=passing) as reports, \
              patch.object(module,'verify_calculations',return_value={'status':'FAIL'}):
@@ -323,7 +324,7 @@ class BudgetChangeTests(unittest.TestCase):
              patch.object(module,'stage_contracts',return_value={'status':'STAGE_CONTRACTS_VERIFIED'}), \
              patch.object(module,'collect_plan_products'),patch.object(module,'verify_plan_products',
                                                                        return_value={'status':'PLAN_PRODUCTS_CREATABLE'}), \
-             patch.object(module,'collect_normalized_hashes',return_value={}):
+             patch.object(module,'collect_scoped_hashes',return_value={}),patch.object(module,'all_tables',return_value={'t':{'count':0,'hash':'h'}}):
             blocked=module.check_ready(s,dataset,f,projection,allocation)
             self.assertEqual((blocked['status'],blocked['reason'],blocked.get('other_gates')),
                              ('BLOCKED_SUITE_READINESS','BUDGET_APPROVAL_MISSING','PASSED'),blocked)
@@ -363,7 +364,8 @@ class PlanPreconditionGateTests(unittest.TestCase):
              patch.object(module,'verify_runtime',return_value={'assembly':'a','sha256':'s'}), \
              patch.object(module,'verify_receipts',return_value={'status':'RECEIPT_START_VERIFIED'}),patch.object(module,'collect_receipts'), \
              patch.object(module,'collect_inputs',return_value=[]),patch.object(module,'collect_allocations',return_value=[]), \
-             patch.object(module,'collect_reports',return_value=[]),patch.object(module,'collect_plan_products'),patch.object(module,'collect_normalized_hashes',return_value={}), \
+             patch.object(module,'collect_reports',return_value=[]),patch.object(module,'collect_plan_products'),patch.object(module,'collect_scoped_hashes',return_value={}), \
+             patch.object(module,'all_tables',return_value={'t':{'count':0,'hash':'h'}}), \
              patch.object(module,'verify_plan_products',return_value=blocked_plan), \
              patch.object(module,'check_receipt_form') as form,patch.object(module,'check_entry_routes') as routes, \
              patch.object(module,'stage_contracts',return_value={'status':'STAGE_CONTRACTS_VERIFIED'}):
@@ -393,23 +395,34 @@ class ReviewerIsolationReportTests(unittest.TestCase):
 
 
 BASE_TABLES = {'samples': {'count': 0, 'hash': 'a'}, 'sampling_plans': {'count': 1, 'hash': 'p'}, 'workspace_products': {'count': 10, 'hash': 'w'}}
+PLAN = '11111111-1111-4111-8111-111111111111'
 
 
 def static_fixture():
     f = fixture();f['suite_copy']['prepared_tables'] = copy.deepcopy(BASE_TABLES)
-    f['suite_copy']['prepared_state_sha256'] = canonical_hash(BASE_TABLES);return f
+    f['suite_copy']['prepared_state_sha256'] = canonical_hash(BASE_TABLES);f['suite_copy']['mapping'] = {'plan_id': PLAN};return f
+
+
+def scoped(target='t', rest='r', target_count=1, rest_count=0):
+    return {'target_count': target_count, 'target_hash': target, 'rest_count': rest_count, 'rest_hash': rest}
+
+
+def allowance(**overrides):
+    return dict({'case_id': 'NSN014-PLAN', 'table': 'sampling_plans', 'target': 'plan_id', 'columns': ['updated_at', 'updated_by'], 'max_rows': 1,
+                 'ids': [PLAN]}, **overrides)
 
 
 class AuditAwareStaticGateTests(unittest.TestCase):
-    """Live run 45eb301f: BLE's plan creation stamps sampling_plans.updated_at/updated_by."""
-    NORMALIZED = {'sampling_plans': {'count': 1, 'hash': 'n-plan'}, 'workspace_products': {'count': 10, 'hash': 'n-prod'}}
+    """Live run 45eb301f: BLE's plan creation stamps sampling_plans.updated_at/updated_by on the plan row.
+    The tolerance is scoped by the side-effect contract to one table and its target rows."""
+    SCOPED = {'sampling_plans': scoped()}
 
-    def state(self, tables, collected=None, baseline=NORMALIZED):
+    def state(self, tables, collected=None, baseline=SCOPED, resolved=(allowance(),)):
         current = {'tables': dict(copy.deepcopy(BASE_TABLES), **tables)}
         calls = []
-        def collect(fixture_, names):
-            calls.append(list(names));return collected
-        return module.static_state(static_fixture(), current, normalized_baseline=baseline, collect=collect), calls
+        def collect(fixture_, allowances):
+            calls.append([a['table'] for a in allowances]);return collected
+        return module.static_state(static_fixture(), current, resolved=resolved, scoped_baseline=baseline, collect=collect), calls
 
     def test_identical_protected_data_needs_no_second_query(self):
         result, calls = self.state({})
@@ -418,44 +431,64 @@ class AuditAwareStaticGateTests(unittest.TestCase):
     def test_mutable_tables_may_change_freely(self):
         self.assertTrue(self.state({'samples': {'count': 10, 'hash': 'b'}})[0]['unchanged'])
 
-    def test_audit_only_difference_is_tolerated_and_reported(self):
-        result, calls = self.state({'sampling_plans': {'count': 1, 'hash': 'changed'}}, {'sampling_plans': self.NORMALIZED['sampling_plans']})
+    def test_audit_only_stamp_on_the_target_row_is_tolerated_and_reported_with_its_scope(self):
+        result, calls = self.state({'sampling_plans': {'count': 1, 'hash': 'stamped'}}, {'sampling_plans': scoped()})
         self.assertEqual((result['unchanged'], result['audit_only_tables'], result['changed_tables'], calls), (True, ['sampling_plans'], [], [['sampling_plans']]))
-        self.assertEqual(result['audit_columns'], ['updated_at', 'updated_by'])
+        self.assertEqual(result['audit_only'], [{'table': 'sampling_plans', 'rows': 1, 'columns': ['updated_at', 'updated_by']}])
 
-    def test_substantive_change_row_count_or_unknown_table_still_fails(self):
-        result, _ = self.state({'sampling_plans': {'count': 1, 'hash': 'changed'}}, {'sampling_plans': {'count': 1, 'hash': 'different-content'}})
-        self.assertEqual((result['unchanged'], result['changed_tables']), (False, ['sampling_plans']))
-        result, _ = self.state({'workspace_products': {'count': 11, 'hash': 'x'}}, {'workspace_products': {'count': 11, 'hash': 'n-x'}})
+    def test_any_other_difference_fails_even_next_to_an_allowed_stamp(self):
+        # A changed target row (not only its audit columns), a changed other row, an added or removed target row.
+        for collected in ({'sampling_plans': scoped(target='other')}, {'sampling_plans': scoped(rest='other', rest_count=1)},
+                          {'sampling_plans': scoped(target_count=0)}, {'sampling_plans': scoped(target_count=2)}, {'sampling_plans': None}, {}):
+            result, _ = self.state({'sampling_plans': {'count': 1, 'hash': 'stamped'}}, collected)
+            self.assertEqual((result['unchanged'], result['changed_tables']), (False, ['sampling_plans']), collected)
+        result, _ = self.state({'workspace_products': {'count': 11, 'hash': 'x'}}, {})
         self.assertFalse(result['unchanged'])
-        # One audit-only and one substantive difference: the substantive one decides.
-        result, _ = self.state({'sampling_plans': {'count': 1, 'hash': 'c'}, 'workspace_products': {'count': 10, 'hash': 'c2'}},
-                               {'sampling_plans': self.NORMALIZED['sampling_plans'], 'workspace_products': {'count': 10, 'hash': 'other'}})
+        # One allowed stamp and one substantive difference: the substantive one decides, and is the only one named.
+        result, _ = self.state({'sampling_plans': {'count': 1, 'hash': 'c'}, 'workspace_products': {'count': 10, 'hash': 'c2'}}, {'sampling_plans': scoped()})
         self.assertEqual((result['unchanged'], result['changed_tables'], result['audit_only_tables']), (False, ['workspace_products'], ['sampling_plans']))
 
-    def test_without_a_readiness_baseline_or_with_a_changed_table_set_nothing_is_tolerated(self):
-        self.assertFalse(self.state({'sampling_plans': {'count': 1, 'hash': 'c'}}, {'sampling_plans': self.NORMALIZED['sampling_plans']}, baseline=None)[0]['unchanged'])
-        self.assertFalse(self.state({'sampling_plans': {'count': 1, 'hash': 'c'}}, {}, baseline={})[0]['unchanged'])
+    def test_without_an_allowance_a_baseline_or_with_a_changed_table_set_nothing_is_tolerated(self):
+        stamped = {'sampling_plans': {'count': 1, 'hash': 'c'}}
+        self.assertFalse(self.state(stamped, {'sampling_plans': scoped()}, resolved=())[0]['unchanged'])
+        self.assertFalse(self.state(stamped, {'sampling_plans': scoped()}, baseline=None)[0]['unchanged'])
+        # An allowance for another table never excuses sampling_plans.
+        self.assertFalse(self.state(stamped, {'sampling_plans': scoped()}, resolved=(allowance(table='workspace_products'),))[0]['unchanged'])
         f = static_fixture();f['suite_copy']['prepared_state_sha256'] = '0' * 64
         self.assertFalse(module.static_state(f, {'tables': copy.deepcopy(BASE_TABLES)})['unchanged'])
         self.assertFalse(module.static_state(static_fixture(), {'tables': {'samples': BASE_TABLES['samples']}})['unchanged'])
 
-    def test_stage_gate_uses_a_fresh_snapshot_and_the_readiness_baseline(self):
+    def test_stage_gate_uses_a_fresh_snapshot_and_the_scoped_baseline(self):
         tables = copy.deepcopy(BASE_TABLES);tables['sampling_plans'] = {'count': 1, 'hash': 'stamped'}
-        gate = module.static_gate(static_fixture(), self.NORMALIZED, snapshot_fn=lambda fixture_, **k: {'tables': tables},
-                                  collect=lambda fixture_, names: {'sampling_plans': self.NORMALIZED['sampling_plans']})
+        gate = module.static_gate(static_fixture(), (allowance(),), self.SCOPED, snapshot_fn=lambda fixture_, **k: {'tables': tables},
+                                  collect=lambda fixture_, allowances: {'sampling_plans': scoped()})
         self.assertEqual((gate['unchanged'], gate['audit_only_tables']), (True, ['sampling_plans']))
 
-    def test_final_oracle_reports_the_audit_only_tables_instead_of_hiding_them(self):
-        manifest = {'verdict': 'NO-GO', 'protected_normalized_baseline': self.NORMALIZED}
+    def test_final_oracle_reports_the_audit_only_scope_instead_of_hiding_it(self):
+        contract_hash = module.stage_effects.contract_hash(module.stage_effects.load_contract(module.CASE_IDS))
+        manifest = {'verdict': 'NO-GO', 'protected_scoped_baseline': self.SCOPED, 'side_effect_contract_sha256': contract_hash}
         passing = {'status': 'PASS'}
         tables = copy.deepcopy(BASE_TABLES);tables['sampling_plans'] = {'count': 1, 'hash': 'stamped'}
+        records = [{'case_id': 'NSN014-PREPARATION', 'side_effect_findings': [{'code': 'UNEXPECTED_TABLE_WRITE', 'table': 'x'}]}, {'case_id': 'NSN014-SE'}]
         with patch.object(module, 'collect_receipts'), patch.object(module, 'collect_inputs', return_value=[]), \
              patch.object(module, 'collect_allocations'), patch.object(module, 'collect_reports'), patch.object(module, 'collect_report_calculations'), \
-             patch.object(module, 'collect_normalized_hashes', return_value={'sampling_plans': self.NORMALIZED['sampling_plans']}), \
+             patch.object(module, 'collect_scoped_hashes', return_value={'sampling_plans': scoped()}), \
              patch.object(module, 'verify_receipts', return_value=passing), patch.object(module, 'verify_inputs', return_value=passing), \
              patch.object(module, 'verify_allocations', return_value=passing), patch.object(module, 'verify_reports', return_value=passing), \
              patch.object(module, 'verify_calculations', return_value=passing):
-            module.finalise_oracles(manifest, {'records': []}, static_fixture(), {}, {}, {}, {'tables': tables})
-        self.assertTrue(manifest['final_oracles']['static_fixture_unchanged'])
-        self.assertEqual(manifest['final_oracles']['static_fixture_audit_only_tables'], ['sampling_plans'])
+            module.finalise_oracles(manifest, {'records': records}, static_fixture(), {}, {}, {}, {'tables': tables})
+        final = manifest['final_oracles']
+        self.assertTrue(final['static_fixture_unchanged'])
+        self.assertEqual(final['static_fixture_audit_only_tables'], ['sampling_plans'])
+        self.assertEqual(final['static_fixture_audit_only_scope'], [{'table': 'sampling_plans', 'rows': 1, 'columns': ['updated_at', 'updated_by']}])
+        self.assertEqual(final['side_effect_findings'], [{'case_id': 'NSN014-PREPARATION', 'findings': [{'code': 'UNEXPECTED_TABLE_WRITE', 'table': 'x'}]}])
+        # A run whose contract is not the pinned one has no static verdict.
+        manifest = {'verdict': 'NO-GO', 'protected_scoped_baseline': self.SCOPED, 'side_effect_contract_sha256': '0' * 64}
+        with patch.object(module, 'collect_receipts'), patch.object(module, 'collect_inputs', return_value=[]), \
+             patch.object(module, 'collect_allocations'), patch.object(module, 'collect_reports'), patch.object(module, 'collect_report_calculations'), \
+             patch.object(module, 'verify_receipts', return_value=passing), patch.object(module, 'verify_inputs', return_value=passing), \
+             patch.object(module, 'verify_allocations', return_value=passing), patch.object(module, 'verify_reports', return_value=passing), \
+             patch.object(module, 'verify_calculations', return_value=passing):
+            module.finalise_oracles(manifest, {'records': []}, static_fixture(), {}, {}, {}, {'tables': copy.deepcopy(BASE_TABLES)})
+        self.assertFalse(manifest['final_oracles']['static_fixture_unchanged'])
+        self.assertEqual((manifest['reason'], manifest['verdict']), ('STATIC_FIXTURE_CHANGED', 'NO-GO'))

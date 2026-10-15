@@ -19,7 +19,7 @@ def reports():
         snapshot={'probe_id':probe,'sample_code':position['sample_code'],'product':position['product'],'plant':'Enzberg','is_official':False}
         snapshot.update({k:float(v) for k,v in module.expected_numbers(position).items()})
         records.append({'id':report,'probe_id':probe,'tenant_id':fixture['fixture_data']['tenant_id'],
-            'plant_id':fixture['fixture_data']['plant_id'],'laboratory_id':None,'is_official':False,'status':'Draft','snapshot':snapshot})
+            'plant_id':fixture['fixture_data']['plant_id'],'laboratory_id':None,'is_official':False,'status':'DRAFT','snapshot':snapshot})  # BLE persists 'DRAFT'
         downloads.append({'report_id':report,'pdf_integrity':'PASS'})
     fixture['suite_copy']['measurement_reference_sha256']=canonical_hash(projection)
     return fixture,projection,records,receipts,downloads
@@ -40,6 +40,17 @@ class ReportOracleTests(unittest.TestCase):
         for column,value in [('sample_code','OTHER'),('dry_g',0),('sand_a_mm',9.5)]:
             f,p,r,probes,pdfs=reports();r[0]['snapshot'][column]=value
             self.assertEqual(module.verify_reports(r,probes,p,f,pdfs)['status'],'FAIL')
+
+    def test_draft_status_is_recognized_as_persisted_by_ble_and_no_other_status_is_a_draft(self):
+        # Dry run 15.10.2026: BLE stores 'DRAFT'; an exact 'Draft' comparison rejected every report of the suite.
+        for status in ('DRAFT','Draft','draft',' DRAFT '):
+            f,p,r,probes,pdfs=reports();r[0]['status']=status
+            self.assertEqual(module.verify_reports(r,probes,p,f,pdfs)['status'],'PASS',status)
+        for status in ('FINAL','Released','APPROVED','ISSUED','',None,'DRAFTED'):
+            f,p,r,probes,pdfs=reports();r[0]['status']=status
+            result=module.verify_reports(r,probes,p,f,pdfs)
+            self.assertEqual(result['status'],'FAIL',status);self.assertFalse(result['positions'][0]['relations_valid'])
+        self.assertTrue(module.is_draft('DRAFT'));self.assertFalse(module.is_draft(1))
 
     def test_duplicate_record_and_malformed_or_unknown_probe_blocks(self):
         f,p,r,probes,pdfs=reports();r.append(copy.deepcopy(r[0]))

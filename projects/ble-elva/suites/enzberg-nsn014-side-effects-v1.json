@@ -1,0 +1,72 @@
+{
+  "schema_version": "sqbf-stage-side-effects-1",
+  "contract_id": "ENZBERG-NSN014-SIDE-EFFECTS-v1",
+  "suite_id": "ENZBERG-NSN014",
+  "basis": "Scripted model-free dry run on a disposable fixture copy, 2026-10-15 (SQBF issue #21): full-table row and column diff around every UI action of every stage with the application build of the fixture (90b6d58d). Values are never stored, only table names, row counts and changed column names.",
+  "audit_columns": ["updated_at", "updated_by"],
+  "rules": {
+    "protected_tables": "The tables of the prepared fixture baseline (minus the mutable benchmark tables) must be byte-identical after every stage, except the audit-only allowances listed here. An allowance names one stage, one table, the target rows and the columns; it never applies to another stage, table, row or column.",
+    "read_only_stages": "No table may change. A change is recorded as WRITE_IN_READ_ONLY_STAGE; in a protected table it stops the suite.",
+    "write_stages": "Only the listed tables may change. A change elsewhere is recorded as UNEXPECTED_TABLE_WRITE (finding for review, no stop); in a protected table it stops the suite.",
+    "between_stages": "A stage must start from the exact state the previous stage ended in; a difference means an external write and stops the suite."
+  },
+  "audit_only_allowances": [
+    {
+      "case_id": "NSN014-PLAN",
+      "table": "sampling_plans",
+      "target": "plan_id",
+      "columns": ["updated_at", "updated_by"],
+      "max_rows": 1,
+      "action": "Proben anlegen / nachanlegen (plan-wide sample creation)",
+      "evidence": "run 45eb301f and dry run: exactly one sampling_plans row, only these two columns"
+    }
+  ],
+  "stages": {
+    "NSN014-PLAN": {
+      "mode": "write",
+      "actions": ["plan_samples"],
+      "tables": ["samples", "probe_applied_standards", "sampling_plans"],
+      "new_rows": {"samples": 10, "probe_applied_standards": 10}
+    },
+    "NSN014-RECEIPT": {"mode": "read_only", "actions": [], "tables": []},
+    "NSN014-PREPARATION": {
+      "mode": "write",
+      "actions": ["allocation_draft", "allocation_entry", "wash_save"],
+      "tables": ["lims_sieblinie_ergebnis", "lims_sieblinie_punkt", "workspace_sampling_info", "lims_agg_uf_fine_tests", "lims_probe_test_modules"],
+      "notes": "The first saved result of a sample creates its lims_probe_test_modules rows from the requirement resolver (product exclusions apply). Allocation cards for excluded methods exist only before that first save; the runner always works allocations before wash per position."
+    },
+    "NSN014-SIEVE": {
+      "mode": "write",
+      "actions": ["sieve_draft", "sieve_save", "partial_start", "partial_save"],
+      "tables": ["lims_sieblinie_ergebnis", "lims_sieblinie_punkt", "workspace_sampling_info", "workspace_work_items", "samples", "lims_probe_test_modules",
+                 "lims_customer", "lims_product", "lims_project", "lims_sample", "lims_sample_portion", "lims_sample_test", "lims_test_method",
+                 "lims_sample_derived_sieve_result", "lims_sample_derived_test_result_series", "lims_sample_derived_test_step"],
+      "notes": "Starting the partial sieve creates the lazy LIMS records of the sample (customer, product, project, sample, test method); saving it writes back into the main sieve."
+    },
+    "NSN014-SHAPE": {
+      "mode": "write",
+      "actions": ["shape_fraction_save"],
+      "tables": ["workspace_particle_shape_results", "workspace_particle_shape_fraction_results", "workspace_work_items", "lims_probe_test_modules"]
+    },
+    "NSN014-BOILING": {
+      "mode": "write",
+      "actions": ["boiling_repetition_add", "boiling_save"],
+      "tables": ["workspace_boiling_test_results", "workspace_work_items", "lims_probe_test_modules"]
+    },
+    "NSN014-SE": {
+      "mode": "write",
+      "actions": ["sand_save"],
+      "tables": ["workspace_sand_equivalent_results", "workspace_work_items", "lims_probe_test_modules"]
+    },
+    "NSN014-ASSESS": {"mode": "read_only", "actions": [], "tables": []},
+    "NSN014-WPK": {"mode": "read_only", "actions": [], "tables": []},
+    "NSN014-ANALYSIS": {"mode": "read_only", "actions": [], "tables": []},
+    "NSN014-REPORT": {
+      "mode": "write",
+      "actions": ["report_generate", "pdf_download"],
+      "tables": ["ble_reports", "workspace_probe_report_entries"],
+      "notes": "Generating the non-official report writes the report and its entry; the PDF download writes nothing."
+    },
+    "NSN014-RIGHTS": {"mode": "read_only", "actions": [], "tables": []}
+  }
+}

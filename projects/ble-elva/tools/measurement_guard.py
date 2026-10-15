@@ -66,12 +66,13 @@ def make_contract(fixture,probe_id,position,kind):
     elif kind=='partial':
         series=raw['partial_series']
         if len(series)!=2:raise ValueError('Two recorded partial towers required')
-        fields['K-Basis: Trockenmasse vor Waschen']=number(raw['preparation'][0]['dry_g'])
+        # BLE derives the K basis (read-only, "automatisch aus Feuchte/Abschlaemmung") and the pan loss of each tower (not stored,
+        # shown as "Siebverlust"); neither is an input control (dry run 15.10.2026), so they are neither approved fields nor typed.
         for tower,row in zip(('A','B'),series):
             fields['Einwaage Siebturm '+tower]=number(row['initial_g'])
             for point in row['points']:
-                key='pan' if point['pan'] else number(point['sieve_mm'])
-                fields['partial:'+key+':'+tower]=number(point['retained_g'])
+                if point['pan']:continue
+                fields['partial:'+number(point['sieve_mm'])+':'+tower]=number(point['retained_g'])
     if not fields:raise ValueError('No approved inputs for this module')
     root='/samples/'+probe_id
     return {'origin':fixture['target_url'].rstrip('/'),'root':root,'path':root+'/'+ROUTES[kind],
@@ -82,7 +83,7 @@ def make_contract(fixture,probe_id,position,kind):
 CLASSIFY=r"""
 const norm=s=>(s||'').replace(/\s+/g,' ').replace(/\s*\*+$/,'').trim();
 const num=s=>{const m=(s||'').match(/\d+(?:[.,]\d+)?/);return m?String(Number(m[0].replace(',','.'))):null;};
-const field=e=>{
+const field=(e,ignoreSaveLatch)=>{
  const input=e?.matches('input')?e:e?.closest('.mud-input-control')?.querySelector('input');
  if(!input||input.disabled||input.readOnly||['password','file','hidden'].includes(input.type))return null;
  let name=norm(input.closest('.mud-input-control')?.querySelector('label')?.innerText);
@@ -91,7 +92,11 @@ const field=e=>{
  if(config.kind==='shape')name+=':'+num(input.closest('.kf-panel')?.querySelector('.kf-panel-label')?.innerText);
  if(config.kind==='sieve'){
    if(input.closest('.sa-kpi-einwaage'))name='main_input';
-   else if(input.closest('.sieve-residue-input'))name='sieve:'+num(input.closest('tr')?.querySelector('[data-label="Sieb"]')?.innerText);
+   else if(input.closest('.sieve-residue-input')){
+     // The pan row is labelled "Boden", "Pfanne" or "Anteile gesamt < x mm"; the reference stores it as sieve 0 (#21 dry run, 15.10.2026).
+     const label=norm(input.closest('tr')?.querySelector('[data-label="Sieb"]')?.innerText);
+     name='sieve:'+(/boden|pfanne|anteile gesamt/i.test(label)?'0':num(label));
+   }
  }
  if(config.kind==='allocations'&&input.closest('.sa-ec')){
    const card=input.closest('.sa-ec'),s=norm(card.querySelector('.sa-ec-sieb')?.innerText);
@@ -103,7 +108,7 @@ const field=e=>{
    if(tower)name='partial:'+(/boden|pfanne/i.test(s)?'pan':num(s))+':'+tower;
  }
  const scope=config.kind==='shape'?name.split(':').at(-1):'module';
- if(sessionStorage.getItem('sqbf-module-save:'+config.path+':'+scope))return null;
+ if(!ignoreSaveLatch&&sessionStorage.getItem('sqbf-module-save:'+config.path+':'+scope))return null;
  return Object.hasOwn(config.fields,name)?name:null;
 };
 const classify=e=>{
@@ -147,6 +152,21 @@ document.addEventListener('wheel',e=>{if(field(e.target))stop(e);},{capture:true
 })()""".replace('__CONFIG__',json.dumps(contract)).replace('__CLASSIFY__',CLASSIFY)
 
 
+def german(value):
+    """BLE parses de-DE: ',' is the decimal mark and '.' a thousands separator, so '1.250' silently becomes 1250.
+    The approved values therefore reach the executor, and are accepted from it, only in German notation."""
+    return value.replace('.',',')
+
+
+def offered_fields(page,contract):
+    """Approved fields the page offers as enabled inputs right now (independent of the save latch).
+    Evidence only: a field BLE does not offer is not an executor fault."""
+    names=page.evaluate(r"""({config})=>{__CLASSIFY__
+const names=new Set();document.querySelectorAll('input').forEach(i=>{const n=field(i,true);if(n)names.add(n);});return [...names];
+}""".replace('__CLASSIFY__',CLASSIFY),{'config':contract})
+    return {name for name in names if name in contract['fields']}
+
+
 def check_action(page,action,contract,saved):
     parsed=urlsplit(page.url)
     if f'{parsed.scheme}://{parsed.netloc}'!=contract['origin'] or parsed.path not in (contract['root'],contract['path']):
@@ -159,8 +179,7 @@ return {target:classify(Number.isFinite(x)&&Number.isFinite(y)?document.elementF
     if kind=='click' and target['kind'] in ('navigation','expand','field','add_repetition'):return state
     if kind=='click' and target['kind'] in ('save','setup') and target['scope'] not in saved:return state
     focused=state['focused']
-    if kind=='type' and focused in contract['fields'] and action.get('text') in (
-            contract['fields'][focused],contract['fields'][focused].replace('.',',')):
+    if kind=='type' and focused in contract['fields'] and action.get('text')==german(contract['fields'][focused]):
         return state
     if kind=='key' and action.get('key') in ('ControlOrMeta+A','Backspace','Delete','Tab','Escape') and (focused or action['key']=='Escape'):
         return state

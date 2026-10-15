@@ -28,13 +28,11 @@ from sqbf.scope_check import verify_runtime
 from sqbf.session_credentials import load_credentials
 from sqbf.suites import canonical_hash
 from . import module_replay
+from .side_effect_probe import TABLE_HASH_SQL
 from .suite_fixture import validate_target
 
 IDENT = re.compile(r'[a-z][a-z0-9_]{0,62}')
 UUID_PATTERN = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
-TABLE_HASH_SQL = """SELECT string_agg(format('SELECT json_build_object(''table'',%L,''count'',count(*),''hash'',md5(coalesce(
-string_agg(to_jsonb(x)::text,E''\\n'' ORDER BY to_jsonb(x)::text),''''))) FROM public.%I x;',tablename,tablename),E'\\n' ORDER BY tablename)
-FROM pg_tables WHERE schemaname='public';"""
 
 
 class CloneError(RuntimeError):

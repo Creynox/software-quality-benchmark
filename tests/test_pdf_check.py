@@ -47,6 +47,17 @@ class PdfCheckTests(unittest.TestCase):
             result=self.inspect(path,('SYNTHETIC-02','Enzberg'))
             self.assertEqual((result['pdf_integrity'],result['artifact_error']),('FAIL','IDENTITY_TEXT_MISSING'))
 
+    def test_a_sample_code_wrapped_after_a_hyphen_still_matches_but_other_codes_do_not(self):
+        # BLE's report layout breaks "ENZBERG-20260508-NSN-014-02" after a hyphen; extraction then reads "20260508- NSN".
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'wrapped.pdf'
+            synthetic_pdf(path,'Probe SYNTH-20260508-\nNSN-014-02 Produkt Synthetic stone Werk Enzberg')
+            result=self.inspect(path,('SYNTH-20260508-NSN-014-02','Synthetic stone Werk Enzberg','Enzberg'))
+            self.assertEqual((result['pdf_integrity'],result['artifact_error']),('PASS',None))
+            for wrong in ('SYNTH-20260508-NSN-014-03','SYNTH-20260509-NSN-014-02','Synthetic stone Werk Other'):
+                result=self.inspect(path,(wrong,))
+                self.assertEqual((result['pdf_integrity'],result['artifact_error']),('FAIL','IDENTITY_TEXT_MISSING'),wrong)
+
     def test_controller_side_path_problems_still_raise(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(FileNotFoundError):self.inspect(Path(directory)/'missing.pdf')

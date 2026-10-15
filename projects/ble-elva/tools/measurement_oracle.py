@@ -18,6 +18,13 @@ KINDS={'wash','shape','boiling','boiling_repetitions','sand','sieves','preparati
 PERSISTED_NAMES={'sand':{'sand_height_mm':'sand_height','suspension_height_mm':'suspension_height'}}
 
 
+def comparable(kind,row):
+    """Drop what BLE derives instead of storing: the pan loss of a partial tower is shown as "Siebverlust" but persisted as NULL,
+    so it can be neither typed nor compared (dry run 15.10.2026). Every other point value still has to match exactly."""
+    if kind!='partial_series':return row
+    return dict(row,points=[{k:v for k,v in p.items() if not (p.get('pan') and k=='retained_g')} for p in row['points']])
+
+
 def normalize_inputs(kind,inputs):
     names=PERSISTED_NAMES.get(kind)
     if not names:return inputs
@@ -142,8 +149,8 @@ def verify_inputs(records, projection, fixture, *, kinds):
         mismatches=[];checked=0
         for code,position in codes.items():
             for kind in kinds:
-                expected=position['measurements'][kind]
-                found=actual[code][kind]
+                expected=[comparable(kind,r) for r in position['measurements'][kind]]
+                found=[comparable(kind,r) for r in actual[code][kind]]
                 # Repetition/series order is meaningful, independent query order isn't.
                 if kind in ('sand','partial_series'):
                     found=sorted(found,key=lambda row:row['order'])

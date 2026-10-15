@@ -138,6 +138,35 @@ mit Prüfsumme, vergleicht den Hash aller öffentlichen Tabellen und setzt danac
 Plan-Produkts. Es gibt keinen automatischen Rollback und keinen Retry; `clone-state.json` hält jede Phase fest. Die OAuth-Anmeldung
 der Probe muss innerhalb von 300 s im Browser bestätigt werden.
 
+## NSN014: Fixture aus gestoppter Quelle, Konfigurations-Replay, Seiteneffekt-Vertrag
+
+Stand 15.10.2026 (Issue #21, Vorbereitung ohne Modellaufruf). Die verifizierte Quelle bleibt gestoppt und wird nie gestartet;
+das Volume wird byteweise kopiert und gegen die beim Stoppen festgehaltene Prüfsumme geprüft.
+
+```powershell
+# Plan (nur lesend), dann Ausführung; der Besetzer der Ports 5082/55434 wird nach der Prüfung gestoppt (nicht gelöscht):
+& $python -m sqbf.cli suite-fixture-clone --source-fixture <Quelle-Manifest> --controller-credentials <controller-credentials.dpapi.json> `
+  --output-dir <neuer-privater-Ordner> --source-stopped --expected-tree-sha256 <Prüfsumme> `
+  --occupant-fixture <Manifest-der-laufenden-Fixture> --purpose scratch|fixture --session-seed-fixture <Manifest-mit-neuesten-Sessions> [--execute]
+```
+
+Der Klon ersetzt zusätzlich zum Plan-Produkt-Override die fehlende Produktkonfiguration durch einen **Replay aus der normalen lokalen
+BLE-Datenbank** (nur lesend): `lims_product_test_modules` (51 Zeilen) und die produktbezogenen `workspace_sampling_rules` (37 Zeilen).
+Ohne sie sperrt BLE die Messformulare und bietet nur 2 von 9 Entnahmekarten an. Jede Phase und jede geänderte Tabelle wird im
+Klon-Nachweis festgehalten. `--purpose scratch` erzeugt eine Wegwerfkopie für Trockenläufe; nur `--purpose fixture` ist für einen Lauf bestimmt.
+
+Seiteneffekt-Vertrag: `projects/ble-elva/suites/enzberg-nsn014-side-effects-v1.json` legt je Stufe fest, ob sie lesend ist
+oder welche Tabellen sie beschreiben darf. Die Prüfung im Runner (`stage_effects.py`, `guarded_stage`):
+
+- geschützte Tabellen (Baseline der vorbereiteten Fixture): nach jeder Stufe unverändert, Ausnahme ist genau eine Audit-Freigabe
+  (`NSN014-PLAN`, Tabelle `sampling_plans`, Zielzeile = Plan-Id, Spalten `updated_at`/`updated_by`, höchstens 1 Zeile);
+- jede Stufe beginnt exakt im Endzustand der vorherigen (Schreibzugriffe außerhalb der Suite stoppen sie);
+- alle anderen Tabellen (Hash aller öffentlichen Tabellen, Controller READ ONLY): nicht gelistete Schreibzugriffe sind Befunde
+  (`UNEXPECTED_TABLE_WRITE`, `WRITE_IN_READ_ONLY_STAGE`) ohne Abbruch.
+
+Der Vertrag ist im Lauf-Manifest über seinen Hash festgelegt. Für Trockenläufe gibt es die Werkzeuge `module_replay.py` und
+`side_effect_probe.py` (Zeilen- und Spaltendiff je Aktion, nur Spaltennamen und Zähler, keine Werte).
+
 ## Evidenz und Aufbewahrung
 
 Private lokale Run-Ordner: PNGs mit SHA-256, Events, Usage, gemessene Modell-/Runnerzeit,

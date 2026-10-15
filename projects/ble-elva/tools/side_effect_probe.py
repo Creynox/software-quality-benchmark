@@ -17,10 +17,11 @@ TABLE = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
 
 def _psql(run, container, user, database, sql, *, timeout=120):
     result = run(['docker', 'exec', '-i', container, 'psql', '-X', '-q', '-At', '-U', user, '-d', database, '-v', 'ON_ERROR_STOP=1'],
-                 input='BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;\n' + sql + '\nROLLBACK;', capture_output=True, text=True,
-                 encoding='utf-8', timeout=timeout)
+                 input='BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;\n' + sql.rstrip().rstrip(';') + ';\nROLLBACK;', capture_output=True,
+                 text=True, encoding='utf-8', timeout=timeout)
     if result.returncode != 0:
-        raise RuntimeError('psql failed')
+        # The first stderr line names the failing statement class (syntax, missing column), never row values.
+        raise RuntimeError('psql failed: ' + ((result.stderr or '').strip().splitlines() or [''])[0][:160])
     return result.stdout
 
 
@@ -29,6 +30,23 @@ def table_names(run, container, user, database):
     if not names or any(not TABLE.fullmatch(name) for name in names):
         raise ValueError('Unexpected table identifiers')
     return names
+
+
+TABLE_HASH_SQL = """SELECT string_agg(format('SELECT json_build_object(''table'',%L,''count'',count(*),''hash'',md5(coalesce(
+string_agg(to_jsonb(x)::text,E''\\n'' ORDER BY to_jsonb(x)::text),''''))) FROM public.%I x;',tablename,tablename),E'\\n' ORDER BY tablename)
+FROM pg_tables WHERE schemaname='public';"""
+
+
+def table_hashes(run, container, user, database):
+    """{table: {count, hash}} of every public table (controller role, READ ONLY, rolled back). Values are never returned."""
+    statements = _psql(run, container, user, database, TABLE_HASH_SQL).strip()
+    if not statements:
+        raise ValueError('No tables')
+    rows = [json.loads(line) for line in _psql(run, container, user, database, statements, timeout=120).splitlines() if line.strip()]
+    result = {row['table']: {'count': row['count'], 'hash': row['hash']} for row in rows}
+    if len(result) != len(rows) or any(not TABLE.fullmatch(name) for name in result):
+        raise ValueError('Unexpected table identifiers')
+    return result
 
 
 def snapshot_rows(run, container, user, database, tables=None):

@@ -14,7 +14,7 @@ from sqbf.calibration import ResourceStop, ask_calibrated
 from sqbf.models import validate_action, safe_action_log, ActionValidationError, ALLOWED_ACTIONS
 from sqbf.read_only import ReadOnlyViolation
 from sqbf.runner import apply_action
-from .measurement_guard import make_contract, event_guard, check_action, transport_allowed
+from .measurement_guard import make_contract, event_guard, check_action, transport_allowed, german, offered_fields
 from .measurement_oracle import collect_inputs, verify_inputs
 from .receipt_oracle import collect_receipts
 from .allocation_oracle import collect_allocations, verify_allocations
@@ -25,6 +25,7 @@ from sqbf.no_write_oracle import snapshot
 INSTRUCTIONS='''Work only from the displayed screenshots, source inputs below and your previous visible actions.
 Return one strict JSON UI action. No tools, files, DOM, APIs, hidden URLs, passwords or browser shortcuts.
 Enter only the supplied original numbers in their corresponding visible fields. Do not invent missing values.
+The numbers are given in German notation (decimal comma, no thousands separator). Type each number exactly as given; a point is read as a thousands separator and changes the value.
 Physical laboratory operations are simulated. Existing norms, method profiles and product settings stay unchanged.
 Save each module or individual shape fraction once only, then inspect the resulting state. No save retry.
 No release, signature, finalization, delete, dispatch, master data or optional notes.
@@ -42,12 +43,19 @@ def required_saves(contract):
     return {'module'}
 
 
+def fields_not_offered(contract,offered):
+    """Approved fields the page never offered. Boiling repetition rows are created by the executor, so they never count."""
+    missing=set(contract['fields'])-offered
+    if contract['kind']=='boiling':missing={name for name in missing if ':' not in name}
+    return sorted(missing)
+
+
 def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer,budget,evidence):
     contract=make_contract(fixture,probe_id,position,kind)
     context=browser.new_context(viewport={'width':1280,'height':800},
         locale='de-DE',timezone_id='Europe/Berlin',
         storage_state=fixture['personas']['laboratory_staff']['storage_state'],accept_downloads=False,service_workers='block')
-    images,actions,saved,filled=[],[],set(),set();stall=StallDetector()
+    images,actions,saved,filled,offered=[],[],set(),set(),set();stall=StallDetector()
     outcome={'position_id':position['position_id'],'kind':kind,'status':'INCONCLUSIVE','technical_gate':'PASS','review':None}
     try:
         context.add_init_script(event_guard(contract))
@@ -56,11 +64,12 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
         page.goto(contract['origin']+contract['root'],wait_until='domcontentloaded',timeout=min(15000,budget.remaining()*1000))
         page.wait_for_timeout(800)
         task=json.dumps({'sample_code':position['sample_code'],'product':position['product'],
-                          'module':kind,'source_inputs':contract['fields']},ensure_ascii=False)
+                          'module':kind,'source_inputs':{name:german(value) for name,value in contract['fields'].items()}},ensure_ascii=False)
         while True:
             budget.remaining()
             if urlsplit(page.url).path=='/login':raise ReadOnlyViolation('SESSION_INVALIDATED')
             png=page.screenshot(animations='disabled',timeout=min(5000,budget.remaining()*1000))
+            offered|=offered_fields(page,contract)
             images.append(png);evidence.snapshot(png,position['position_id']+'-'+kind);stall.observe(png)
             if stall.stalled():
                 evidence.event('stopped_no_visible_progress',position=position['position_id'],module=kind)
@@ -112,7 +121,9 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
     finally:
         context.close()
     outcome.update(screenshots=len(images),fields_required=len(contract['fields']),fields_entered=len(filled),
-                   fully_entered=set(contract['fields'])<=filled and required_saves(contract)<=saved)
+                   fully_entered=set(contract['fields'])<=filled and required_saves(contract)<=saved,
+                   fields_offered=len(offered),fields_not_offered=fields_not_offered(contract,offered),
+                   offered_entered=offered<=filled and (required_saves(contract)<=saved or not offered))
     return outcome
 
 
@@ -120,9 +131,13 @@ def classify_position(outcomes,mismatched):
     """One position across this case's modules: PASS, FAIL or INCOMPLETE with reason."""
     if mismatched and all(o.get('fully_entered') for o in outcomes):
         return 'FAIL','PERSISTED_VALUE_DEVIATION'
+    # No enabled input for some approved field was present on the page at any step (BLE shows KF cards only while a sample has no saved result
+    # and its product does not exclude the method), while everything that was present was entered and saved. The class is evidence for the
+    # reviewer, not a verdict about the application, and it can never be a FAIL.
+    absent=any(o.get('fields_not_offered') for o in outcomes) and all(o.get('offered_entered') for o in outcomes)
     unfinished=[o for o in outcomes if o['status']!='DONE']
-    if unfinished:return 'INCOMPLETE',incomplete_reason(unfinished[0])
-    if mismatched:return 'INCOMPLETE','EXECUTOR_DONE_WITHOUT_ALL_APPROVED_INPUTS'
+    if unfinished:return 'INCOMPLETE','APPROVED_FIELDS_NOT_PRESENT_ON_PAGE' if absent and all(o['status'] in ('DONE','BLOCKED') for o in unfinished) else incomplete_reason(unfinished[0])
+    if mismatched:return 'INCOMPLETE','APPROVED_FIELDS_NOT_PRESENT_ON_PAGE' if absent else 'EXECUTOR_DONE_WITHOUT_ALL_APPROVED_INPUTS'
     return 'PASS',None
 
 

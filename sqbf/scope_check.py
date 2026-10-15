@@ -57,7 +57,7 @@ if ($f.LastWriteTime -gt $p.CreationDate) {throw 'Build changed after launch'}
 '''
     r = run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],
             input=json.dumps({'root':str(root),'port':parsed.port,'executable':config['executable'],
-                              'assembly':config['assembly']}),capture_output=True,text=True,check=True,timeout=15,
+                              'assembly':config['assembly']}),capture_output=True,text=True,encoding='utf-8',errors='replace',check=True,timeout=15,
             env={k:v for k,v in os.environ.items() if k.lower() != 'psmodulepath'})
     data=json.loads(r.stdout)
     return {k:data[k] for k in ('pid','assembly','sha256')}

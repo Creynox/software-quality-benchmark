@@ -59,6 +59,42 @@ class MeasurementOracleTests(unittest.TestCase):
         self.assertEqual(module.verify_inputs(r,p,f,kinds={'sand'})['status'],'PASS')
         self.assertIn('sand_height_mm',str([row['inputs'] for row in r if row['kind']=='sand']))
 
+    def partial_case(self,persisted_pan,persisted_sieve='114.2',pan_flag=True):
+        f,p,r=inputs()
+        reference=[{'initial_g':'268.5','dry_g':'268.5','points':[{'sieve_mm':'2','pan':False,'retained_g':'114.2'},
+                                                               {'sieve_mm':'0','pan':True,'retained_g':'0.4'}]},
+                   {'initial_g':'268.5','dry_g':'268.5','points':[{'sieve_mm':'2','pan':False,'retained_g':'106'},
+                                                               {'sieve_mm':'0','pan':True,'retained_g':'0.5'}]}]
+        p['positions'][0]['measurements']['partial_series']=reference
+        f['suite_copy']['measurement_reference_sha256']=canonical_hash(p)
+        sieve=[persisted_sieve,'106']
+        for order,series in enumerate(reference,1):
+            points=[{'sieve_mm':2.0,'pan':False,'retained_g':float(sieve[order-1])},
+                    {'sieve_mm':0.0,'pan':pan_flag,'retained_g':persisted_pan}]
+            r.append({'sample_code':'SYNTHETIC-1','product_id':str(UUID(int=101)),'kind':'partial_series',
+                      'inputs':{'order':order,'initial_g':268.5,'dry_g':268.5,'points':points}})
+        return f,p,r
+
+    def test_the_pan_loss_of_a_partial_tower_is_derived_by_ble_and_never_compared(self):
+        # BLE persists the pan loss as NULL (it only shows it as "Siebverlust"); the reference holds the sheet value.
+        f,p,r=self.partial_case(None)
+        self.assertEqual(module.verify_inputs(r,p,f,kinds={'partial_series'})['status'],'PASS')
+        # Even a stored pan value does not matter (derived), but every stored sieve value still has to match exactly.
+        f,p,r=self.partial_case(9.9)
+        self.assertEqual(module.verify_inputs(r,p,f,kinds={'partial_series'})['status'],'PASS')
+        f,p,r=self.partial_case(None,persisted_sieve='114.3')
+        result=module.verify_inputs(r,p,f,kinds={'partial_series'})
+        self.assertEqual(result['status'],'FAIL');self.assertIn({'position_id':'P1','kind':'partial_series'},result['mismatches'])
+        # A point that is not the pan row is never excused by the derived-value rule.
+        f,p,r=self.partial_case(None,pan_flag=False)
+        self.assertEqual(module.verify_inputs(r,p,f,kinds={'partial_series'})['status'],'FAIL')
+
+    def test_comparable_changes_nothing_outside_partial_series_pan_points(self):
+        row={'points':[{'pan':True,'retained_g':'1'}]}
+        self.assertIs(module.comparable('sieves',row),row);self.assertIs(module.comparable('wash',row),row)
+        self.assertEqual(module.comparable('partial_series',row),{'points':[{'pan':True}]})
+        self.assertEqual(row['points'][0]['retained_g'],'1')
+
     def test_wrong_sample_product_nonfinite_or_unknown_scope_blocks(self):
         for column,value in [('product_id',str(UUID(int=999))),('sample_code','OTHER')]:
             f,p,r=inputs();r[0][column]=value

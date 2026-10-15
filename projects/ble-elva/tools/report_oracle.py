@@ -53,6 +53,12 @@ def expected_numbers(position):
     return expected
 
 
+def is_draft(status):
+    """BLE persists the status of a non-official report as 'DRAFT'; the oracle expected 'Draft' and would have rejected every
+    report (dry run 15.10.2026). Any other status, official or not, is still not a draft."""
+    return isinstance(status,str) and status.strip().upper()=='DRAFT'
+
+
 def pdf_status(files):
     """MISSING (no download), INVALID_ARTIFACT, IDENTITY_TEXT_MISSING or PASS."""
     if len(files)!=1:return 'MISSING' if not files else 'DUPLICATE_DOWNLOAD'
@@ -82,7 +88,7 @@ def verify_reports(records,receipts,projection,fixture,downloads,*,basis=None):
             seen.add(probe['id']);snap=report['snapshot']
             files=[d for d in downloads if d['report_id']==report['id']]
             relations=(report['tenant_id']==fixture['fixture_data']['tenant_id'] and report['plant_id']==fixture['fixture_data']['plant_id']
-                and report['laboratory_id'] is None and report['is_official'] is False and report['status']=='Draft' and snap['is_official'] is False
+                and report['laboratory_id'] is None and report['is_official'] is False and is_draft(report['status']) and snap['is_official'] is False
                 and probe['tenant_id']==fixture['fixture_data']['tenant_id'] and probe['plant_id']==fixture['fixture_data']['plant_id']
                 and snap['probe_id']==probe['id'] and snap['sample_code']==probe['sample_code']
                 and snap['product']==position['product'] and snap['plant']=='Enzberg'

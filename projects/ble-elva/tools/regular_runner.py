@@ -21,7 +21,9 @@ from sqbf.models import Scenario
 from sqbf.reporting import Evidence, now_iso, index_run
 from sqbf.suites import suite_check, canonical_hash, aggregate, validate_suite, comparison_key
 from sqbf.no_write_oracle import snapshot
+from sqbf.oracle import verify_docker_identity
 from sqbf.scope_check import verify_runtime
+from . import stage_effects
 from .allocation_oracle import collect_allocations, verify_allocations
 from .calculation_oracle import collect_report_calculations, persisted_basis, verify_calculations, expected_calculations
 from .measurement_guard import make_contract
@@ -31,7 +33,8 @@ from .receipt_oracle import collect_receipts, verify_receipts, collect_plan_prod
 from .suite_acceptance import check_fixture
 from .persona_scope import check_persona
 from .measurement_runner import run_measurements, required_saves
-from .protected_oracle import collect_normalized_hashes, AUDIT_COLUMNS
+from .protected_oracle import collect_scoped_hashes
+from .side_effect_probe import table_hashes
 from .inspection_runner import run_inspection, run_reports, run_plan_creation, ENTRY_PATHS
 from .receipt_contract_check import check_receipt_form, check_entry_routes
 from .stage_support import (REVIEW_SCHEMA, SCORING_VERSION, RUBRIC_VERSION, CATEGORIES, SEVERITIES, DIMENSIONS,
@@ -52,34 +55,78 @@ def objective_status(result):
     return OBJECTIVE_STATUS.get(result,result)
 
 
-def static_state(fixture,current,*,normalized_baseline=None,collect=None):
-    """Protected-data gate. A differing table passes only if it differs in audit columns alone.
-
-    BLE's sample creation stamps sampling_plans.updated_at/updated_by (live run 45eb301f). Raw hashes
-    decide first; only for differing tables are hashes without audit columns compared to the
-    baseline taken at readiness. Any other difference, table set or pinned-baseline change fails.
+def static_state(fixture,current,*,resolved=(),scoped_baseline=None,collect=None):
+    """Protected-data gate against the prepared baseline. Nothing may differ, except an audit-only stamp that a stage
+    contract allows for exactly one table and its named target rows (live run 45eb301f: plan-wide sample creation stamps
+    sampling_plans.updated_at/updated_by on the plan row). Raw hashes decide first; only if a table differs is the scoped
+    comparison against the baseline taken at readiness made. Any other difference, the table set or the pinned baseline fails.
     """
     baseline=fixture['suite_copy']['prepared_tables']
     if canonical_hash(baseline)!=fixture['suite_copy']['prepared_state_sha256'] or set(baseline)!=set(current['tables']):
-        return {'unchanged':False,'changed_tables':['BASELINE_OR_TABLE_SET'],'audit_only_tables':[]}
+        return {'unchanged':False,'changed_tables':['BASELINE_OR_TABLE_SET'],'audit_only_tables':[],'audit_only':[]}
     differing=sorted(t for t,v in baseline.items() if t not in MUTABLE_TABLES and current['tables'][t]!=v)
-    if not differing:return {'unchanged':True,'changed_tables':[],'audit_only_tables':[]}
-    if normalized_baseline is None or collect is None or any(t not in normalized_baseline for t in differing):
-        return {'unchanged':False,'changed_tables':differing,'audit_only_tables':[]}
-    now=collect(fixture,differing)
-    real=[t for t in differing if now.get(t)!=normalized_baseline[t]]
-    return {'unchanged':not real,'changed_tables':real,'audit_only_tables':sorted(set(differing)-set(real)),
-            'audit_columns':list(AUDIT_COLUMNS)}
+    if not differing:return {'unchanged':True,'changed_tables':[],'audit_only_tables':[],'audit_only':[]}
+    if not resolved or scoped_baseline is None or collect is None:
+        return {'unchanged':False,'changed_tables':differing,'audit_only_tables':[],'audit_only':[]}
+    delta=stage_effects.protected_delta(baseline,current['tables'],resolved,scoped_baseline,collect(fixture,resolved),mutable=MUTABLE_TABLES)
+    return {'unchanged':delta['unchanged'],'changed_tables':delta['changed_tables'],
+            'audit_only_tables':[a['table'] for a in delta['audit_only']],'audit_only':delta['audit_only']}
 
 
 def static_fixture_unchanged(fixture,current,**kwargs):
     return static_state(fixture,current,**kwargs)['unchanged']
 
 
-def static_gate(fixture,normalized_baseline,*,snapshot_fn=None,collect=None):
+def static_gate(fixture,resolved,scoped_baseline,*,snapshot_fn=None,collect=None):
     snapshot_fn=snapshot_fn or snapshot
-    return static_state(fixture,snapshot_fn(fixture,enforce_counts=False),normalized_baseline=normalized_baseline,
-                        collect=collect or collect_normalized_hashes)
+    return static_state(fixture,snapshot_fn(fixture,enforce_counts=False),resolved=resolved,scoped_baseline=scoped_baseline,
+                        collect=collect or collect_scoped_hashes)
+
+
+def all_tables(fixture,*,run=subprocess.run):
+    """Count and hash of every public table (controller role, READ ONLY): the basis of the per-stage side-effect findings."""
+    verify_docker_identity(fixture,run=run)
+    db=fixture['database']
+    return table_hashes(run,db['container'],db['bootstrap_user'],db['name'])
+
+
+def capture_state(fixture,resolved,*,snapshot_fn=None,all_fn=None,collect=None):
+    """Everything one stage gate compares: protected hashes, every public table, and the scoped rows of the allowances."""
+    return {'tables':(snapshot_fn or snapshot)(fixture,enforce_counts=False)['tables'],'all':(all_fn or all_tables)(fixture),
+            'scoped':(collect or collect_scoped_hashes)(fixture,resolved)}
+
+
+def guarded_stage(fixture,contract,case_id,tracker,run_case,*,capture=None):
+    """One stage between two captured states. The start state must equal the end of the previous stage (the prepared baseline for
+    the first one), otherwise something outside the suite wrote to the protected data. After the stage only the contract's
+    allowances may differ in the protected tables (INVALID otherwise); every other table is a finding, never an abort."""
+    capture=capture or capture_state
+    resolved=stage_effects.allowances(contract,fixture,case_id)
+    before=capture(fixture,resolved)
+    if before['tables']!=tracker['tables']:
+        changed=sorted(t for t in tracker['tables'] if before['tables'].get(t)!=tracker['tables'][t])
+        return {'result':'BLOCKED','technical_gate':'BLOCKED','reason':'STATIC_FIXTURE_CHANGED','changed_tables':changed}
+    started=time.monotonic()
+    result=dict(run_case())
+    result['stage_wall_seconds']=round(time.monotonic()-started,3)
+    after=capture(fixture,resolved)
+    hard,facts=stage_effect_gate(fixture,contract,case_id,before,after,previous=tracker['previous'])
+    tracker.update(tables=after['tables'],previous=after)
+    if hard:
+        return dict(result,result='INVALID',technical_gate='INVALID',reason='STATIC_FIXTURE_CHANGED',changed_tables=hard,**facts)
+    return dict(result,**facts)
+
+
+def stage_effect_gate(fixture,contract,case_id,before,after,*,previous=None):
+    """Judge one stage from its start and end state. Returns (hard, facts): hard is the list of protected tables that changed
+    outside an allowance (the suite stops), facts are findings and audit-only stamps for the record."""
+    resolved=stage_effects.allowances(contract,fixture,case_id)
+    delta=stage_effects.protected_delta(before['tables'],after['tables'],resolved,before['scoped'],after['scoped'],mutable=MUTABLE_TABLES)
+    protected=set(fixture['suite_copy']['prepared_tables'])-MUTABLE_TABLES
+    facts={'audit_only_changes':[a['table'] for a in delta['audit_only']],'audit_only_scope':delta['audit_only'],
+           'side_effect_findings':stage_effects.findings(contract,case_id,before['all'],after['all'],protected=protected),
+           'external_changes_before_stage':stage_effects.external_changes(previous['all'] if previous else None,before['all'])}
+    return delta['changed_tables'],facts
 
 
 def atomic_json(path,data):
@@ -264,8 +311,15 @@ def check_ready(suite,dataset,fixture,projection,allocation,*,provider_probe=Non
         if gates['status']!='FIXTURE_GATES_VERIFIED':return dict(blocked,reason='FIXTURE_GATE_FAILED',gates=gates)
         if not static_fixture_unchanged(fixture,snapshot(fixture)):
             return dict(blocked,reason='STATIC_FIXTURE_BASELINE_MISMATCH')
-        protected=sorted(set(fixture['suite_copy']['prepared_tables'])-MUTABLE_TABLES)
-        normalized_baseline=collect_normalized_hashes(fixture,protected)
+        try:contract=stage_effects.load_contract(CASE_IDS)
+        except (stage_effects.ContractError,OSError,ValueError):return dict(blocked,reason='SIDE_EFFECT_CONTRACT_INVALID')
+        scoped_baseline=collect_scoped_hashes(fixture,stage_effects.allowances(contract,fixture))
+        public_tables=all_tables(fixture)
+        side_effects={'contract_id':contract['contract_id'],'contract_sha256':stage_effects.contract_hash(contract),
+                      'read_only_stages':sorted(k for k,v in contract['stages'].items() if v['mode']=='read_only'),
+                      'write_stages':sorted(k for k,v in contract['stages'].items() if v['mode']=='write'),
+                      'audit_only_allowances':[{k:a[k] for k in ('case_id','table','columns','max_rows')} for a in contract['audit_only_allowances']],
+                      'public_tables_hashed':len(public_tables)}
         runtime=verify_runtime(fixture['target_url'],fixture['suite_copy']['application_root'],fixture['identity_scope_check'])
         if any(runtime[k]!=fixture['suite_copy']['runtime'][k] for k in ('assembly','sha256')):
             return dict(blocked,reason='ACTIVE_RUNTIME_MISMATCH')
@@ -292,7 +346,8 @@ def check_ready(suite,dataset,fixture,projection,allocation,*,provider_probe=Non
                         request_estimate=estimate,provider_probe=probe,plan_products=plan_products)
         return {'status':'READY_FOR_SINGLE_SUITE_RUN','model_calls':0,'database_writes':0,
                 'budget_approval':budget,'provider_probe':probe,'plan_products':plan_products,'source':source,
-                'protected_normalized_baseline':normalized_baseline,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
+                'protected_scoped_baseline':scoped_baseline,'side_effects':side_effects,'side_effect_contract':contract,
+                'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
                 'fixture_gates':gates,'dependencies':dependencies,'native_receipt_form':form,'entry_routes':routes,
                 'active_runtime':runtime,'request_estimate':estimate,'persona_context':persona_context(suite,fixture),
                 'fresh_subscription_authorization_required_at_execution':True,'current_provider_catalog_checked':False,
@@ -388,20 +443,15 @@ def browser_suite(payload):
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=not payload['headed'],downloads_path=str(downloads),timeout=min(15000,budget.remaining()*1000))
         try:
-            baseline=payload['normalized_baseline']
+            contract=payload['side_effect_contract']
+            if stage_effects.contract_hash(contract)!=payload['side_effect_contract_sha256']:raise ValueError('SIDE_EFFECT_CONTRACT_CHANGED')
+            # The state the next stage must start from: the prepared baseline, then the end state of the previous stage.
+            tracker={'tables':fixture['suite_copy']['prepared_tables'],'previous':None}
             def stage(case):
-                before=static_gate(fixture,baseline)
-                if not before['unchanged']:
-                    return {'result':'BLOCKED','technical_gate':'BLOCKED','reason':'STATIC_FIXTURE_CHANGED','changed_tables':before['changed_tables']}
-                evidence=Evidence(root/case['case_id'])
-                started=time.monotonic()
-                result=dispatch(case,browser,fixture,payload['dataset'],payload['projection'],payload['allocation'],
-                                policy,executor,reviewer,budget,evidence)
-                result=dict(result,stage_wall_seconds=round(time.monotonic()-started,3))
-                after=static_gate(fixture,baseline)
-                if not after['unchanged']:
-                    return dict(result,result='INVALID',technical_gate='INVALID',reason='STATIC_FIXTURE_CHANGED',changed_tables=after['changed_tables'])
-                return dict(result,audit_only_changes=after['audit_only_tables'])
+                def run_case():
+                    return dispatch(case,browser,fixture,payload['dataset'],payload['projection'],payload['allocation'],
+                                    policy,executor,reviewer,budget,Evidence(root/case['case_id']))
+                return guarded_stage(fixture,contract,case['case_id'],tracker,run_case)
             records=execute_cases(suite,fixture,budget,stage,write=write)
             summary=aggregate(suite,records)
             return {'records':records,'summary':summary,'accounting':budget.report(),'browser_version':browser.version}
@@ -442,7 +492,8 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         'sqbf_commit':ready['source']['commit'],'sqbf_source_clean':ready['source']['clean'],
         'suite_sha256':canonical_hash(suite),'dataset_sha256':canonical_hash(dataset),
         'reference_projection_sha256':canonical_hash(projection),'allocation_reference_sha256':canonical_hash(allocation),
-        'protected_normalized_baseline':ready['protected_normalized_baseline'],
+        'protected_scoped_baseline':ready['protected_scoped_baseline'],'side_effects':ready['side_effects'],
+        'side_effect_contract_sha256':ready['side_effects']['contract_sha256'],
         'fixture_manifest_sha256':canonical_hash(fixture),
         'prepared_state_sha256':fixture['suite_copy']['prepared_state_sha256'],
         'environment':ready['dependencies'],'viewport':{'width':1280,'height':800},
@@ -470,7 +521,7 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         manifest['started_at']=now_iso();manifest['execution_started']=True;started=time.monotonic()
         result=invoke_worker('regular-suite',{'suite':suite,'dataset':dataset,'fixture':fixture,
             'projection':projection,'allocation':allocation,'folder':str(evidence.path),'headed':headed,
-            'normalized_baseline':ready['protected_normalized_baseline'],
+            'side_effect_contract':ready['side_effect_contract'],'side_effect_contract_sha256':ready['side_effects']['contract_sha256'],
             'executor':model_spec(executor),'reviewer':model_spec(reviewer)},suite['resource_policy']['hard_seconds'])
         summary=result['summary']
         critical=any(r.get('technical_gate')=='BLOCKED' for r in result['records'])
@@ -529,8 +580,17 @@ def finalise_oracles(manifest,result,fixture,dataset,projection,allocation,curre
         if record['case_id']=='NSN014-REPORT':
             pdfs=record.get('downloads',[]) or [d for p in record.get('positions',[]) for d in p.get('downloads',[])]
     basis=persisted_basis(collect_inputs(fixture))
-    static=static_state(fixture,current,normalized_baseline=manifest.get('protected_normalized_baseline'),collect=collect_normalized_hashes)
+    contract=stage_effects.load_contract(CASE_IDS)
+    if stage_effects.contract_hash(contract)!=manifest.get('side_effect_contract_sha256'):
+        static={'unchanged':False,'changed_tables':['SIDE_EFFECT_CONTRACT_CHANGED'],'audit_only_tables':[],'audit_only':[]}
+    else:
+        # Every stage was judged on its own while it ran; this is the run-wide check against the prepared baseline, with the
+        # allowances of all stages and the scoped baseline taken at readiness.
+        static=static_state(fixture,current,resolved=stage_effects.allowances(contract,fixture),
+                            scoped_baseline=manifest.get('protected_scoped_baseline'),collect=collect_scoped_hashes)
+    stage_findings=[{'case_id':r['case_id'],'findings':r['side_effect_findings']} for r in result.get('records',[]) if r.get('side_effect_findings')]
     final_oracles={'static_fixture_unchanged':static['unchanged'],'static_fixture_audit_only_tables':static['audit_only_tables'],
+        'static_fixture_audit_only_scope':static['audit_only'],'side_effect_findings':stage_findings,
         'receipt':verify_receipts(receipts,dataset,fixture,phase='after_modules'),
         'measurements':verify_inputs(collect_inputs(fixture),projection,fixture,kinds=KINDS),
         'allocations':verify_allocations(collect_allocations(fixture),projection,allocation,fixture),

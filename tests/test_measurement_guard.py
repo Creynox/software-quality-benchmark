@@ -35,6 +35,14 @@ class MeasurementGuardTests(unittest.TestCase):
         for bad in ('NaN','-1','Infinity'):
             with self.assertRaises(ValueError):module.number(bad)
 
+    def test_derived_partial_values_are_not_approved_input_fields(self):
+        # BLE shows the K basis read-only and derives the pan loss of each tower; neither can be typed.
+        p=position()
+        for series in p['measurements']['partial_series']:series['points'].append({'pan':True,'sieve_mm':'0','retained_g':'0.5'})
+        c=module.make_contract(owned_fixture(),'11111111-1111-4111-8111-111111111111',p,'partial')
+        self.assertEqual(sorted(c['fields']),['Einwaage Siebturm A','Einwaage Siebturm B','partial:2:A','partial:2:B'])
+        self.assertFalse([name for name in c['fields'] if 'pan' in name or 'K-Basis' in name])
+
     def test_native_guard_blocks_delete_and_second_save_and_latches_across_reload(self):
         from playwright.sync_api import sync_playwright
         c=self.contract('wash')
@@ -59,6 +67,59 @@ class MeasurementGuardTests(unittest.TestCase):
         page.evaluate.return_value={'focused':None,'target':{'kind':'save','scope':'module'}}
         module.check_action(page,{'action':'click'},c,set())
         with self.assertRaises(ReadOnlyViolation):module.check_action(page,{'action':'click'},c,{'module'})
+
+    def test_typed_numbers_must_use_the_decimal_comma_because_a_point_is_a_thousands_separator(self):
+        # BLE parses de-DE: "1.250" is read as 1250, so a point would corrupt the value silently (dry run 15.10.2026).
+        c=self.contract('boiling');page=MagicMock();page.url=c['origin']+c['path']
+        page.evaluate.return_value={'focused':'Rückwaage nach Kochen:1','target':{'kind':'field'}}
+        self.assertEqual(c['fields']['Rückwaage nach Kochen:1'],'99.5')
+        module.check_action(page,{'action':'type','text':'99,5'},c,set())
+        for text in ('99.5','995','99,50',' 99,5','99,5 '):
+            with self.assertRaises(ReadOnlyViolation):module.check_action(page,{'action':'type','text':text},c,set())
+        page.evaluate.return_value={'focused':'Einwaage vor Kochen:1','target':{'kind':'field'}}
+        module.check_action(page,{'action':'type','text':'100'},c,set())
+        with self.assertRaises(ReadOnlyViolation):module.check_action(page,{'action':'type','text':'100,0'},c,set())
+        self.assertEqual(module.german('1250.5'),'1250,5');self.assertEqual(module.german('7'),'7')
+
+    def test_pan_row_of_the_main_sieve_maps_to_sieve_zero_under_every_label(self):
+        from playwright.sync_api import sync_playwright
+        p=position();p['measurements']['sieves'][0]['points'].append({'sieve_mm':'0','partial':False,'retained_g':'12.5'})
+        c=module.make_contract(owned_fixture(),'11111111-1111-4111-8111-111111111111',p,'sieve')
+        self.assertEqual(c['fields']['sieve:0'],'12.5');self.assertEqual(c['fields']['sieve:8'],'200')
+        def row(label):
+            return ('<table><tr><td data-label="Sieb">'+escape(label)+'</td><td class="sieve-residue-input"><div class="mud-input-control">'
+                    '<label></label><input></div></td></tr></table>')
+        with sync_playwright() as pw:
+            browser=pw.chromium.launch()
+            for label,expected in (('Boden','sieve:0'),('Pfanne','sieve:0'),('Anteile gesamt < 0,063 mm','sieve:0'),('8 mm','sieve:8')):
+                context=browser.new_context();context.add_init_script(module.event_guard(c))
+                html=row(label)  # bound per iteration; a default argument would receive Playwright's request object
+                context.route(c['origin']+'/**',(lambda body:lambda route:route.fulfill(body=body,content_type='text/html; charset=utf-8'))(html))
+                page=context.new_page();page.goto(c['origin']+c['path']);page.locator('input').click()
+                state=module.check_action(page,{'action':'type','text':module.german(c['fields'][expected])},c,set())
+                self.assertEqual(state['focused'],expected,label)
+                # The neighbouring sieve value is not accepted in this row.
+                other='sieve:8' if expected=='sieve:0' else 'sieve:0'
+                with self.assertRaises(ReadOnlyViolation):module.check_action(page,{'action':'type','text':module.german(c['fields'][other])},c,set())
+                context.close()
+            browser.close()
+
+    def test_offered_fields_ignore_the_save_latch_and_disabled_or_unapproved_inputs(self):
+        from playwright.sync_api import sync_playwright
+        c=self.contract('wash')
+        def control(label,extra=''):return '<div class="mud-input-control"><label>'+escape(label)+'</label><input '+extra+'></div>'
+        html=control('Probenmasse feucht')+control('Schale + Probe feucht','disabled')+control('Unbekanntes Feld')
+        with sync_playwright() as pw:
+            browser=pw.chromium.launch();context=browser.new_context();context.add_init_script(module.event_guard(c))
+            context.route(c['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(c['origin']+c['path'])
+            self.assertEqual(module.offered_fields(page,c),{'Probenmasse feucht'})
+            page.evaluate("sessionStorage.setItem('sqbf-module-save:'+%r+':module','attempted')"%c['path'])
+            # After the one allowed save the field is latched for typing, yet the page still offers it.
+            page.locator('input').first.click()
+            self.assertIsNone(page.evaluate("({config})=>{__C__ return field(document.activeElement);}".replace('__C__',module.CLASSIFY),{'config':c}))
+            self.assertEqual(module.offered_fields(page,c),{'Probenmasse feucht'})
+            context.close();browser.close()
 
     def test_all_native_control_contexts_identify_the_correct_source_field(self):
         from playwright.sync_api import sync_playwright

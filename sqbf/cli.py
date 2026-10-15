@@ -185,6 +185,11 @@ def main(argv=None) -> int:
     sessions=sub.add_parser('suite-sessions',help='Model-free four-persona session check/one guarded renewal; no benchmark',allow_abbrev=False)
     for name in ('fixture','output','report'):
         sessions.add_argument('--'+name,required=True)
+    clone=sub.add_parser('suite-fixture-clone',help='Clone an unchanged NSN014 fixture with one documented override; preflight only without --execute',allow_abbrev=False)
+    clone.add_argument('--source-fixture',required=True)
+    clone.add_argument('--controller-credentials',required=True)
+    clone.add_argument('--output-dir',required=True)
+    clone.add_argument('--execute',action='store_true',help='Stops the source web/container (kept) and creates the clone; no retry')
     suite_run=sub.add_parser('run-suite',help='Check suite readiness; live execution requires --execute',allow_abbrev=False)
     for name in ('suite','dataset','fixture','projection','allocations'):
         suite_run.add_argument('--'+name,required=True)
@@ -273,6 +278,20 @@ def main(argv=None) -> int:
         print(json.dumps(report,indent=2))
         return 0 if (report['status']=='READY_FOR_SINGLE_SUITE_RUN' or
                      report['status']=='SUITE_RUN_RECORDED' and report.get('technical_status')=='COMPLETED') else 2
+    if args.command=='suite-fixture-clone':
+        from importlib import import_module
+        tool=import_module('projects.ble-elva.tools.fixture_clone')
+        try:
+            report=(({'status':'CLONE_CREATED','manifest':str(tool.clone_fixture(args.source_fixture,args.controller_credentials,args.output_dir))})
+                    if args.execute else tool.plan_clone(args.source_fixture))
+        except tool.CloneError as error:
+            print('BLOCKED_FIXTURE_CLONE: phase='+error.phase+' reason='+error.reason+'; no retry/rollback, inspect clone-state.json.')
+            return 2
+        except Exception as error:
+            print('BLOCKED_FIXTURE_CLONE: error_type='+type(error).__name__)
+            return 2
+        print(json.dumps(report,indent=2))
+        return 0
     if args.command=='suite-provider-probe':
         from .write_profile import load_suite_profile
         try:

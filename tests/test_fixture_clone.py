@@ -209,3 +209,18 @@ class CloneFlowTests(unittest.TestCase):
     def test_an_already_active_product_stops_the_override(self):
         result, docker, _, _, _ = self.run_clone(row_active=True)
         self.assertEqual((result.phase, result.reason), ('override', 'PRODUCT_NOT_INACTIVE'));self.assertNotIn('update', docker.log)
+
+
+class CloneCommandTests(unittest.TestCase):
+    def test_default_is_a_read_only_preflight_and_only_execute_clones(self):
+        from sqbf.cli import main
+        with tempfile.TemporaryDirectory() as folder:
+            src = source(Path(folder) / 'rt');path = Path(folder) / 'source.json';path.write_text(json.dumps(src), encoding='utf-8')
+            args = ['suite-fixture-clone', '--source-fixture', str(path), '--controller-credentials', 'c', '--output-dir', str(Path(folder) / 'out')]
+            with patch.object(module, 'preflight', return_value={'pid': 4242}) as preflight, patch.object(module, 'clone_fixture') as clone:
+                self.assertEqual(main(args), 0)
+                clone.assert_not_called();preflight.assert_called_once()
+                clone.return_value = Path('manifest.json')
+                self.assertEqual(main(args + ['--execute']), 0);clone.assert_called_once()
+            with patch.object(module, 'clone_fixture', side_effect=module.CloneError('volume', 'COPY_CHECKSUM_MISMATCH')):
+                self.assertEqual(main(args + ['--execute']), 2)

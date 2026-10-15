@@ -285,3 +285,13 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
     path.write_text(json.dumps(manifest, indent=2), encoding='utf-8')
     done('web_started', web_pid=process.pid, manifest=path.name)
     return path
+
+
+def plan_clone(source_path, *, run=subprocess.run, product_position='P06'):
+    """Read-only preflight: proves the source is unchanged and names what would be stopped."""
+    source = json.loads(Path(source_path).resolve(strict=True).read_text(encoding='utf-8-sig'))
+    runtime = preflight(source, run)
+    return {'status': 'CLONE_PREFLIGHT_PASSED', 'model_calls': 0, 'database_writes': 0, 'source_fixture_id': source['fixture_id'],
+            'would_stop_web_pid': runtime['pid'], 'would_stop_container': source['database']['container'],
+            'override': {'position_id': product_position, 'column': 'workspace_products.is_active', 'to': True},
+            'source_retained': ['volume', 'runtime directory', 'credentials', 'sessions', 'consumed lease']}

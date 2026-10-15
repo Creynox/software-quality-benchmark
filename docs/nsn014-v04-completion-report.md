@@ -417,3 +417,55 @@ Beide Modelle stehen im Modellkatalog. Das gespeicherte Ergebnis ist an Modelle 
 **Readiness** (`run-suite`, v0.4.1, neue Fixture, `--provider-probe`): Alle Gates bestanden, darunter Plan-Produkte (zehn von zehn anlegbar), Probe (`PROBE_PASSED`, UX-Ebene abgesichert), Sessions, Scopes, Runtime und Stufenverträge. Blockiert ist nur `BUDGET_APPROVAL_MISSING`, mit `other_gates: PASSED` und 0 Modellaufrufen. 345 lokale Tests OK.
 
 **Verbleibender Freigabepunkt:** eine neue ausdrückliche Einzellauf-Freigabe mit Suite-Version, Commit, Manifest, Provider, Budget und Datengrenze. Mit ihr trage ich die Budgetfreigabe in eine Manifest-Kopie ein und wiederhole die Readiness unmittelbar vor dem Start.
+
+## 15. Live-Lauf 2 (45eb301f-ea0a-4b93-810e-57deaadbc586) — Ergebnis
+
+**Bewertung: Lauf NO-GO / INVALID_HARNESS. Es liegt weiterhin keine gültige Gesamtmessung vor.** Die PLAN-Stufe war fachlich erfolgreich, wurde aber vom Controller wegen eines Fehlers im Harness ungültig gesetzt; elf Stufen sind NOT_RUN. Der Lauf ist nach Vertrag beendet, es gibt keinen zweiten Versuch.
+
+**Durchführung.** Genau ein Lauf auf PO-Freigabe (PR #10, 15.10.2026): SQBF `06d7a883d48ef0582cb240cf030b3d549ed1e144` (sauber), Suite v0.4.1 (`451796ac…`), Fixture `nsn014-ux-4e460e296674` mit aktivem P06, `chatgpt_plan`, Executor `gpt-6-luna`, Reviewer `gpt-6.1-sol`, Profil `NSN014-CALIBRATION-v2`. Die Freigabe stand in einer neuen, privaten Manifest-Kopie (Hash `83a6bc6e…`); historische Manifeste blieben unverändert. Die Readiness unmittelbar davor war vollständig bestanden (inklusive Probe, Plan-Produkte 10/10, vier Sessions mit Identität und Scope).
+
+**Stufenmatrix (alle zwölf Aufgaben)**
+
+| # | Stufe | Objektiver Status | Grund / Abhängigkeit |
+|---|---|---|---|
+| 1 | PLAN | **INVALID_HARNESS** | Controller: `STATIC_FIXTURE_CHANGED` (Fehlalarm, siehe unten). Evidenz der Stufe selbst: Oracle PASS |
+| 2–12 | RECEIPT, PREPARATION, SIEVE, SHAPE, BOILING, SE, ASSESS, WPK, ANALYSIS, REPORT, RIGHTS | **NOT_RUN** | `UPSTREAM_CRITICAL_STOP`; alle hängen von PLAN ab |
+
+Die Status werden so ausgewiesen, wie der Lauf sie erzeugt hat. Es ist keine Stufe als PASS markiert.
+
+**PLAN im Detail**
+- **Objektiv:** Der unabhängige Receipt-Oracle (`after_plan`) bestätigt **10 von 10** planverknüpfte Proben (Identität, Besitzer, Produkt, Kunde/Projekt, Probenahmedatum, Planposition), keine fehlenden oder abweichenden Positionen, 0 LIMS-Datensätze und keine verwaisten. Die Anlage geschah genau einmal (ein Klick, ein Executor-Abschluss).
+- **Technisch:** 29,9 s Stufenlaufzeit, 34,3 s gesamt. Sichtbar: BLE zeigt „10 Probe(n) angelegt.“ und die Proben-IDs `ENZBERG-20260508-NSN-014-01` bis `-10`.
+- **Modellverbrauch:** **3 von 1.500 Anfragen** (0,2 %): Executor 2 (3,7 s und 4,8 s; 1.616 und 1.710 Tokens), Reviewer 1 (19,1 s; 3.710 Tokens). Zeitverbrauch 34 von 10.800 s. Keine unbekannte Nutzung. Das Ressourcenlimit war nie erreicht.
+- **UI-Aktionen:** 1 Klick, dann „done“. Keine abgelehnte Aktion, kein Stillstand.
+- **Reviewer (UX, `nsn014-ux-rubric-v1`):** Auffindbarkeit 5, Klarheit 4, Aufgabenfortschritt 5, Fehlerbehandlung **NOT_EVALUATED** (kein Fehlerfall sichtbar). Der Reviewer-Aufruf hat diesmal funktioniert; der Ausfall aus Lauf 1 trat nicht auf.
+- **Findings des Reviewers (unbestätigt):** (a) *UX_IMPROVEMENT, minor:* Die grüne Erfolgsmeldung liegt rechts unten über den Zeilen 9 und 10 und verdeckt dort den Status. Die Zustandskontrolle aller zehn Positionen ist gleichzeitig erschwert (Bild 2). (b) *UNCLEAR, info:* Die Executor-Aussage „alle Positionen stehen auf Neu“ war wegen dieser Überlagerung nicht vollständig unabhängig ablesbar.
+
+**Blocker und technische Ursache (Harness, SQBF).** Nach jeder Stufe vergleicht der Controller die geschützten Tabellen mit dem Ausgangszustand; nur fünf Tabellen waren als veränderlich zugelassen. Die genehmigte Plan-Aktion von BLE stempelt aber die Audit-Spalten der Planzeile: `sampling_plans.updated_at` (exakt zum Klick-Zeitpunkt 14:04:19 UTC) und `updated_by`. Der Controller hat diese legitime Nebenwirkung der freigegebenen Fähigkeit als Datenänderung gewertet, die Stufe auf INVALID_HARNESS gesetzt und die Suite beendet. Beim Klonen und in Lauf 1 trat das nicht auf, weil dort kein BLE-Schreibzugriff stattfand.
+
+**Beleg aus den Daten.** Gegenüber der unverändert erhaltenen Quell-Fixture (schreibgeschütztes Volume, temporäre Kopie, danach entfernt) unterscheidet sich in den **16 geschützten Tabellen** nur `workspace_products` (der dokumentierte P06-Override). `sampling_plans` ist ohne Audit-Spalten identisch. Es gibt keine Änderung an Referenzdaten, Normen, Messwerten, Produkten oder Rechten durch den Lauf.
+
+**Korrektur (Commit `049a3f8`, 354 Tests OK).** Das Gate vergleicht eine abweichende Tabelle zusätzlich ohne `updated_at` und `updated_by` mit dem bei der Readiness erfassten Zustand. Nur eine reine Audit-Differenz wird toleriert und im Stufenergebnis und in den Abschluss-Oracles ausgewiesen (`audit_only_changes`). Jede substanzielle Änderung, jede Zeilenzahl-Änderung und jede Änderung der Tabellenmenge bleibt ein harter Stopp. Die Korrektur ist nur offline getestet und in einem echten Lauf noch nicht bestätigt.
+
+**Abschluss-Oracles dieses Laufs:** Der Receipt-Oracle meldet FAIL für `after_modules` (P01 verlangt nach den Modulstufen einen LIMS-Datensatz, die Modulstufen liefen nicht), Messwerte, Zuteilungen und Reports FAIL, weil nichts erfasst oder generiert wurde (Folge von NOT_RUN, kein BLE-Befund). Berechnungen: PASS ohne Gegenstand (kein Report). Die Gesamtwerte dieses Laufs sind damit nicht aussagekräftig.
+
+**Sicherheit und Datenintegrität.** Vor dem Lauf und je Stufe: Persona-Scope und signierte Identität bestanden; Fixture-, Datenbank- und Runtime-Identität; vier gültige Sessions; Plan-Produkte 10/10. Der Executor erhielt nur Screenshots, die Aufgabe und seine Aktionsliste, keine Zugangsdaten, Tokens oder Cookies. Der Reviewer erhielt ausgewählte Screenshots und die als unverifiziert markierte Executor-Aussage. Gemessene Originalwerte (K3) wurden noch nicht an ein Modell gesendet, da keine Messstufe lief. Die Quell-Fixture, die Golden-Quelle und alle historischen Artefakte sind unverändert. Die verbrauchte Fixture enthält jetzt 10 Proben und eine Lease.
+
+**Findings getrennt**
+
+| Art | Befund | Status |
+|---|---|---|
+| BLE-Produkt | Keine objektive Abweichung. Die planbezogene Anlage von zehn Proben funktioniert (Oracle PASS). | belegt |
+| BLE-UX (unbestätigt) | Erfolgsmeldung verdeckt Status der Positionen 9 und 10 bei 1280×800. | kein Issue |
+| BLE-UX (unbestätigt, aus Lauf 1) | Meldung zum inaktiven Produkt nennt es nicht, Planliste markiert es nicht. | kein Issue |
+| SQBF-Harness | Statisches Gate wertete Audit-Stempel einer genehmigten BLE-Aktion als Datenänderung. | behoben, offline getestet |
+| SQBF-Harness (Prozess) | Der Schreibpfad der freigegebenen Fähigkeit war vor dem Live-Lauf nicht gegen reale BLE-Nebenwirkungen geprüft. Eine Nachprüfung der übrigen Stufen steht aus. | offen |
+
+**Artefakte (privat, schreibgeschützt, außerhalb von Git).** `run.json`, `cases.json`, `accounting.json`, `completion-report.md`, Events, zwei Screenshots. Hash-Manifest: `45eb301f-…-artifact-hashes.json` (Wurzel-Hash `bf441c57…`); `run.json` hat den SHA-256 `c1a277b3…`.
+
+**Antworten auf die Fragen des Auftrags:** (1) Funktionierend: die planbezogene Probenanlage. (2) Scheiternd: nichts belegt. (3) Fehler: SQBF (Harness), nicht BLE. (4) UX-Hürden: nur die verdeckende Erfolgsmeldung, schwach belegt. (5) Verbesserung: Meldung außerhalb der Tabelle platzieren, inaktive Produkte kenntlich machen (beides unbestätigt). (6) Reproduzierbar belegt: bisher nur die Plananlage. (7) Issues: keines. (8) Retest: PLAN, danach alle zwölf Stufen. (9) Nicht getestet: alle Stufen ab RECEIPT. (10) Vollständig und valide: **nein**.
+
+**Für einen Folgelauf nötig:**
+1. Eine neue Fixture aus der unveränderten Quell-Fixture mit P06-Override. Das Klon-Werkzeug erwartet eine laufende Quelle mit Web; die Quelle ist gestoppt. Für den Weg gilt: die aktuelle Fixture stoppen, die Quelle starten und klonen. Das ist ein zusätzlicher Arbeitsschritt.
+2. Eine neue ausdrückliche Einzellauf-Freigabe.
+3. Vorab, soweit möglich, eine Prüfung der erwarteten BLE-Nebenwirkungen der übrigen Stufen: Auch dort könnten Audit-Stempel oder weitere Tabellen betroffen sein. Das Gate bleibt bei jeder substanziellen Änderung strikt.

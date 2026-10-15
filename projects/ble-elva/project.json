@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "FOLLOWUP_READY_NEW_RUN_APPROVAL_PENDING",
+    "status": "LIVE_RUN_2_INVALID_HARNESS_FIXTURE_CONSUMED_FOLLOWUP_APPROVAL_REQUIRED",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -99,7 +99,7 @@
       "sqbf_commit": "f4ecc0d",
       "model_calls": 0,
       "database_writes": 0,
-      "local_tests": 345,
+      "local_tests": 354,
       "gates": [
         "clean SQBF source",
         "plan workflow and permissions",
@@ -137,8 +137,8 @@
       ]
     },
     "live_run_authorization": {
-      "status": "MISSING",
-      "detail": "Previous approval consumed by run 3d9c2706; a new explicit approval is required"
+      "status": "CONSUMED",
+      "detail": "Second approved single run executed 2026-10-15; a follow-up needs a new explicit PO approval and a fresh fixture"
     },
     "budget_candidate": {
       "suite": "suites/enzberg-nsn014-v0.4.1.json",
@@ -170,10 +170,29 @@
           "reviewer request failed; controller treated it as stage-invalidating (fixed in 65cd318)"
         ],
         "bounded_valid_measurement": false
+      },
+      {
+        "run_id": "45eb301f-ea0a-4b93-810e-57deaadbc586",
+        "date": "2026-10-15",
+        "suite": "0.4.1",
+        "sqbf_commit": "06d7a883d48ef0582cb240cf030b3d549ed1e144",
+        "fixture": "nsn014-ux-4e460e296674",
+        "result": "NO-GO",
+        "classification": "INVALID_HARNESS",
+        "stages": {
+          "PLAN": "INVALID_HARNESS (Oracle after_plan PASS, 10/10 samples)",
+          "others": "NOT_RUN (11)"
+        },
+        "model_requests": 3,
+        "wall_seconds": 34.3,
+        "database_changed": "plan samples (10) and sampling_plans audit columns only",
+        "fixture_lease_consumed": true,
+        "cause": "static fixture gate treated the audit stamp (sampling_plans.updated_at/updated_by) of the approved plan action as a data change; fixed in 049a3f8",
+        "valid_measurement": false
       }
     ],
     "fixture_clone": {
-      "status": "CREATED_AND_VERIFIED",
+      "status": "USED_BY_RUN_45eb301f_LEASE_CONSUMED",
       "created_at": "2026-10-15",
       "fixture_id": "nsn014-ux-4e460e296674",
       "source_fixture_id": "nsn014-ux-536fe4e42888",

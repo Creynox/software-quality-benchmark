@@ -329,8 +329,17 @@ class BudgetChangeTests(unittest.TestCase):
             self.assertEqual(blocked['request_estimate']['hard_model_calls'],1500);self.assertEqual(blocked['model_calls'],0)
             f['suite_copy']['budget_approval']=approval(s)
             ready=module.check_ready(s,dataset,f,projection,allocation)
+            with patch.object(module,'evaluate_probe',return_value={'status':'PROBE_FAILED','ux_layer_assured':False,'codes':{}}):
+                probe_failed=module.check_ready(s,dataset,f,projection,allocation,provider_probe='probe.json')
+            with patch.object(module,'evaluate_probe',return_value={'status':'PROBE_PASSED','ux_layer_assured':True}):
+                probe_passed=module.check_ready(s,dataset,f,projection,allocation,provider_probe='probe.json')
         self.assertEqual((ready['status'],ready['budget_approval']['status']),('READY_FOR_SINGLE_SUITE_RUN','BUDGET_APPROVED'))
         self.assertTrue(ready['request_estimate']['fits_ceiling'])
+        self.assertEqual((ready['provider_probe']['status'],ready['provider_probe']['ux_layer_assured']),('NOT_PROBED',False))
+        self.assertTrue(any('not probed' in x for x in ready['limitations']))
+        self.assertEqual((probe_failed['status'],probe_failed['reason']),('BLOCKED_SUITE_READINESS','PROVIDER_PROBE_NOT_USABLE'))
+        self.assertEqual((probe_passed['status'],probe_passed['provider_probe']['status']),('READY_FOR_SINGLE_SUITE_RUN','PROBE_PASSED'))
+        self.assertFalse(any('not probed' in x for x in probe_passed['limitations']))
 
 
 class PlanPreconditionGateTests(unittest.TestCase):

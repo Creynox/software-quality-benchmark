@@ -5,10 +5,12 @@ The reviewer contributes a separate, versioned and provisional UX judgement; it
 never decides PASS/FAIL. A guard rejection is a prevented action, not a safety
 breach: only the affected task ends, unless the session itself became invalid.
 """
+import copy
 import hashlib
 
 from sqbf.calibration import ResourceStop
 from sqbf.models import ActionValidationError
+from sqbf.smoke_runner import ACTION_SCHEMA
 
 SCORING_VERSION = 'nsn014-objective-v1'
 RUBRIC_VERSION = 'nsn014-ux-rubric-v1'
@@ -16,6 +18,13 @@ DIMENSIONS = ('findability', 'clarity', 'task_progress', 'error_recovery')
 CATEGORIES = ('BLE_DEFECT_CANDIDATE', 'UX_IMPROVEMENT', 'AGENT_DIFFICULTY', 'HARNESS_SUSPECTED', 'UNCLEAR')
 SEVERITIES = ('critical', 'major', 'minor', 'info')
 CRITICAL_REJECTIONS = {'SESSION_INVALIDATED'}
+
+
+def executor_schema():
+    """Executor response schema used by the suite (restricted key set); shared with the provider probe."""
+    schema = copy.deepcopy(ACTION_SCHEMA)
+    schema['properties']['key']['enum'] = [None, 'ControlOrMeta+A', 'Backspace', 'Delete', 'Tab', 'Escape']
+    return schema
 
 
 def _object(properties):

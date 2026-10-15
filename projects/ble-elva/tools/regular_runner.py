@@ -20,7 +20,6 @@ from sqbf.calibration import SuiteBudget, ResourceStop
 from sqbf.models import Scenario
 from sqbf.reporting import Evidence, now_iso, index_run
 from sqbf.suites import suite_check, canonical_hash, aggregate, validate_suite, comparison_key
-from sqbf.smoke_runner import ACTION_SCHEMA
 from sqbf.no_write_oracle import snapshot
 from sqbf.scope_check import verify_runtime
 from .allocation_oracle import collect_allocations, verify_allocations
@@ -35,7 +34,8 @@ from .measurement_runner import run_measurements, required_saves
 from .inspection_runner import run_inspection, run_reports, run_plan_creation, ENTRY_PATHS
 from .receipt_contract_check import check_receipt_form, check_entry_routes
 from .stage_support import (REVIEW_SCHEMA, SCORING_VERSION, RUBRIC_VERSION, CATEGORIES, SEVERITIES, DIMENSIONS,
-                            valid_review)
+                            executor_schema, valid_review)
+from .provider_probe import evaluate_probe, provider_probe
 
 CASE_KINDS={'NSN014-PREPARATION':['allocations','wash'],'NSN014-SIEVE':['sieve','partial'],
             'NSN014-SHAPE':['shape'],'NSN014-BOILING':['boiling'],'NSN014-SE':['sand']}
@@ -201,7 +201,7 @@ def budget_approval(suite,fixture):
             'approval_sha256':canonical_hash(approval)}
 
 
-def check_ready(suite,dataset,fixture,projection,allocation):
+def check_ready(suite,dataset,fixture,projection,allocation,*,provider_probe=None,executor_id='gpt-6-luna',reviewer_id='gpt-6.1-sol'):
     blocked={'status':'BLOCKED_SUITE_READINESS','model_calls':0,'database_writes':0}
     try:
         validate_suite(suite)
@@ -254,17 +254,22 @@ def check_ready(suite,dataset,fixture,projection,allocation):
         if form['status']!='RECEIPT_UI_CONTRACT_VERIFIED':return dict(blocked,reason='RECEIPT_UI_CONTRACT_FAILED',form=form)
         routes=check_entry_routes(fixture,policy,route_probes(suite,fixture))
         if routes['status']!='ENTRY_ROUTES_VERIFIED':return dict(blocked,reason='ENTRY_ROUTE_CONTRACT_FAILED',entry_routes=routes)
+        probe=evaluate_probe(provider_probe,executor_id,reviewer_id)
+        if probe['status'] in ('PROBE_FAILED','PROBE_NOT_CURRENT'):
+            # A supplied probe that failed or is stale must not be read as "UX layer assured".
+            return dict(blocked,reason='PROVIDER_PROBE_NOT_USABLE',provider_probe=probe)
         budget=budget_approval(suite,fixture)
         if budget['status']=='BUDGET_APPROVAL_MISSING':
             # Every other gate above passed; only the PO's budget decision is outstanding.
             return dict(blocked,reason='BUDGET_APPROVAL_MISSING',other_gates='PASSED',budget_approval=budget,
                         request_estimate=estimate)
         return {'status':'READY_FOR_SINGLE_SUITE_RUN','model_calls':0,'database_writes':0,
-                'budget_approval':budget,'plan_products':plan_products,'source':source,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
+                'budget_approval':budget,'provider_probe':probe,'plan_products':plan_products,'source':source,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
                 'fixture_gates':gates,'dependencies':dependencies,'native_receipt_form':form,'entry_routes':routes,
                 'active_runtime':runtime,'request_estimate':estimate,'persona_context':persona_context(suite,fixture),
                 'fresh_subscription_authorization_required_at_execution':True,'current_provider_catalog_checked':False,
                 'limitations':['Readiness is not a successful benchmark or proof of defect-free BLE behaviour.',
+                               *([] if probe['ux_layer_assured'] else ['Provider schemas not probed: the UX layer may be unavailable (NOT_EVALUATED) during the run.']),
                                'Request estimate is a lower bound; agent detours can exhaust the ceiling (INCONCLUSIVE).']}
     except Exception:
         return dict(blocked,reason='READINESS_EVIDENCE_UNAVAILABLE')
@@ -372,9 +377,10 @@ def browser_suite(payload):
         finally:browser.close()
 
 
-def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,reviewer_id,*,headed=False):
+def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,reviewer_id,*,headed=False,provider_probe=None):
     """Explicit live entry point; preflight precedes browser OAuth or inference."""
-    ready=check_ready(suite,dataset,fixture,projection,allocation)
+    ready=check_ready(suite,dataset,fixture,projection,allocation,provider_probe=provider_probe,
+                      executor_id=executor_id,reviewer_id=reviewer_id)
     if (ready['status']!='READY_FOR_SINGLE_SUITE_RUN' and ready.get('reason')=='FIXTURE_GATE_FAILED'
             and ready.get('gates',{}).get('reason')=='SESSION_FAILED'):
         from .suite_sessions import prepare_sessions
@@ -386,7 +392,8 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         prepared.write_text(json.dumps(fixture,indent=2),encoding='utf-8')
         report_path.write_text(json.dumps(session_result,indent=2),encoding='utf-8')
         if session_result['status']!='SESSIONS_VERIFIED':return session_result
-        ready=check_ready(suite,dataset,fixture,projection,allocation)
+        ready=check_ready(suite,dataset,fixture,projection,allocation,provider_probe=provider_probe,
+                          executor_id=executor_id,reviewer_id=reviewer_id)
     if ready['status']!='READY_FOR_SINGLE_SUITE_RUN':return ready
     if (executor_id,reviewer_id)!=('gpt-6-luna','gpt-6.1-sol'):
         return {'status':'BLOCKED_MODEL_SELECTION','model_calls':0}
@@ -410,7 +417,7 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         'locale':'de-DE','timezone':'Europe/Berlin',
         'ble_assembly_sha256':fixture['suite_copy']['runtime']['sha256'],
         'active_runtime':ready['active_runtime'],'request_estimate':ready['request_estimate'],
-        'resource_policy':suite['resource_policy'],'budget_approval':ready['budget_approval'],
+        'resource_policy':suite['resource_policy'],'budget_approval':ready['budget_approval'],'provider_probe':ready['provider_probe'],
         'verdict':'NO-GO','technical_status':'NOT_STARTED','functional_status':'NOT_RUN','model_calls':0,'execution_started':False}
     (evidence.path/'run.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
     result={}
@@ -420,9 +427,7 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         directory=Path(os.environ['LOCALAPPDATA'])/'SQBF'/'plan-login'
         credential=authorize(_load_host(directory));available=catalog(credential)
         if executor_id not in available or reviewer_id not in available:raise ValueError('MODEL_UNAVAILABLE')
-        schema=copy.deepcopy(ACTION_SCHEMA)
-        schema['properties']['key']['enum']=[None,'ControlOrMeta+A','Backspace','Delete','Tab','Escape']
-        executor=ChatGPTPlanModel(executor_id,credential,schema)
+        executor=ChatGPTPlanModel(executor_id,credential,executor_schema())
         reviewer=ChatGPTPlanModel(reviewer_id,credential,REVIEW_SCHEMA)
         # A measured write fixture is single-use, including failed/aborted runs.
         # Reserve only after OAuth so a cancelled login does not consume it.
@@ -573,7 +578,8 @@ def completion_text(manifest,records):
         f"- SQBF-Commit: {text(manifest['sqbf_commit'])}; BLE-Build: {text(manifest['software_version'])}",
         f"- Executor: {text(manifest['executor_model'])}; Reviewer: {text(manifest['analyst_model'])}",
         f"- Modellanfragen: {text(manifest.get('model_calls',0))} von höchstens {text(manifest['resource_policy']['hard_model_calls'])}; "
-        f"Zeitgrenze {text(manifest['resource_policy']['hard_seconds'])} s; Budgetfreigabe: {text(manifest['budget_approval']['status'])}",'']
+        f"Zeitgrenze {text(manifest['resource_policy']['hard_seconds'])} s; Budgetfreigabe: {text(manifest['budget_approval']['status'])}",
+        f"- Provider-Vorabprüfung: {text(manifest.get('provider_probe',{}).get('status','NOT_PROBED'))}",'']
     if manifest.get('final_oracles'):
         lines+=['Abschließende unabhängige Oracles: '+text({key:value.get('status') if isinstance(value,dict) else value
                                                        for key,value in manifest['final_oracles'].items()}),'']

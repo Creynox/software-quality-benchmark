@@ -193,6 +193,13 @@ def main(argv=None) -> int:
     suite_run.add_argument('--reviewer-model',default='gpt-6.1-sol')
     suite_run.add_argument('--execute',action='store_true',help='Explicit single live run after gates and fresh subscription OAuth')
     suite_run.add_argument('--headed',action='store_true')
+    suite_run.add_argument('--provider-probe',help='Stored provider-probe result; a failed or stale probe blocks readiness')
+    probe=sub.add_parser('suite-provider-probe',help='Two synthetic provider requests for the suite schemas; plan only without --execute',allow_abbrev=False)
+    probe.add_argument('--suite',required=True)
+    probe.add_argument('--output',default='D:/Temp/sqbf-provider-probes')
+    probe.add_argument('--executor-model',default='gpt-6-luna')
+    probe.add_argument('--reviewer-model',default='gpt-6.1-sol')
+    probe.add_argument('--execute',action='store_true',help='Fresh subscription OAuth and exactly two requests, no retry')
     registry.add_argument("--output",default="runs")
     for option in ["test-id","software-version","date"]:
         registry.add_argument("--"+option, help="Case-sensitive substring match")
@@ -256,14 +263,27 @@ def main(argv=None) -> int:
             suite=json.loads(Path(args.suite).read_text(encoding='utf-8-sig'))
             adapter=load_suite_profile(suite.get('adapter_contract'))
             inputs=adapter.load_inputs(args.suite,args.dataset,args.fixture,args.projection,args.allocations)
-            report=(adapter.run_suite(*inputs,args.output,args.executor_model,args.reviewer_model,headed=args.headed)
-                    if args.execute else adapter.check_ready(*inputs))
+            report=(adapter.run_suite(*inputs,args.output,args.executor_model,args.reviewer_model,headed=args.headed,
+                                      provider_probe=args.provider_probe)
+                    if args.execute else adapter.check_ready(*inputs,provider_probe=args.provider_probe,
+                                                              executor_id=args.executor_model,reviewer_id=args.reviewer_model))
         except Exception:
             print('BLOCKED_SUITE_READINESS: invalid input or private evidence; no fallback/retry.')
             return 2
         print(json.dumps(report,indent=2))
         return 0 if (report['status']=='READY_FOR_SINGLE_SUITE_RUN' or
                      report['status']=='SUITE_RUN_RECORDED' and report.get('technical_status')=='COMPLETED') else 2
+    if args.command=='suite-provider-probe':
+        from .write_profile import load_suite_profile
+        try:
+            suite=json.loads(Path(args.suite).read_text(encoding='utf-8-sig'))
+            report=load_suite_profile(suite.get('adapter_contract')).provider_probe(
+                suite,args.output,args.executor_model,args.reviewer_model,execute=args.execute)
+        except Exception:
+            print('BLOCKED_PROVIDER_PROBE: invalid input, OAuth or private evidence; no fallback/retry.')
+            return 2
+        print(json.dumps(report,indent=2))
+        return 0 if report['status'] in ('PROBE_PLAN_ONLY','PROBE_RECORDED') and report.get('verdict','PROBE_PASS')=='PROBE_PASS' else 2
     if args.command=='suite-sessions':
         from importlib import import_module
         try:

@@ -31,6 +31,7 @@ from .receipt_oracle import collect_receipts, verify_receipts, collect_plan_prod
 from .suite_acceptance import check_fixture
 from .persona_scope import check_persona
 from .measurement_runner import run_measurements, required_saves
+from .protected_oracle import collect_normalized_hashes, AUDIT_COLUMNS
 from .inspection_runner import run_inspection, run_reports, run_plan_creation, ENTRY_PATHS
 from .receipt_contract_check import check_receipt_form, check_entry_routes
 from .stage_support import (REVIEW_SCHEMA, SCORING_VERSION, RUBRIC_VERSION, CATEGORIES, SEVERITIES, DIMENSIONS,
@@ -51,10 +52,34 @@ def objective_status(result):
     return OBJECTIVE_STATUS.get(result,result)
 
 
-def static_fixture_unchanged(fixture,current):
+def static_state(fixture,current,*,normalized_baseline=None,collect=None):
+    """Protected-data gate. A differing table passes only if it differs in audit columns alone.
+
+    BLE's sample creation stamps sampling_plans.updated_at/updated_by (live run 45eb301f). Raw hashes
+    decide first; only for differing tables are hashes without audit columns compared to the
+    baseline taken at readiness. Any other difference, table set or pinned-baseline change fails.
+    """
     baseline=fixture['suite_copy']['prepared_tables']
-    if canonical_hash(baseline)!=fixture['suite_copy']['prepared_state_sha256']:return False
-    return set(baseline)==set(current['tables']) and all(current['tables'][k]==v for k,v in baseline.items() if k not in MUTABLE_TABLES)
+    if canonical_hash(baseline)!=fixture['suite_copy']['prepared_state_sha256'] or set(baseline)!=set(current['tables']):
+        return {'unchanged':False,'changed_tables':['BASELINE_OR_TABLE_SET'],'audit_only_tables':[]}
+    differing=sorted(t for t,v in baseline.items() if t not in MUTABLE_TABLES and current['tables'][t]!=v)
+    if not differing:return {'unchanged':True,'changed_tables':[],'audit_only_tables':[]}
+    if normalized_baseline is None or collect is None or any(t not in normalized_baseline for t in differing):
+        return {'unchanged':False,'changed_tables':differing,'audit_only_tables':[]}
+    now=collect(fixture,differing)
+    real=[t for t in differing if now.get(t)!=normalized_baseline[t]]
+    return {'unchanged':not real,'changed_tables':real,'audit_only_tables':sorted(set(differing)-set(real)),
+            'audit_columns':list(AUDIT_COLUMNS)}
+
+
+def static_fixture_unchanged(fixture,current,**kwargs):
+    return static_state(fixture,current,**kwargs)['unchanged']
+
+
+def static_gate(fixture,normalized_baseline,*,snapshot_fn=None,collect=None):
+    snapshot_fn=snapshot_fn or snapshot
+    return static_state(fixture,snapshot_fn(fixture,enforce_counts=False),normalized_baseline=normalized_baseline,
+                        collect=collect or collect_normalized_hashes)
 
 
 def atomic_json(path,data):
@@ -239,6 +264,8 @@ def check_ready(suite,dataset,fixture,projection,allocation,*,provider_probe=Non
         if gates['status']!='FIXTURE_GATES_VERIFIED':return dict(blocked,reason='FIXTURE_GATE_FAILED',gates=gates)
         if not static_fixture_unchanged(fixture,snapshot(fixture)):
             return dict(blocked,reason='STATIC_FIXTURE_BASELINE_MISMATCH')
+        protected=sorted(set(fixture['suite_copy']['prepared_tables'])-MUTABLE_TABLES)
+        normalized_baseline=collect_normalized_hashes(fixture,protected)
         runtime=verify_runtime(fixture['target_url'],fixture['suite_copy']['application_root'],fixture['identity_scope_check'])
         if any(runtime[k]!=fixture['suite_copy']['runtime'][k] for k in ('assembly','sha256')):
             return dict(blocked,reason='ACTIVE_RUNTIME_MISMATCH')
@@ -264,7 +291,8 @@ def check_ready(suite,dataset,fixture,projection,allocation,*,provider_probe=Non
             return dict(blocked,reason='BUDGET_APPROVAL_MISSING',other_gates='PASSED',budget_approval=budget,
                         request_estimate=estimate,provider_probe=probe,plan_products=plan_products)
         return {'status':'READY_FOR_SINGLE_SUITE_RUN','model_calls':0,'database_writes':0,
-                'budget_approval':budget,'provider_probe':probe,'plan_products':plan_products,'source':source,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
+                'budget_approval':budget,'provider_probe':probe,'plan_products':plan_products,'source':source,
+                'protected_normalized_baseline':normalized_baseline,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
                 'fixture_gates':gates,'dependencies':dependencies,'native_receipt_form':form,'entry_routes':routes,
                 'active_runtime':runtime,'request_estimate':estimate,'persona_context':persona_context(suite,fixture),
                 'fresh_subscription_authorization_required_at_execution':True,'current_provider_catalog_checked':False,
@@ -360,17 +388,20 @@ def browser_suite(payload):
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=not payload['headed'],downloads_path=str(downloads),timeout=min(15000,budget.remaining()*1000))
         try:
+            baseline=payload['normalized_baseline']
             def stage(case):
-                if not static_fixture_unchanged(fixture,snapshot(fixture,enforce_counts=False)):
-                    return {'result':'BLOCKED','technical_gate':'BLOCKED','reason':'STATIC_FIXTURE_CHANGED'}
+                before=static_gate(fixture,baseline)
+                if not before['unchanged']:
+                    return {'result':'BLOCKED','technical_gate':'BLOCKED','reason':'STATIC_FIXTURE_CHANGED','changed_tables':before['changed_tables']}
                 evidence=Evidence(root/case['case_id'])
                 started=time.monotonic()
                 result=dispatch(case,browser,fixture,payload['dataset'],payload['projection'],payload['allocation'],
                                 policy,executor,reviewer,budget,evidence)
                 result=dict(result,stage_wall_seconds=round(time.monotonic()-started,3))
-                if not static_fixture_unchanged(fixture,snapshot(fixture,enforce_counts=False)):
-                    return dict(result,result='INVALID',technical_gate='INVALID',reason='STATIC_FIXTURE_CHANGED')
-                return result
+                after=static_gate(fixture,baseline)
+                if not after['unchanged']:
+                    return dict(result,result='INVALID',technical_gate='INVALID',reason='STATIC_FIXTURE_CHANGED',changed_tables=after['changed_tables'])
+                return dict(result,audit_only_changes=after['audit_only_tables'])
             records=execute_cases(suite,fixture,budget,stage,write=write)
             summary=aggregate(suite,records)
             return {'records':records,'summary':summary,'accounting':budget.report(),'browser_version':browser.version}
@@ -411,6 +442,7 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         'sqbf_commit':ready['source']['commit'],'sqbf_source_clean':ready['source']['clean'],
         'suite_sha256':canonical_hash(suite),'dataset_sha256':canonical_hash(dataset),
         'reference_projection_sha256':canonical_hash(projection),'allocation_reference_sha256':canonical_hash(allocation),
+        'protected_normalized_baseline':ready['protected_normalized_baseline'],
         'fixture_manifest_sha256':canonical_hash(fixture),
         'prepared_state_sha256':fixture['suite_copy']['prepared_state_sha256'],
         'environment':ready['dependencies'],'viewport':{'width':1280,'height':800},
@@ -438,6 +470,7 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         manifest['started_at']=now_iso();manifest['execution_started']=True;started=time.monotonic()
         result=invoke_worker('regular-suite',{'suite':suite,'dataset':dataset,'fixture':fixture,
             'projection':projection,'allocation':allocation,'folder':str(evidence.path),'headed':headed,
+            'normalized_baseline':ready['protected_normalized_baseline'],
             'executor':model_spec(executor),'reviewer':model_spec(reviewer)},suite['resource_policy']['hard_seconds'])
         summary=result['summary']
         critical=any(r.get('technical_gate')=='BLOCKED' for r in result['records'])
@@ -496,7 +529,8 @@ def finalise_oracles(manifest,result,fixture,dataset,projection,allocation,curre
         if record['case_id']=='NSN014-REPORT':
             pdfs=record.get('downloads',[]) or [d for p in record.get('positions',[]) for d in p.get('downloads',[])]
     basis=persisted_basis(collect_inputs(fixture))
-    final_oracles={'static_fixture_unchanged':static_fixture_unchanged(fixture,current),
+    static=static_state(fixture,current,normalized_baseline=manifest.get('protected_normalized_baseline'),collect=collect_normalized_hashes)
+    final_oracles={'static_fixture_unchanged':static['unchanged'],'static_fixture_audit_only_tables':static['audit_only_tables'],
         'receipt':verify_receipts(receipts,dataset,fixture,phase='after_modules'),
         'measurements':verify_inputs(collect_inputs(fixture),projection,fixture,kinds=KINDS),
         'allocations':verify_allocations(collect_allocations(fixture),projection,allocation,fixture),

@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "LIVE_RUN_2_INVALID_HARNESS_FIXTURE_CONSUMED_FOLLOWUP_APPROVAL_REQUIRED",
+    "status": "PREPARED_FOR_RUN_3_MODELLESS_BUDGET_APPROVAL_AND_PO_DECISION_ON_THREE_REFERENCE_VALUES_OPEN",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -94,29 +94,32 @@
     ],
     "setup_history": "docs/regular-suite-setup.md",
     "readiness": {
-      "status": "ALL_GATES_PASSED_EXCEPT_BUDGET_APPROVAL_FOR_CLONE_FIXTURE",
+      "status": "ALL_GATES_PASSED_EXCEPT_BUDGET_APPROVAL_FOR_PREPARED_FIXTURE",
       "checked_at": "2026-10-15",
-      "sqbf_commit": "f4ecc0d",
+      "sqbf_commit": "8f3a52e",
       "model_calls": 0,
       "database_writes": 0,
-      "local_tests": 354,
+      "local_tests": 399,
+      "provider_probe": "PROBE_PASSED (2026-10-15 13:18 UTC, valid 12 h)",
       "gates": [
         "clean SQBF source",
         "plan workflow and permissions",
         "reference hashes",
         "suite bound to fixture",
         "stage contracts and vocabulary round trip",
-        "request lower bound",
+        "side-effect contract loaded and hashed",
+        "scoped baseline and all-table hash",
+        "request lower bound (640)",
         "method fixture",
         "fixture and sessions",
         "static start state",
         "active runtime identity",
         "unused start state",
+        "plan products 10/10",
         "native plan form",
         "entry routes"
       ],
-      "not_a_benchmark_result": true,
-      "superseded_by": "Live run 1 exposed a missing plan-product gate; readiness now reports PLAN_PRODUCT_PRECONDITION_FAILED for P06 and FIXTURE_ALREADY_CLAIMED while the lease exists"
+      "not_a_benchmark_result": true
     },
     "scoring": {
       "objective": "nsn014-objective-v1",
@@ -137,8 +140,8 @@
       ]
     },
     "live_run_authorization": {
-      "status": "CONSUMED",
-      "detail": "Second approved single run executed 2026-10-15; a follow-up needs a new explicit PO approval and a fresh fixture"
+      "status": "NONE",
+      "detail": "Earlier single-run approvals are consumed; a third live run needs a new explicit PO approval and the budget approval in a private manifest copy"
     },
     "budget_candidate": {
       "suite": "suites/enzberg-nsn014-v0.4.1.json",
@@ -192,22 +195,19 @@
       }
     ],
     "fixture_clone": {
-      "status": "USED_BY_RUN_45eb301f_LEASE_CONSUMED",
+      "status": "PREPARED_UNUSED_NO_LEASE_NO_BUDGET_APPROVAL",
       "created_at": "2026-10-15",
-      "fixture_id": "nsn014-ux-4e460e296674",
+      "fixture_id": "nsn014-ux-e781d1466b55",
       "source_fixture_id": "nsn014-ux-536fe4e42888",
-      "method": "byte copy of the PostgreSQL volume with file checksum comparison",
+      "method": "byte copy of the stopped, never started PostgreSQL volume; checksum 9ae39dba…; 22 protected tables equal the prepared baseline",
       "public_tables_compared": 426,
-      "override": {
-        "position": "P06",
-        "column": "workspace_products.is_active",
-        "from": false,
-        "to": true,
-        "other_tables_identical": true,
-        "reference_values_changed": false
-      },
+      "changes_against_source": [
+        "workspace_products.is_active (P06)",
+        "lims_product_test_modules (51 rows replayed)",
+        "workspace_sampling_rules (37 product rules replayed)"
+      ],
+      "reference_values_changed": false,
       "sessions": "SESSIONS_VERIFIED, one login per persona",
-      "lease": "none on the clone; consumed lease retained at the source",
       "budget_approval_recorded": false,
       "readiness": "all gates passed except BUDGET_APPROVAL_MISSING (other_gates PASSED), 0 model calls"
     },
@@ -225,6 +225,51 @@
     "reviewer_policy": {
       "consecutive_failure_limit": 3,
       "ux_layer": "best effort; objective results never depend on it"
+    },
+    "side_effect_contract": {
+      "file": "suites/enzberg-nsn014-side-effects-v1.json",
+      "evaluator": "tools/stage_effects.py (guarded_stage in tools/regular_runner.py)",
+      "audit_only_allowances": [
+        {
+          "stage": "NSN014-PLAN",
+          "table": "sampling_plans",
+          "target": "plan_id",
+          "columns": [
+            "updated_at",
+            "updated_by"
+          ],
+          "max_rows": 1
+        }
+      ],
+      "other_protected_changes": "hard stop (INVALID_HARNESS); each stage must start from the end state of the previous one",
+      "unlisted_tables": "finding (UNEXPECTED_TABLE_WRITE / WRITE_IN_READ_ONLY_STAGE), never an abort",
+      "basis": "modelless full-table row/column diff dry run, 2026-10-15"
+    },
+    "dry_run_2026_10_15": {
+      "scope": "all twelve stages, runner order, scripted ideal executor, fresh disposable copy, real stage guard and contract",
+      "model_calls": 0,
+      "stage_results": "twelve of twelve stages passed the harness gate; no contract finding, no external change between stages",
+      "oracles": {
+        "receipt": "PASS",
+        "wash_sieve_partial_boiling_sand": "PASS",
+        "reports_and_pdfs": "PASS",
+        "calculations": "PASS",
+        "allocations": "FAIL P01 (Koch 8 mm not offered before the first saved result), P06 (shape module inactive in product configuration)",
+        "shape": "FAIL P06 (same cause)"
+      },
+      "findings_fixed": [
+        "missing product module and sampling-rule configuration (replayed)",
+        "audit tolerance scoped to one table, row and column set",
+        "decimal point is a thousands separator in de-DE (German notation enforced)",
+        "main sieve pan row mapping",
+        "derived partial-sieve values not approved inputs",
+        "report status DRAFT",
+        "PDF sample code wrapped after hyphen",
+        "lazy LIMS and probe-module rows listed in the contract",
+        "diagnostics and encoding"
+      ],
+      "position_class_for_fields_not_offered": "INCOMPLETE / APPROVED_FIELDS_NOT_PRESENT_ON_PAGE (never FAIL)",
+      "po_decision_open": "three reference values BLE does not offer with the customer configuration (completion report 16.5)"
     }
   }
 }

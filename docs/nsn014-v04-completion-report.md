@@ -12,6 +12,11 @@ Einzellauf-Freigabe war eine PO-Entscheidung nötig (Abschnitte 8, 10, 11).
 als **NO-GO / INVALID_HARNESS**; elf Stufen sind NOT_RUN. Es liegt **keine gültige BLE-Messung** vor.
 Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-Freigabe und eine PO-Entscheidung zu Position P06.
 
+**Nachtrag nach Lauf 2 und der Vorbereitung (Abschnitte 15 und 16):** Lauf `45eb301f…` endete als
+INVALID_HARNESS (Audit-Stempel). Die Vorbereitung für einen dritten Lauf ist modellfrei abgeschlossen: neue Fixture,
+Seiteneffekt-Vertrag je Stufe, vollständiger Trockenlauf aller zwölf Stufen ohne Harness-Abbruch, neun dabei gefundene und behobene bzw. im Vertrag erfasste Befunde (16.2),
+399 Tests OK. Offen ist nur die Budgetfreigabe (`BUDGET_APPROVAL_MISSING`) und die PO-Entscheidung zu drei von BLE nicht angebotenen Referenzwerten (16.5).
+
 ## 1. Ergebnis in Kürze
 
 - Alle zwölf v0.4-Stufen sind über echte Adapter integriert. Jede Stufe bekommt einen objektiven
@@ -469,3 +474,95 @@ Die Status werden so ausgewiesen, wie der Lauf sie erzeugt hat. Es ist keine Stu
 1. Eine neue Fixture aus der unveränderten Quell-Fixture mit P06-Override. Das Klon-Werkzeug erwartet eine laufende Quelle mit Web; die Quelle ist gestoppt. Für den Weg gilt: die aktuelle Fixture stoppen, die Quelle starten und klonen. Das ist ein zusätzlicher Arbeitsschritt.
 2. Eine neue ausdrückliche Einzellauf-Freigabe.
 3. Vorab, soweit möglich, eine Prüfung der erwarteten BLE-Nebenwirkungen der übrigen Stufen: Auch dort könnten Audit-Stempel oder weitere Tabellen betroffen sein. Das Gate bleibt bei jeder substanziellen Änderung strikt.
+
+## 16. Vorbereitung des dritten Laufs (15.10.2026, Issue #21): neue Fixture, Seiteneffekt-Vertrag, vollständiger Trockenlauf
+
+**Bewertung: modellfrei vorbereitet, technisch geprüft. Es gab keine Modellaufrufe, keinen dritten Live-Lauf und keinen Merge. Der einzige offene Blocker der Readiness ist `BUDGET_APPROVAL_MISSING`.** Das Ziel dieses Abschnitts ist, die Ursache wiederholter `INVALID_HARNESS`-Abbrüche zu beseitigen: Statt nach jedem Live-Lauf einen einzelnen Controller-Fehler zu reparieren, wurde die gesamte Prozesskette vorab gegen echtes BLE-Verhalten gelaufen.
+
+### 16.1 Vorgehen
+
+1. **Neue, vollständig isolierte Fixture** `nsn014-ux-e781d1466b55` (Container `sqbf-nsn014-e781d1466b55`, Web 5082, PostgreSQL 55434, Purpose `fixture`). Quelle ist die verifizierte, gestoppte und nie gestartete Quell-Fixture; das Volume wurde byteweise kopiert und gegen die beim Stoppen festgehaltene Prüfsumme (`9ae39dba…`) verglichen; der Klon stimmt in den 22 geschützten Tabellen mit der vorbereiteten Baseline überein. Danach wurde der Hash aller 426 öffentlichen Tabellen vor und nach Override und Replay verglichen: verändert sind genau `workspace_products` (P06 aktiv) sowie die zwei replizierten Konfigurationstabellen. Im Manifest steht keine Budgetfreigabe; es gibt keine Lease. Die bisherigen Fixtures (Quelle, Lauf 1, Lauf 2, vier Wegwerfkopien) bleiben unverändert erhalten.
+2. **Wegwerfkopien für Trockenläufe.** Fünf Kopien derselben Quelle (`--purpose scratch`). Auf ihnen lief ein skriptgesteuerter, modellfreier „idealer Executor“ durch die UI, mit einem Zeilen- und Spaltendiff über alle Tabellen vor und nach jeder Aktion (nur Tabellen, Zähler und Spaltennamen, keine Werte) und den unabhängigen Oracles auf den realen, von BLE geschriebenen Daten.
+3. **Vollständiger Lauf in der Reihenfolge des Runners** (Kopie 5): alle zwölf Stufen, jede Stufe in `guarded_stage` mit dem echten Vertrag. Ergebnis siehe 16.4.
+
+### 16.2 Befunde des Trockenlaufs und ihre Behebung
+
+| # | Befund (belegt durch Diff oder Oracle auf echten Daten) | Wirkung im Live-Lauf ohne Behebung | Behebung |
+|---|---|---|---|
+| 1 | **Fehlende Produktkonfiguration:** Die Fixture hatte keine Zeilen in `lims_product_test_modules` und nur die 28 generischen `workspace_sampling_rules`. BLE sperrte Messformulare und bot nur 2 von 9 Entnahmekarten an. | Messstufen unausführbar | Replay aus der normalen lokalen BLE-Datenbank (nur lesend): 51 Modulzeilen, 37 Produktregeln; deterministische Ids, Tabellenhash vorher/nachher belegt genau diese zwei Änderungen. |
+| 2 | **Audit-Stempel:** Plananlage stempelt `updated_at`/`updated_by` genau einer Zeile von `sampling_plans`. Die erste Korrektur duldete reine Audit-Differenzen in jeder geschützten Tabelle und jeder Stufe. | zu breite Toleranz | Vertrag: genau eine Freigabe (Stufe PLAN, Tabelle `sampling_plans`, Zielzeile = Plan-Id, Spalten `updated_at`/`updated_by`, höchstens eine Zeile). In jeder anderen Stufe, Tabelle, Zeile oder Spalte bleibt jede Änderung ein harter Stopp. |
+| 3 | **Dezimalpunkt:** BLE parst de-DE; ein Punkt ist ein Tausendertrenner. „557.9“ wurde als 5579 gespeichert (Waschen P01/P02, ×10), ohne Fehlermeldung. | stille Datenverfälschung, falsches FAIL | Executor erhält und der Guard erlaubt nur deutsche Schreibweise (Komma). Ein Punkt wird abgelehnt. Anweisung ergänzt. |
+| 4 | **Pfannenzeile der Hauptsiebung** heißt „Boden“, „Pfanne“ oder „Anteile gesamt < x mm“ und gehört zu Sieb 0; der Guard kannte nur Siebweiten und blockierte das Feld. | Feld nie eingebbar | Zeilenzuordnung im Guard. |
+| 5 | **Teilsiebung:** „K-Basis“ ist schreibgeschützt (aus Feuchte/Abschlämmung berechnet); der Pfannenverlust je Turm wird nicht gespeichert (NULL), BLE zeigt ihn nur als „Siebverlust“. | Position stets unvollständig bzw. falsches FAIL | beide sind keine Eingabefelder mehr; der Pfannenverlust wird im Oracle nicht verglichen, alle anderen Punktwerte weiter exakt. |
+| 6 | **Report-Oracle:** BLE speichert den Status `DRAFT`, das Oracle erwartete `Draft` und lehnte jeden Bericht ab. | REPORT würde trotz korrekter Berichte FAIL/INCONCLUSIVE (Stufe 11 von 12) | Erkennung unabhängig von der Schreibweise; jeder andere Status bleibt kein Entwurf. |
+| 7 | **PDF-Identität:** BLE bricht die Probennummer nach einem Bindestrich um („…0508- NSN-014-02“); die Textprüfung fand den Code nicht. | alle PDFs „IDENTITY_TEXT_MISSING“ | Vergleich ohne Leerraum. |
+| 8 | **Lazy LIMS-Daten:** „Teilsiebung starten“ legt Kunde, Produkt, Projekt, Probe und Prüfverfahren im LIMS an. Die ersten Ergebnisspeicherungen legen `lims_probe_test_modules` an. | unbekannte Tabellen | im Vertrag je Stufe geführt; nicht gelistete Schreibzugriffe sind Befunde ohne Abbruch. |
+| 9 | **Diagnose:** `side_effect_probe` meldete nur „psql failed“; `scope_check` decodierte lokalisierte PowerShell-Fehlertexte mit der Plattform-Codepage und beendete einen Reader-Thread. | schwer auffindbare Controller-Fehler | Fehlerzeile und UTF-8. |
+
+### 16.3 Seiteneffekt-Vertrag (Stufen, Aktionen, Tabellen, Zielzeilen)
+
+Der Vertrag liegt unter `projects/ble-elva/suites/enzberg-nsn014-side-effects-v1.json` und ist im Lauf-Manifest über seinen Hash festgelegt (die Suite v0.4.1 und ihr Hash `451796ac…` bleiben unverändert).
+
+| Stufe | Modus | Beobachtete Schreibzugriffe im Trockenlauf |
+|---|---|---|
+| PLAN | schreibend | `samples` +10, `probe_applied_standards` +10; Audit-Stempel auf 1 Zeile `sampling_plans` |
+| RECEIPT, ASSESS, WPK, ANALYSIS, RIGHTS | lesend | keine |
+| PREPARATION | schreibend | Entwurf: `lims_sieblinie_ergebnis`/`_punkt`; Eingabe: `workspace_sampling_info`, `lims_agg_uf_fine_tests`; erste Speicherung: `lims_probe_test_modules` |
+| SIEVE | schreibend | `lims_sieblinie_*`, `workspace_sampling_info`, `workspace_work_items`, `samples`, `lims_probe_test_modules`; Teilsiebung: `lims_customer`, `lims_product`, `lims_project`, `lims_sample`, `lims_sample_portion`, `lims_sample_test`, `lims_test_method`, `lims_sample_derived_*` |
+| SHAPE | schreibend | `workspace_particle_shape_results`, `…_fraction_results`, `workspace_work_items`, `lims_probe_test_modules` |
+| BOILING | schreibend | `workspace_boiling_test_results`, `workspace_work_items`, `lims_probe_test_modules` |
+| SE | schreibend | `workspace_sand_equivalent_results`, `workspace_work_items`, `lims_probe_test_modules` |
+| REPORT | schreibend | `ble_reports` +1, `workspace_probe_report_entries` +1 je Bericht; der PDF-Download schreibt nichts |
+
+Prüfung im Runner (`stage_effects.py`, `guarded_stage`, getrennt von den Oracles):
+- **Hart (INVALID_HARNESS):** geschützte Tabellen der vorbereiteten Baseline ändern sich außerhalb der einen Freigabe, auch durch denselben Stempel in einer anderen Stufe; oder eine Stufe beginnt nicht exakt im Endzustand der vorherigen (Schreibzugriff außerhalb der Suite: BLOCKED).
+- **Befund ohne Abbruch:** jede andere Tabelle (Hash aller 426 öffentlichen Tabellen, Controller READ ONLY, rund 1 s je Aufnahme), die eine Stufe ändert, ohne dass der Vertrag sie nennt (`UNEXPECTED_TABLE_WRITE`), und jede Änderung in einer lesenden Stufe (`WRITE_IN_READ_ONLY_STAGE`). Das verhindert, dass ein legitimer, im Trockenlauf nicht gesehener BLE-Schreibzugriff erneut zum Abbruch führt, und macht ihn trotzdem sichtbar.
+- Die Abschluss-Prüfung vergleicht den Endzustand mit der vorbereiteten Baseline unter derselben einen Freigabe und weist Umfang und Befunde aus.
+
+### 16.4 Ergebnis des vollständigen Trockenlaufs (Kopie 5, Reihenfolge des Runners)
+
+Alle zwölf Stufen liefen durch, **ohne harten Stopp, ohne Befund des Vertrags und ohne externe Änderung zwischen den Stufen**; einzige geschützte Änderung ist der freigegebene Stempel auf einer Zeile `sampling_plans`. Abschluss-Oracles auf den echten Daten:
+
+| Oracle | Ergebnis |
+|---|---|
+| Statisches Gate (Baseline, Vertrag) | unverändert; Stempel: `sampling_plans`, 1 Zeile, `updated_at`/`updated_by` |
+| Empfang (`after_modules`) | PASS (10 Proben, 1 LIMS-Probe, keine verwaiste) |
+| Waschen, Siebung, Teilsiebung, Kochen, Sandäquivalent | PASS |
+| Berichte (10 Berichte, 10 PDFs, Identität, Zahlen) | PASS |
+| Berechnungen (Nachrechnung aus gespeicherten Rohwerten) | PASS |
+| Zuteilungen | FAIL für **P01 und P06** (siehe 16.5) |
+| Kornform | FAIL für **P06** (siehe 16.5) |
+
+### 16.5 Was BLE in der echten Reihenfolge nicht anbietet (Abweichung Referenz gegen Produktkonfiguration)
+
+In der Reihenfolge des Runners (je Position erst Zuteilungen, dann Waschen) bietet BLE drei Referenzwerte nicht an. Das ist weder ein Fehler des Executors noch des Harness:
+
+| Position | Fehlt | Ursache (aus den Daten belegt) |
+|---|---|---|
+| P01 | Entnahme „Koch 8 mm“ | Solange eine Probe kein gespeichertes Ergebnis hat, leitet BLE die Entnahmekarten aus den **Produktmodulen** ab; das Produkt von P01 führt das Kochmodul nicht. Nach der ersten Speicherung (Probenmodulzeilen aus den Normen) erscheint die Karte. |
+| P06 | Kornform-Zuteilungen 16 und 22,4 mm und die Kornform-Messung | Das Produkt von P06 hat das Kornform-Modul in der Kundenkonfiguration **inaktiv** (in der Quelle ebenso; der Replay kopiert die Werte). Die Referenzdaten enthalten Kornformwerte. |
+
+Zusätzlich beobachtet (kein Fehlalarm, aber relevant für die Reihenfolge): Fünf Produkte (P01, P05, P06, P09, P10) schließen die Kornform-Prüfverfahren aus. Die Kornform-Karten erscheinen deshalb **nur, solange eine Probe noch kein gespeichertes Ergebnis hat**; die erste Speicherung (z. B. Waschen) legt die Probenmodulzeilen unter Beachtung dieses Ausschlusses an, danach fehlen die Karten. Das Ergebnis einer Stufe hängt damit von der Reihenfolge ab. Der Runner arbeitet je Position erst Zuteilungen, dann Waschen; in dieser Reihenfolge sind alle Kornform-Werte außer denen von P06 erreichbar. In meiner ersten Trockenlauf-Reihenfolge (Waschen zuerst) waren sie es nicht, was den Befund aufdeckte.
+
+**Behandlung im Harness.** Der Runner erfasst je Position, welche der freigegebenen Felder die Seite angeboten hat. Waren Felder nicht vorhanden und wurde alles Vorhandene eingegeben und gespeichert, ist die Position `INCOMPLETE` mit `APPROVED_FIELDS_NOT_PRESENT_ON_PAGE`, niemals `FAIL`. Die Stufen PREPARATION und SHAPE werden dadurch bei einem idealen Executor `INCONCLUSIVE` bleiben, mit acht bzw. vier bestandenen Positionen im Positionsergebnis. Die Klassifikation ist offline getestet und im Live-Lauf noch nicht bestätigt. **Es wurden weder Referenzdaten noch Kundenkonfiguration verändert.**
+
+**Entscheidungsvorschlag für den PO (vor dem Live-Lauf):**
+- A (Empfehlung für den ersten Realwert-Lauf): so lassen. Die Abweichung ist ein echtes, reproduzierbares BLE-Ergebnis der Kundenkonfiguration.
+- B: dokumentierter Fixture-Override (Kornform-Modul von P06 aktivieren), analog zum Override für das inaktive Plan-Produkt. Das ist eine Abweichung von der Kundenkonfiguration und ändert, was das Benchmark misst; deshalb nicht ohne PO-Entscheidung.
+- C: Referenz korrigieren (die drei Werte als „nicht eingebbar“ markieren). Gleiches Argument; ändert die freigegebene Referenz.
+- D: für P01 eine zweite Zuteilungsrunde nach dem Waschen. Ändert den Ablauf der Stufe und die Anfragezahl.
+
+### 16.6 Readiness (modellfrei, Suite v0.4.1, neue Fixture)
+
+`run-suite` ohne `--execute`, mit der Provider-Probe vom 15.10.2026 (`PROBE_PASSED`, UX-Ebene abgesichert, 5,6 h alt, gültig 12 h): alle Gates bestanden (Quell-Commit sauber, Referenzen und Suite gebunden, Stufenverträge, Seiteneffekt-Vertrag geladen, Hash aller öffentlichen Tabellen, Baseline, Runtime, leerer Start, Plan-Produkte 10 von 10, Plan-Formular, Einstiegsrouten, vier Sessions mit Scope), **0 Modellaufrufe, 0 Schreibzugriffe**. Blockiert ist nur `BUDGET_APPROVAL_MISSING` (Profil `NSN014-CALIBRATION-v2`, 1.500 Anfragen / 10.800 s; Mindestbedarf 640 Anfragen). Die Budgetfreigabe bleibt bis zu einer ausdrücklichen PO-Freigabe der erwartete letzte Blocker.
+
+### 16.7 Tests
+
+**399 Tests OK** (vorher 367): Vertrag (Schema, zwölf Stufen, ungültige Verträge), zeilengenaue Audit-Freigabe (positiv und alle Negativfälle: andere Zeile, andere Spalte, andere Stufe, andere Tabelle, hinzugefügte oder entfernte Zielzeile), Stufenfolge (Start ≠ Ende der Vorstufe), Befunde, Sammler (nur SELECT, READ ONLY, keine unsicheren Bezeichner), Dezimalkomma, Pfannenzeile, abgeleitete Teilsiebwerte, `APPROVED_FIELDS_NOT_PRESENT_ON_PAGE` gegen echte Auslassung und FAIL, Berichtsstatus, umbrochene Probennummer im PDF.
+
+### 16.8 Grenzen und offene Punkte
+
+- Der Trockenlauf ist ein idealer, skriptgesteuerter Executor. Er belegt, dass die Kette technisch tragfähig ist, nicht, dass ein Modell sie bewältigt. Neue Schreibpfade, die nur ein Modell findet, melden sich als Befund `UNEXPECTED_TABLE_WRITE`, nicht als Abbruch.
+- Die Trockenlauf-Skripte liegen privat im Scratchpad dieser Sitzung (Pfade siehe Bericht in Issue #21), nicht im Repository.
+- Zwei BLE-Beobachtungen sind **unbestätigt** und noch nicht als Issue angelegt (Vorschlag an den PO): (1) stille Fehlinterpretation von Dezimalpunkten in Messfeldern (kein Hinweis, Wert ×10); (2) Entnahmekarten hängen davon ab, ob die Probe schon ein gespeichertes Ergebnis hat (Rückfallpfad über Produktmodule, danach Pfad über Probenmodule mit Ausschlüssen).
+- Die Provider-Probe gilt bis 16.10.2026, 01:18 UTC; danach ist eine neue nötig (zwei synthetische Anfragen, OAuth-Anmeldung des PO).

@@ -85,6 +85,14 @@ def check_plan_form(fixture,dataset,policy):
 ACCESS_DENIED_TITLE='Kein Zugriff auf diesen Bereich'
 
 
+def route_handler(config,policy,allowed):
+    # Exactly one parameter: Playwright passes (route, request) to two-parameter handlers.
+    def handle(route):
+        if allowed(route.request.url,route.request.method,config,policy):route.continue_()
+        else:route.abort()
+    return handle
+
+
 def check_entry_routes(fixture,policy,probes):
     """Model-free GET probe of each stage entry route per persona; no click, input or save.
 
@@ -105,8 +113,7 @@ def check_entry_routes(fixture,policy,probes):
                         viewport={'width':1280,'height':800},service_workers='block',accept_downloads=False)
                     try:
                         context.add_init_script(event_guard(config))
-                        context.route('**/*',lambda route,config=config:route.continue_() if transport_allowed(
-                            route.request.url,route.request.method,config,policy) else route.abort())
+                        context.route('**/*',route_handler(config,policy,transport_allowed))
                         page=context.new_page();page.set_default_timeout(3000)
                         page.goto(config['origin']+path,wait_until='domcontentloaded',timeout=15000);page.wait_for_timeout(800)
                         reached=page.url==config['origin']+path

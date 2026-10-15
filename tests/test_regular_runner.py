@@ -237,3 +237,17 @@ class RegularRunnerTests(unittest.TestCase):
             result=main(['run-suite','--suite','projects/ble-elva/suites/enzberg-nsn014-v0.4.json','--fixture','private',
                          '--dataset','private','--projection','private','--allocations','private'])
         self.assertEqual(result,0);check.assert_called_once();execute.assert_not_called()
+
+
+class EntryRouteHandlerTests(unittest.TestCase):
+    def test_route_handler_takes_only_the_route_and_binds_its_own_contract(self):
+        import inspect
+        check=importlib.import_module('projects.ble-elva.tools.receipt_contract_check')
+        seen=[];allowed=lambda url,method,config,policy:seen.append((url,method,config,policy)) or url.endswith('/ok')
+        handlers=[check.route_handler({'origin':str(i)},'policy',allowed) for i in range(2)]
+        self.assertTrue(all(len(inspect.signature(h).parameters)==1 for h in handlers))
+        route=MagicMock();route.request.url='http://x/ok';route.request.method='GET'
+        handlers[1](route);route.continue_.assert_called_once();route.abort.assert_not_called()
+        self.assertEqual(seen[-1][2],{'origin':'1'})
+        route=MagicMock();route.request.url='http://x/no';route.request.method='POST'
+        handlers[0](route);route.abort.assert_called_once()

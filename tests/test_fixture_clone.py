@@ -17,6 +17,8 @@ PRODUCT = str(UUID(int=106))
 OTHER_TABLES = ('samples', 'lims_sample', 'ble_reports', 'sqbf_measurement_inputs_v1', 'sqbf_allocation_inputs_v1')
 BASE = {name: {'count': 0, 'hash': 'e' * 32} for name in OTHER_TABLES}
 BASE.update(workspace_products={'count': 10, 'hash': 'a' * 32}, norm_versions={'count': 16, 'hash': 'b' * 32})
+MODULES_BEFORE = {'count': 0, 'hash': 'm0'}
+MODULES_AFTER = {'count': 51, 'hash': 'm1'}
 ROW = {'id': PRODUCT, 'name': 'Synthetic product six', 'is_active': False, 'use_area': 'Asphalt'}
 
 
@@ -28,12 +30,18 @@ def source(runtime_root):
     f['identity_scope_check'] = {'executable': 'BLE.Web.exe', 'assembly': 'BLE.Web.dll'}
     f['active_list_expected_products'] = ['Betonsplitt', 'asphalt']
     f['suite_copy'].update(stage='persona_sessions_verified', measured_samples_preseeded=False, prepared_tables=copy.deepcopy(BASE),
-                           prepared_state_sha256=canonical_hash(BASE), mapping={'positions': {'P06': PRODUCT}},
+                           prepared_state_sha256=canonical_hash(BASE), mapping={'positions': {'P06': PRODUCT}, 'products': {'src-product': PRODUCT}},
                            runtime={'assembly': 'asm', 'sha256': 's' * 64}, application_root=str(runtime_root), web_pid=4242,
                            suite_sha256='f' * 64)
     f['suite_copy']['budget_approval'] = None
     del f['suite_copy']['budget_approval']
+    f['read_only_oracle'] = {'expected_counts': {name: value['count'] for name, value in BASE.items()}}
     return f
+
+
+def replay(docker):
+    docker.replayed = True;docker.log.append('replay')
+    return {'table': 'lims_product_test_modules', 'rows': 51, 'per_module': {'AGGREGATE_SIEVE_ANALYSIS': 10}}
 
 
 class FakeDocker:
@@ -45,6 +53,7 @@ class FakeDocker:
         self.row_active = row_active
         self.encodings = []
         self.ids, self.status = {}, {}
+        self.replayed = False
 
     def __call__(self, args, input=None, capture_output=True, text=True, timeout=None, encoding=None, errors=None):
         self.encodings.append((args[0], encoding, errors))
@@ -76,6 +85,7 @@ class FakeDocker:
             self.updated = True;self.log.append('update')
             return ok()
         tables = copy.deepcopy(BASE)
+        tables['lims_product_test_modules'] = dict(MODULES_AFTER if self.replayed and container != self.source else MODULES_BEFORE)
         if self.updated and container != self.source:
             tables['workspace_products']['hash'] = 'd' * 32
         if self.corrupt_clone and container != self.source:
@@ -164,6 +174,8 @@ class CloneFlowTests(unittest.TestCase):
             tables = copy.deepcopy(BASE)
             if fixture['database']['container'] != src['database']['container'] and docker.updated:
                 tables['workspace_products'] = {'count': 10, 'hash': 'd' * 32}
+            if 'lims_product_test_modules' in fixture['read_only_oracle']['expected_counts']:
+                tables['lims_product_test_modules'] = dict(MODULES_AFTER)
             return {'tables': tables}
         runtime_info = {'pid': 4242, 'assembly': 'asm', 'sha256': 's' * 64}
         def runtime_fn(url, root, config, **kwargs):
@@ -172,7 +184,8 @@ class CloneFlowTests(unittest.TestCase):
         with patch.object(module, 'snapshot', side_effect=snap), patch.object(module, 'verify_docker_identity'), \
              patch.object(module, 'verify_runtime', side_effect=runtime_fn), \
              patch.object(module, 'load_credentials', return_value={'username': 'u', 'password': 'p'}), \
-             patch.object(module, 'check_private_directory'), patch.object(module.shutil, 'copytree', side_effect=lambda a, b, **k: Path(b).mkdir()):
+             patch.object(module, 'check_private_directory'), patch.object(module.shutil, 'copytree', side_effect=lambda a, b, **k: Path(b).mkdir()), \
+             patch.object(module.module_replay, 'replay', side_effect=lambda fixture, run=None: replay(docker)):
             popen = MagicMock(return_value=process)
             try:
                 result = module.clone_fixture(path, 'controller.dpapi', output, run=docker, popen=popen, sleep=lambda s: None, environ={'PATH': 'p'})
@@ -183,8 +196,8 @@ class CloneFlowTests(unittest.TestCase):
     def test_phases_run_in_a_safe_order_and_produce_a_verified_manifest(self):
         result, docker, output, src, popen = self.run_clone()
         self.assertIsInstance(result, Path, result)
-        order = [entry for entry in docker.log if entry in ('taskkill', 'docker stop -t', 'docker volume create', 'docker run --rm', 'docker run -d', 'rename', 'update')]
-        self.assertEqual(order, ['taskkill', 'docker stop -t', 'docker volume create', 'docker run --rm', 'docker run -d', 'rename', 'update'])
+        order = [entry for entry in docker.log if entry in ('taskkill', 'docker stop -t', 'docker volume create', 'docker run --rm', 'docker run -d', 'rename', 'update', 'replay')]
+        self.assertEqual(order, ['taskkill', 'docker stop -t', 'docker volume create', 'docker run --rm', 'docker run -d', 'rename', 'update', 'replay'])
         manifest = json.loads(result.read_text(encoding='utf-8'))
         self.assertEqual((manifest['suite_copy']['web_pid'], manifest['database']['container_id']), (5151, 'c' * 64))
         self.assertNotEqual(manifest['database']['container'], src['database']['container'])
@@ -193,9 +206,14 @@ class CloneFlowTests(unittest.TestCase):
                          (['workspace_products'], ['is_active'], True))
         self.assertEqual(manifest['suite_copy']['prepared_tables']['workspace_products']['hash'], 'd' * 32)
         self.assertEqual({t for t in BASE if manifest['suite_copy']['prepared_tables'][t] != BASE[t]}, {'workspace_products'})
+        self.assertEqual(manifest['suite_copy']['prepared_state_sha256'], canonical_hash(manifest['suite_copy']['prepared_tables']))
         phases = [p['phase'] for p in json.loads((output / 'clone-state.json').read_text(encoding='utf-8'))['phases']]
         self.assertEqual(phases, ['source_hashed', 'source_stopped', 'volume_cloned', 'container_started',
-                                  'clone_verified_identical', 'override_applied', 'web_started'])
+                                  'clone_verified_identical', 'override_applied', 'modules_replayed', 'web_started'])
+        self.assertEqual(manifest['suite_copy']['clone']['all_changed_tables'], ['lims_product_test_modules', 'workspace_products'])
+        self.assertEqual(manifest['read_only_oracle']['expected_counts']['lims_product_test_modules'], 51)
+        self.assertEqual(manifest['suite_copy']['prepared_tables']['lims_product_test_modules'], MODULES_AFTER)
+        self.assertEqual(manifest['suite_copy']['clone']['module_replay']['rows'], 51)
         self.assertEqual(popen.call_args.kwargs['env']['ConnectionStrings__DefaultConnection'].count('Database=' + manifest['database']['name']), 1)
         self.assertFalse(any('workspace_products' in str(c) and 'DELETE' in str(c) for c in docker.log))
         self.assertTrue(all(enc == 'utf-8' for _, enc, _ in docker.encodings))
@@ -253,6 +271,8 @@ class StoppedSourceCloneTests(unittest.TestCase):
             tables = copy.deepcopy(BASE)
             if fixture['database']['container'] != src['database']['container'] and docker.updated:
                 tables['workspace_products'] = {'count': 10, 'hash': 'd' * 32}
+            if 'lims_product_test_modules' in fixture['read_only_oracle']['expected_counts']:
+                tables['lims_product_test_modules'] = dict(MODULES_AFTER)
             return {'tables': tables}
         def runtime_fn(url, root, config, **kwargs):
             return {'pid': 5151 if Path(root).parent.name == 'out' else occupant_pid, 'assembly': 'asm', 'sha256': 's' * 64}
@@ -260,7 +280,8 @@ class StoppedSourceCloneTests(unittest.TestCase):
         with patch.object(module, 'snapshot', side_effect=snap), patch.object(module, 'verify_docker_identity'), \
              patch.object(module, 'verify_runtime', side_effect=runtime_fn), \
              patch.object(module, 'load_credentials', return_value={'username': 'u', 'password': 'p'}), \
-             patch.object(module, 'check_private_directory'), patch.object(module.shutil, 'copytree', side_effect=lambda a, b, **k: Path(b).mkdir()):
+             patch.object(module, 'check_private_directory'), patch.object(module.shutil, 'copytree', side_effect=lambda a, b, **k: Path(b).mkdir()), \
+             patch.object(module.module_replay, 'replay', side_effect=lambda fixture, run=None: replay(docker)):
             try:
                 result = module.clone_fixture(src_path, 'c.dpapi', output, run=docker, popen=MagicMock(return_value=process), sleep=lambda s: None,
                                               environ={'PATH': 'p'}, source_stopped=True, expected_tree_sha256=expected,
@@ -275,7 +296,8 @@ class StoppedSourceCloneTests(unittest.TestCase):
         order = [e for e in docker.log if e in ('docker volume create', 'docker run --rm', 'taskkill', 'docker stop -t', 'docker run -d', 'rename', 'update')]
         self.assertEqual(order, ['docker volume create', 'docker run --rm', 'taskkill', 'docker stop -t', 'docker run -d', 'rename', 'update'])
         phases = [p['phase'] for p in json.loads((output / 'clone-state.json').read_text(encoding='utf-8'))['phases']]
-        self.assertEqual(phases, ['volume_cloned', 'occupant_stopped', 'container_started', 'clone_verified_identical', 'override_applied', 'web_started'])
+        self.assertEqual(phases, ['volume_cloned', 'occupant_stopped', 'container_started', 'clone_verified_identical', 'override_applied',
+                                  'modules_replayed', 'web_started'])
         manifest = json.loads(result.read_text(encoding='utf-8'));evidence = manifest['suite_copy']['clone']
         self.assertEqual((evidence['source_started_for_clone'], evidence['occupant_stopped'], evidence['purpose']), (False, 'occupant-fixture', 'scratch'))
         self.assertEqual(evidence['override']['changed_tables'], ['workspace_products'])
@@ -299,3 +321,16 @@ class StoppedSourceCloneTests(unittest.TestCase):
         report = module.plan_clone(path, run=docker, source_stopped=True)
         self.assertEqual((report['status'], report['source_state'], report['database_writes']), ('CLONE_PREFLIGHT_PASSED', 'stopped, never started', 0))
         self.assertEqual(docker.log, ['docker inspect ' + src['database']['container']])
+
+
+class SessionSeedTests(unittest.TestCase):
+    def test_new_copy_points_at_the_newest_session_files_of_the_occupant(self):
+        with tempfile.TemporaryDirectory() as folder:
+            src = source(folder);identity = module.new_identity(src)
+            seed = {name: 'newest-' + name for name in src['personas']}
+            new = module.build_manifest(src, identity, 'c' * 64, Path(folder) / 'rt', copy.deepcopy(BASE),
+                                        {'override': {'product_name': 'X'}, 'source_fixture_id': 'f'}, session_seed=seed)
+            plain = module.build_manifest(src, identity, 'c' * 64, Path(folder) / 'rt', copy.deepcopy(BASE),
+                                          {'override': {'product_name': 'X'}, 'source_fixture_id': 'f'})
+        self.assertTrue(all(new['personas'][n]['storage_state'] == 'newest-' + n for n in src['personas']))
+        self.assertTrue(all(plain['personas'][n]['storage_state'] == src['personas'][n]['storage_state'] for n in src['personas']))

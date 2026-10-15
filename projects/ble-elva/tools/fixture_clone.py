@@ -27,6 +27,7 @@ from sqbf.oracle import verify_docker_identity
 from sqbf.scope_check import verify_runtime
 from sqbf.session_credentials import load_credentials
 from sqbf.suites import canonical_hash
+from . import module_replay
 from .suite_fixture import validate_target
 
 IDENT = re.compile(r'[a-z][a-z0-9_]{0,62}')
@@ -142,7 +143,7 @@ def column_diff(before, after):
     return {key: {'from': before.get(key), 'to': after.get(key)} for key in sorted(keys) if before.get(key) != after.get(key)}
 
 
-def build_manifest(source, identity, container_id, runtime_root, prepared_tables, evidence):
+def build_manifest(source, identity, container_id, runtime_root, prepared_tables, evidence, session_seed=None):
     """New fixture manifest: identity, prepared baseline and override record change; nothing else is invented."""
     fixture = copy.deepcopy(source)
     fixture['database'].update(container=identity['container'], container_id=container_id, name=identity['database'],
@@ -157,8 +158,11 @@ def build_manifest(source, identity, container_id, runtime_root, prepared_tables
     if evidence['override']['product_name'] not in expected:
         expected.append(evidence['override']['product_name'])
     fixture['active_list_expected_products'] = sorted(expected, key=str.casefold)
-    for actor in fixture['personas'].values():
+    for name, actor in fixture['personas'].items():
         actor['gates_verified'] = False
+        # The renewal guard allows one login per stale session file, so a new copy must point at the newest files.
+        if session_seed and name in session_seed:
+            actor['storage_state'] = session_seed[name]
     fixture['session_preparation'] = {'status': 'SESSIONS_PENDING', 'model_calls': 0, 'benchmark_started': False}
     return fixture
 
@@ -205,7 +209,7 @@ def stop_occupant(occupant, run, *, runtime_fn=None, sleep=time.sleep):
 
 def clone_fixture(source_path, source_controller_credentials, output_dir, *, product_position='P06',
                   run=subprocess.run, popen=subprocess.Popen, sleep=time.sleep, environ=None,
-                  source_stopped=False, expected_tree_sha256=None, occupant_path=None, purpose='fixture',
+                  source_stopped=False, expected_tree_sha256=None, occupant_path=None, purpose='fixture', replay_modules=True,
                   override_reason='plan product inactive in approved source data; BLE refuses plan-wide sample creation (run 3d9c2706)'):
     """Perform all phases; returns the new manifest path. Stops at the first failed phase.
 
@@ -301,10 +305,31 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
         raise CloneError('override', 'UNEXPECTED_DIFFERENCE')
     done('override_applied', changed_tables=['workspace_products'], column='is_active')
     prepared = copy.deepcopy(source['suite_copy']['prepared_tables'])
+    expected_counts = {}
+    replay_evidence = None
+    changed_expected = ['workspace_products']
+    if replay_modules:
+        try:
+            replay_evidence = module_replay.replay(new_fixture, run=run)
+        except module_replay.ReplayError as error:
+            raise CloneError('module_replay', str(error)) from None
+        after_replay = table_hashes(run, identity['container'], controller, identity['database'], phase='replay_hash')
+        if changed_tables(after, after_replay) != [module_replay.TABLE]:
+            raise CloneError('module_replay', 'UNEXPECTED_DIFFERENCE')
+        if after_replay[module_replay.TABLE]['count'] != replay_evidence['rows']:
+            raise CloneError('module_replay', 'ROWCOUNT_MISMATCH')
+        expected_counts[module_replay.TABLE] = replay_evidence['rows']
+        changed_expected = sorted(['workspace_products', module_replay.TABLE])
+        done('modules_replayed', rows=replay_evidence['rows'], changed_tables=[module_replay.TABLE])
+    new_fixture['read_only_oracle'] = copy.deepcopy(new_fixture['read_only_oracle'])
+    new_fixture['read_only_oracle']['expected_counts'].update(expected_counts)
     snap = snapshot(new_fixture, enforce_counts=False)['tables']
-    if set(snap) != set(prepared) or [t for t in prepared if snap[t] != prepared[t]] != ['workspace_products']:
+    unchanged_baseline = [t for t in prepared if snap[t] != prepared[t]]
+    if set(snap) != set(prepared) | set(expected_counts) or unchanged_baseline != ['workspace_products']:
         raise CloneError('verify', 'PREPARED_BASELINE_DIFFERENCE')
     prepared['workspace_products'] = snap['workspace_products']
+    for table in expected_counts:
+        prepared[table] = snap[table]
     evidence = {
         'source_fixture_id': source['fixture_id'], 'source_container': db['container'], 'source_volume': db['volume'],
         'source_prepared_state_sha256': source['suite_copy']['prepared_state_sha256'],
@@ -312,6 +337,7 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
         'purpose': purpose, 'source_started_for_clone': not source_stopped,
         'occupant_stopped': occupant['fixture_id'] if occupant is not None else None,
         'volume_tree_sha256': volume_checksum, 'public_tables_compared': len(before),
+        'module_replay': replay_evidence, 'all_changed_tables': changed_expected,
         'override': {'position_id': product_position, 'product_name': row_before['name'], 'table': 'workspace_products',
                      'column': 'is_active', 'from': False, 'to': True, 'statement_sha256': canonical_hash(statement),
                      'row_sha256_before': canonical_hash(row_before), 'row_sha256_after': canonical_hash(row_after),
@@ -321,7 +347,9 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
         'created_at': datetime.now(timezone.utc).isoformat()}
     runtime_root = output / 'runtime'
     shutil.copytree(Path(source['suite_copy']['application_root']), runtime_root, ignore=shutil.ignore_patterns('logs'))
-    manifest = build_manifest(source, identity, container_id, runtime_root, prepared, evidence)
+    seed = {name: actor['storage_state'] for name, actor in occupant['personas'].items()} if occupant is not None else None
+    manifest = build_manifest(source, identity, container_id, runtime_root, prepared, evidence, session_seed=seed)
+    manifest['read_only_oracle'] = copy.deepcopy(new_fixture['read_only_oracle'])
     credential = load_credentials(source_controller_credentials, controller)
     connection = (f"Host=127.0.0.1;Port=55434;Database={identity['database']};Username={credential['username']};"
                   f"Password={credential['password']}")

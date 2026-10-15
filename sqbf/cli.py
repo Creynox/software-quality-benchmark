@@ -182,6 +182,17 @@ def main(argv=None) -> int:
     fixture_check=sub.add_parser('suite-fixture-check',help='Model-free NSN014 fixture and four-persona acceptance; no login/model calls',allow_abbrev=False)
     for name in ('fixture','suite','dataset','output'):
         fixture_check.add_argument('--'+name,required=True)
+    sessions=sub.add_parser('suite-sessions',help='Model-free four-persona session check/one guarded renewal; no benchmark',allow_abbrev=False)
+    for name in ('fixture','output','report'):
+        sessions.add_argument('--'+name,required=True)
+    suite_run=sub.add_parser('run-suite',help='Check suite readiness; live execution requires --execute',allow_abbrev=False)
+    for name in ('suite','dataset','fixture','projection','allocations'):
+        suite_run.add_argument('--'+name,required=True)
+    suite_run.add_argument('--output',default='D:/Temp/sqbf-regular-runs')
+    suite_run.add_argument('--executor-model',default='gpt-6-luna')
+    suite_run.add_argument('--reviewer-model',default='gpt-6.1-sol')
+    suite_run.add_argument('--execute',action='store_true',help='Explicit single live run after gates and fresh subscription OAuth')
+    suite_run.add_argument('--headed',action='store_true')
     registry.add_argument("--output",default="runs")
     for option in ["test-id","software-version","date"]:
         registry.add_argument("--"+option, help="Case-sensitive substring match")
@@ -239,6 +250,30 @@ def main(argv=None) -> int:
     execute.add_argument("--fixture-ready", action="store_true", help="Assert isolated fixture was prepared")
     execute.add_argument("--interactive-budget", action="store_true", help="Explicit manual run extension")
     args = parser.parse_args(argv)
+    if args.command=='run-suite':
+        from .write_profile import load_suite_profile
+        try:
+            suite=json.loads(Path(args.suite).read_text(encoding='utf-8-sig'))
+            adapter=load_suite_profile(suite.get('adapter_contract'))
+            inputs=adapter.load_inputs(args.suite,args.dataset,args.fixture,args.projection,args.allocations)
+            report=(adapter.run_suite(*inputs,args.output,args.executor_model,args.reviewer_model,headed=args.headed)
+                    if args.execute else adapter.check_ready(*inputs))
+        except Exception:
+            print('BLOCKED_SUITE_READINESS: invalid input or private evidence; no fallback/retry.')
+            return 2
+        print(json.dumps(report,indent=2))
+        return 0 if (report['status']=='READY_FOR_SINGLE_SUITE_RUN' or
+                     report['status']=='SUITE_RUN_RECORDED' and report.get('technical_status')=='COMPLETED') else 2
+    if args.command=='suite-sessions':
+        from importlib import import_module
+        try:
+            report=import_module('projects.ble-elva.tools.suite_sessions').write_prepared_sessions(
+                args.fixture,args.output,args.report)
+        except Exception:
+            print('BLOCKED_SESSION: invalid private output or configuration; no retry.')
+            return 2
+        print(json.dumps(report,indent=2))
+        return 0 if report['status']=='SESSIONS_VERIFIED' else 2
     if args.command=='suite-fixture-check':
         from importlib import import_module
         try:

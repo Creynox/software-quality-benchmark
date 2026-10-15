@@ -65,7 +65,7 @@ def create_base_copy(source, suite, dataset, output):
         raise ValueError('Windows DPAPI controller required')
     validate_source(source)
     validate_suite(suite)
-    if (suite.get('suite_id') != 'ENZBERG-NSN014' or suite.get('version') != '0.2'
+    if (suite.get('suite_id') != 'ENZBERG-NSN014' or suite.get('version') not in ('0.2','0.3','0.4')
             or suite.get('benchmark_purpose') != 'ux_ui_process_stress'
             or suite['dataset_id'] != dataset['dataset_id']
             or check_dataset(dataset)['status'] != 'DATASET_APPROVED'):

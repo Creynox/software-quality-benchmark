@@ -25,7 +25,7 @@ def validate_policy(policy):
 
 
 class SuiteBudget:
-    def __init__(self, policy, clock=time.monotonic):
+    def __init__(self, policy, clock=time.monotonic, on_change=lambda report: None):
         self.policy = dict(validate_policy(policy))
         self.clock = clock
         self.started = clock()
@@ -34,9 +34,11 @@ class SuiteBudget:
         self.active = None
         self.requests = []
         self.stop_reason = None
+        self.on_change = on_change
 
     def _stop(self, reason):
         self.stop_reason = reason
+        self.on_change(self.report())
         raise ResourceStop(reason)
 
     def remaining(self):
@@ -58,12 +60,15 @@ class SuiteBudget:
         self.active = {'case_id': case['case_id'], 'started': self.clock(),
                        'marks': dict(marks), 'actions': 0}
         self.tasks.append(self.active)
+        self.active['persona']=case.get('persona')
+        self.on_change(self.report())
 
     def action(self):
         self.remaining()
         if self.active is None:
             raise ValueError('Task required before an action')
         self.active['actions'] += 1
+        self.on_change(self.report())
 
     def finish_task(self):
         if self.active is None:
@@ -72,6 +77,7 @@ class SuiteBudget:
             raise ValueError('Complete the pending request before closing its task')
         self.active['finished'] = self.clock()
         self.active = None
+        self.on_change(self.report())
 
     def claim(self, actor='executor'):
         self.remaining()
@@ -84,6 +90,7 @@ class SuiteBudget:
         self.calls += 1
         self.requests.append({'actor': actor, 'case_id': self.active['case_id'],
                               'started': self.clock(), 'finished': None, 'usage': None})
+        self.on_change(self.report())
         return self.calls - 1
 
     def complete_call(self, ticket, usage=None):
@@ -100,6 +107,7 @@ class SuiteBudget:
                 if type(value) is int and value >= 0:
                     clean[key] = value
         request.update(finished=self.clock(), usage=clean)
+        self.on_change(self.report())
         self.remaining()  # Time spent waiting for a response counts too.
 
     def report(self):
@@ -109,7 +117,7 @@ class SuiteBudget:
         tasks = []
         for task in self.tasks:
             seconds = max(0, task.get('finished', now) - task['started'])
-            tasks.append({'case_id': task['case_id'], 'elapsed_seconds': seconds,
+            tasks.append({'case_id': task['case_id'], 'persona':task.get('persona'), 'elapsed_seconds': seconds,
                           'actions': task['actions'], 'observation_marks': task['marks'],
                           'time_mark_exceeded': seconds > task['marks']['seconds'],
                           'action_mark_exceeded': task['actions'] > task['marks']['actions']})
@@ -125,7 +133,10 @@ class SuiteBudget:
                              'model_wait_seconds': sum((now if r['finished'] is None else r['finished']) - r['started'] for r in calls)}
         elapsed = max(0, now - self.started)
         wait = sum(v['model_wait_seconds'] for v in actors.values())
-        return {'elapsed_seconds': elapsed, 'model_calls': self.calls, 'actors': actors,
+        requests=[{'case_id':r['case_id'],'actor':r['actor'],
+                   'elapsed_seconds':(now if r['finished'] is None else r['finished'])-r['started'],
+                   'completed':r['finished'] is not None,'usage':r['usage']} for r in self.requests]
+        return {'elapsed_seconds': elapsed, 'model_calls': self.calls, 'actors': actors,'requests':requests,
                 'tasks': tasks, 'model_wait_seconds': wait,
                 'non_model_elapsed_seconds': max(0, elapsed - wait),
                 'stop_reason': self.stop_reason,

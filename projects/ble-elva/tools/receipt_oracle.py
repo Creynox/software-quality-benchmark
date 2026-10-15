@@ -41,7 +41,7 @@ def verify_receipts(records, dataset, fixture, *, phase):
     result = {'status':'BLOCKED_RECEIPT_EVIDENCE','model_calls':0,'database_writes':0}
     try:
         validate_target(fixture)
-        if phase not in ('before','after'):
+        if phase not in ('before','after','after_plan','after_modules'):
             raise ValueError('Explicit phase required')
         samples, lims, items = [records[key] for key in ('samples','lims','plan_items')]
         expected = {row['inputs']['sample_code']:row for row in dataset['positions']}
@@ -64,17 +64,19 @@ def verify_receipts(records, dataset, fixture, *, phase):
                 missing.append(key); continue
             product = fixture['suite_copy']['mapping']['positions'][key]
             linked = [l for l in lims if l['probe_id'] == row['id']]
+            needs_lims=(phase=='after' or phase=='after_modules' and any(
+                bool(r.get('series')) for r in source['inputs'].get('derived_and_repetitions',[]) if isinstance(r,dict)))
             valid = (row['tenant_id'] == fixture['fixture_data']['tenant_id']
                 and row['plant_id'] == fixture['fixture_data']['plant_id'] and row['laboratory_id'] is None
                 and row['product_id'] == product and row['customer_id'] == fixture['fixture_data']['customer_id']
                 and row['project_id'] == fixture['fixture_data']['project_id']
                 and row['taken_date'] == dataset['reference']['sampling_date']
                 and row['sampling_plan_item_id'] == item_ids[product]
-                and len(linked) == 1 and linked[0]['product_id'] == product
-                and linked[0]['project_id'] == fixture['fixture_data']['project_id'])
+                and (len(linked)==1 if needs_lims else len(linked)<=1)
+                and all(l['product_id']==product and l['project_id']==fixture['fixture_data']['project_id'] for l in linked))
             if not valid: failures.append(key)
         orphan = any(l['probe_id'] not in {s['id'] for s in samples} for l in lims)
-        complete = not missing and not failures and not orphan and len(samples) == len(lims) == 10
+        complete = not missing and not failures and not orphan and len(samples)==10 and (len(lims)==10 if phase=='after' else len(lims)<=10)
         return dict(result,status='PASS' if complete else 'FAIL',sample_count=len(samples),lims_count=len(lims),
                     missing_positions=missing,mismatched_positions=failures,orphan_lims=orphan,
                     limitations=['No normative certification; related module/result persistence is checked by separate stages.'])

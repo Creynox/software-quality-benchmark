@@ -221,6 +221,12 @@ def main():
             from .write_profile import load_write_profile
             module=load_write_profile(payload['scenario']['write_policy']['contract'],'lab_runner')
             output = module.browser_pilot(payload)
+        elif mode == 'pdf-check':
+            from importlib import import_module
+            output=import_module('projects.ble-elva.tools.pdf_check').inspect_pdf(payload['path'],payload['required_text'])
+        elif mode == 'regular-suite':
+            from .write_profile import load_suite_profile
+            output=load_suite_profile(payload['suite']['adapter_contract']).browser_suite(payload)
         elif mode == "test-hang":
             time.sleep(60)  # Explicit local regression mode, no credentials/UI.
             output = {}

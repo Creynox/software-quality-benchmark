@@ -1,5 +1,6 @@
 """One source-bound probe creation; screenshot executor gets no controller state."""
 import json
+import re
 from urllib.parse import urlsplit
 
 from sqbf.read_only import ReadOnlyViolation, request_allowed
@@ -29,7 +30,10 @@ CLASSIFY = r"""
 const label=e=>e?.closest('.mud-input-control')?.querySelector('label')?.innerText.replace(/\s*\*+\s*$/,'').trim();
 const complete=()=>Object.entries(config.fields).every(([name,value])=>{
  const controls=[...document.querySelectorAll('.mud-input-control')].filter(e=>label(e)===name);
- return controls.length===1&&controls[0].querySelector('input')?.value===value;
+ if(controls.length!==1)return false;
+ const selected=controls[0].querySelector('.mud-input-slot.mud-select-input:not(input)')||controls[0].querySelector('div.mud-select-input');
+ const actual=selected?selected.innerText.replace(/\s+/g,' ').trim():controls[0].querySelector('input:not([type="hidden"])')?.value;
+ return actual===value;
 });
 const classify=e=>{
  if(!e)return {kind:'blocked'};
@@ -100,8 +104,13 @@ def allow_operation(action, state, contract, *, controller_saved):
 
 def check_action(page, action, contract, *, controller_saved):
     parsed=urlsplit(page.url)
-    if f'{parsed.scheme}://{parsed.netloc}' != contract['origin'] or parsed.path not in ('/samples','/samples/create'):
+    saved_detail = controller_saved and bool(re.fullmatch(r'/samples/[0-9a-fA-F-]{36}', parsed.path))
+    if f'{parsed.scheme}://{parsed.netloc}' != contract['origin'] or (parsed.path not in ('/samples','/samples/create') and not saved_detail):
         raise ReadOnlyViolation('RECEIPT_PAGE_SCOPE_DENIED')
+    if saved_detail:
+        if action['action'] not in ('done','blocked','wait','scroll'):
+            raise ReadOnlyViolation('RECEIPT_SAVED_RECORD_READ_ONLY')
+        return {'target': {'kind': 'blocked'}, 'focused': {'kind': 'blocked'}, 'complete': True, 'saved': True}
     state = page.evaluate(r"""({x,y,config})=>{__CLASSIFY__
 return {target:classify(Number.isFinite(x)&&Number.isFinite(y)?document.elementFromPoint(x,y):null),
 focused:classify(document.activeElement),complete:complete(),saved:!!window.__sqbfReceiptSaved};
@@ -110,8 +119,11 @@ focused:classify(document.activeElement),complete:complete(),saved:!!window.__sq
     return state
 
 
-def transport_allowed(url, method, origin, policy):
+def transport_allowed(url, method, origin, policy, *, controller_saved=False):
     parsed=urlsplit(url)
     if method in ('GET','HEAD') and f'{parsed.scheme}://{parsed.netloc}'==origin and parsed.path in ('/samples','/samples/create'):
+        return True
+    if (controller_saved and method in ('GET','HEAD') and f'{parsed.scheme}://{parsed.netloc}'==origin
+            and re.fullmatch(r'/samples/[0-9a-fA-F-]{36}', parsed.path)):
         return True
     return request_allowed(url,method,origin,policy)

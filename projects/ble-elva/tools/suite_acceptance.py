@@ -25,11 +25,16 @@ def check_fixture(fixture, suite, dataset):
         if set(fixture['personas']) != {'laboratory_lead', 'laboratory_staff', 'wpk_lead', 'plant_lead'}:
             return dict(result, reason='PERSONA_SET_MISMATCH')
         counts = fixture['read_only_oracle']['expected_counts']
+        project_count=2 if fixture['suite_copy'].get('receipt_entrypoint')=='plan_replenish_once' else 1
         if any(counts.get(key) != value for key, value in {'workspace_products': 10, 'sampling_plans': 1,
                  'sampling_plan_items': 10, 'samples': 0, 'lims_sample': 0, 'ble_reports': 0,
-                 'customers': 1, 'projects': 1}.items()):
+                 'customers': 1, 'projects': project_count}.items()):
             return dict(result, reason='START_STATE_MISMATCH')
         before = snapshot(fixture)
+        pinned=fixture['suite_copy'].get('prepared_state_sha256')
+        if ((suite.get('resource_policy') is not None and not pinned)
+                or (pinned and canonical_hash(before['tables'])!=pinned)):
+            return dict(result,reason='PREPARED_CONTENT_CHANGED_OR_UNPINNED')
         policy = Scenario.load('projects/ble-elva/scenarios/core-smoke-01.json', fixture['target_url']).read_only_policy
         for persona, actor in fixture['personas'].items():
             session = check_session(fixture['target_url'], actor['storage_state'], policy,

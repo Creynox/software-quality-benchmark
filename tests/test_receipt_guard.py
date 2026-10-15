@@ -16,6 +16,20 @@ def contract():
 
 
 class ReceiptGuardTests(unittest.TestCase):
+    def test_mud_select_uses_visible_label_not_hidden_guid_for_save_contract(self):
+        from playwright.sync_api import sync_playwright
+        cfg=contract();parts=[]
+        for name,value in cfg['fields'].items():
+            content=('<div class="mud-select-input">'+escape(value)+'</div><input type="hidden" value="11111111-1111-4111-8111-111111111111">'
+                     if name not in cfg['editable'] else '<input value="'+escape(value,quote=True)+'">')
+            parts.append('<div class="mud-input-control"><label>'+escape(name)+' *</label>'+content+'</div>')
+        html=''.join(parts)+'<button id="save" onclick="window.writes++">Probe anlegen</button><script>window.writes=0</script>'
+        with sync_playwright() as p:
+            browser=p.chromium.launch();context=browser.new_context();context.add_init_script(module.event_guard(cfg))
+            context.route(cfg['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(cfg['origin']+'/samples/create');page.locator('#save').click()
+            self.assertEqual(page.evaluate('window.writes'),1);context.close();browser.close()
+
     def test_native_save_guard_blocks_incomplete_and_survives_full_reload(self):
         from playwright.sync_api import sync_playwright
         cfg=contract()

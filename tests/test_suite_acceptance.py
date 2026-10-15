@@ -32,6 +32,26 @@ def contracts():
 
 
 class SuiteAcceptanceTests(unittest.TestCase):
+    def test_prepared_content_hash_is_required_for_v03_and_checked_before_browser(self):
+        fixture,suite,dataset,state=contracts()
+        suite['version']='0.3'
+        suite['resource_policy']={'mode':'calibration','hard_seconds':7200,'hard_model_calls':1000,'limit_result':'INCONCLUSIVE',
+            'automatic_retry':False,'task_marks_are_hard_limits':False}
+        # Use the actual v0.3 task shape rather than legacy case hard limits.
+        for case in suite['cases']:
+            for key in ('max_minutes','max_actions','max_model_calls'):case.pop(key)
+            case['observation_marks']={'seconds':600,'actions':60}
+            if case['persona']=='restricted_viewer':case['persona']='plant_lead'
+        fixture['suite_copy']['suite_sha256']=canonical_hash(suite)
+        with patch.object(module,'snapshot',return_value=state),patch.object(module,'check_session') as session:
+            self.assertEqual(module.check_fixture(fixture,suite,dataset)['reason'],'PREPARED_CONTENT_CHANGED_OR_UNPINNED')
+            session.assert_not_called()
+        fixture['suite_copy']['prepared_state_sha256']=canonical_hash(state['tables'])
+        changed=copy.deepcopy(state);changed['tables']['workspace_products']['hash']='unexpected-change'
+        with patch.object(module,'snapshot',return_value=changed),patch.object(module,'check_session') as session:
+            self.assertEqual(module.check_fixture(fixture,suite,dataset)['reason'],'PREPARED_CONTENT_CHANGED_OR_UNPINNED')
+            session.assert_not_called()
+
     def test_four_actor_restore_scope_and_unchanged_snapshot_required(self):
         fixture, suite, dataset, snapshot = contracts()
         with patch.object(module, 'snapshot', return_value=snapshot), \

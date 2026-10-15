@@ -27,6 +27,14 @@ def data():
 
 
 class ReceiptOracleTests(unittest.TestCase):
+    def test_plan_receipt_does_not_invent_immediate_lims_or_require_it_for_plain_samples(self):
+        records,d,f=data();records['lims']=[]
+        self.assertEqual(module.verify_receipts(records,d,f,phase='after_plan')['status'],'PASS')
+        self.assertEqual(module.verify_receipts(records,d,f,phase='after_modules')['status'],'PASS')
+        self.assertEqual(module.verify_receipts(records,d,f,phase='after')['status'],'FAIL')
+        d['positions'][0]['inputs']['derived_and_repetitions']=[{'series':[{'initial_g':200}]}]
+        result=module.verify_receipts(records,d,f,phase='after_modules')
+        self.assertEqual(result['status'],'FAIL');self.assertEqual(result['mismatched_positions'],['P1'])
     def test_empty_start_and_ten_independently_linked_samples(self):
         records,d,f=data()
         self.assertEqual(module.verify_receipts(records,d,f,phase='after')['status'],'PASS')

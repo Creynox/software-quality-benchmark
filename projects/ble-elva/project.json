@@ -86,7 +86,7 @@
       "active_endpoint": "evaluation/PDF; release/signature/delivery excluded",
       "runtime_integration": "implemented; shared accounting used by all stage adapters",
       "minimum_model_requests_estimate": 646,
-      "budget_decision_required": "Lower bound uses 65% of the 1000-request ceiling; PO to confirm v0.4 limits or approve v0.4.1 resource-only change"
+      "budget_decision_required": "PO approval for suite v0.4.1 (1500 requests / 10800 s) or explicit instruction to run v0.4 at 1000 requests / 7200 s; lower bound is 646 requests"
     },
     "superseded_candidates": [
       "suites/enzberg-nsn014-v0.3.json",
@@ -139,6 +139,15 @@
       "status": "MISSING",
       "required_from": "PO",
       "scope": "one v0.4 run, provider chatgpt_plan (gpt-6-luna / gpt-6.1-sol), K3 data, budget, no retry"
+    },
+    "budget_candidate": {
+      "suite": "suites/enzberg-nsn014-v0.4.1.json",
+      "profile": "NSN014-CALIBRATION-v2",
+      "hard_model_calls": 1500,
+      "hard_seconds": 10800,
+      "status": "PREPARED_NOT_ACTIVE_PO_APPROVAL_MISSING",
+      "gate": "suite_copy.budget_approval in the private manifest; readiness BLOCKED BUDGET_APPROVAL_MISSING without it",
+      "v0_4_unchanged": true
     }
   }
 }

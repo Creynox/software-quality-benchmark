@@ -218,6 +218,7 @@ class RegularRunnerTests(unittest.TestCase):
         self.assertEqual(summary['finding_counts']['BLE_DEFECT_CANDIDATE']['major'],1);self.assertIsNone(summary['global_score'])
         manifest={'run_id':'r','verdict':'NO-GO','technical_status':'INVALID','functional_status':'INVALID','scenario_id':'ENZBERG-NSN014',
                   'scenario_version':'0.4','scoring_version':module.SCORING_VERSION,'rubric_version':module.RUBRIC_VERSION,
+                  'resource_policy':suite()['resource_policy'],'budget_approval':{'status':'BASE_LIMITS'},
                   'sqbf_commit':'c','software_version':'b','executor_model':'e','analyst_model':'a','suite_sha256':'s',
                   'dataset_sha256':'d','case_matrix':matrix,'ux_summary':summary}
         text=module.completion_text(manifest,records)
@@ -251,3 +252,80 @@ class EntryRouteHandlerTests(unittest.TestCase):
         self.assertEqual(seen[-1][2],{'origin':'1'})
         route=MagicMock();route.request.url='http://x/no';route.request.method='POST'
         handlers[0](route);route.abort.assert_called_once()
+
+
+def suite_v041():
+    return json.loads(Path('projects/ble-elva/suites/enzberg-nsn014-v0.4.1.json').read_text(encoding='utf-8'))
+
+
+def approval(s,**changes):
+    value={'approved_by':'PO','approved_at':'2026-10-15','statement':'PO budget approval reference',
+           'profile':s['resource_policy']['profile'],'suite_sha256':canonical_hash(s),
+           'hard_seconds':s['resource_policy']['hard_seconds'],'hard_model_calls':s['resource_policy']['hard_model_calls']}
+    value.update(changes);return value
+
+
+class BudgetChangeTests(unittest.TestCase):
+    def test_historical_v04_is_immutable_and_v041_changes_only_the_resource_contract(self):
+        old,new=suite(),suite_v041()
+        self.assertEqual(canonical_hash(old),'fbc65e91611bcb9122d5f26f8ae996f404f6966951adf315ad599af0bbd9084a')
+        self.assertEqual((old['version'],new['version'],new['supersedes']),('0.4','0.4.1','0.4'))
+        self.assertEqual({k for k in set(old)|set(new) if old.get(k)!=new.get(k)},{'version','supersedes','change_note','resource_policy'})
+        self.assertEqual(new['cases'],old['cases'])
+        self.assertEqual({k:v for k,v in new['resource_policy'].items() if k not in ('profile','hard_seconds','hard_model_calls')},
+                         {k:v for k,v in old['resource_policy'].items() if k not in ('hard_seconds','hard_model_calls')})
+        self.assertEqual((new['resource_policy']['hard_seconds'],new['resource_policy']['hard_model_calls'],
+                          new['resource_policy']['automatic_retry']),(10800,1500,False))
+        self.assertEqual(old['resource_policy']['hard_model_calls'],1000)
+        module.validate_suite(old);module.validate_suite(new)
+
+    def test_extended_suite_is_not_ready_without_a_matching_po_approval_record(self):
+        s=suite_v041();f=fixture()
+        self.assertEqual(module.budget_approval(suite(),f)['status'],'BASE_LIMITS')
+        missing=module.budget_approval(s,f)
+        self.assertEqual((missing['status'],missing['required']['hard_model_calls']),('BUDGET_APPROVAL_MISSING',1500))
+        self.assertEqual(missing['required']['suite_sha256'],canonical_hash(s))
+        f['suite_copy']['budget_approval']=approval(s)
+        granted=module.budget_approval(s,f)
+        self.assertEqual((granted['status'],granted['approved_at']),('BUDGET_APPROVED','2026-10-15'))
+        for changes in ({'approved_by':'Claude'},{'approved_by':'po'},{'approved_at':''},{'statement':''},{'hard_model_calls':1000},
+                        {'hard_seconds':7200},{'profile':'other'},{'suite_sha256':'0'*64}):
+            f['suite_copy']['budget_approval']=approval(s,**changes)
+            self.assertEqual(module.budget_approval(s,f)['status'],'BUDGET_APPROVAL_MISSING',changes)
+        f['suite_copy']['budget_approval']=approval(s)
+        edited=dict(s,resource_policy=dict(s['resource_policy'],hard_model_calls=1400))
+        self.assertEqual(module.budget_approval(edited,f)['status'],'BUDGET_APPROVAL_MISSING')
+        f['suite_copy']['budget_approval']='approved'
+        self.assertEqual(module.budget_approval(s,f)['status'],'BUDGET_APPROVAL_MISSING')
+
+    def test_readiness_reports_only_the_budget_decision_as_open_after_all_other_gates(self):
+        s=suite_v041();f=fixture();p=position();ids=s['required_position_ids']
+        dataset={'dataset_id':'d'}
+        projection={'source_sha256':canonical_hash(dataset),'positions':[dict(p,position_id=k,sample_code='S-'+k) for k in ids]}
+        allocation={'source_dataset_id':'d','positions':[{'position_id':k,'allocations':p['allocations']} for k in ids]}
+        f['suite_copy'].update(application_root='D:/Temp/sqbf-unit-nonexistent/app',receipt_entrypoint='plan_replenish_once',
+            suite_sha256=canonical_hash(s),runtime={'assembly':'a','sha256':'s'},
+            measurement_reference_sha256=canonical_hash(projection),allocation_reference_sha256=canonical_hash(allocation),
+            mapping={'plan_id':'11111111-1111-4111-8111-111111111111',
+                     'positions':{k:'00000000-0000-4000-8000-0000000000%02d'%i for i,k in enumerate(ids)}})
+        f['personas']['laboratory_lead']['allowed_permissions']=['sampling.manage','samples.view']
+        f['read_only_oracle']={'expected_counts':{'product_test_method_derived_steps':20,'product_test_method_input_specs':11,
+            'product_test_method_sampling_steps':9,'product_sample_preparation_steps':5,'product_original_sample_split_requirements':15}}
+        clean={'commit':'c'*40,'clean':True,'checked_paths':['sqbf','projects']}
+        with patch.object(module,'source_state',return_value=clean),patch.object(module,'check_fixture',return_value={'status':'FIXTURE_GATES_VERIFIED'}), \
+             patch.object(module,'snapshot'),patch.object(module,'static_fixture_unchanged',return_value=True), \
+             patch.object(module,'verify_runtime',return_value={'assembly':'a','sha256':'s'}), \
+             patch.object(module,'verify_receipts',return_value={'status':'RECEIPT_START_VERIFIED'}),patch.object(module,'collect_receipts'), \
+             patch.object(module,'collect_inputs',return_value=[]),patch.object(module,'collect_allocations',return_value=[]), \
+             patch.object(module,'collect_reports',return_value=[]),patch.object(module.Scenario,'load'), \
+             patch.object(module,'check_receipt_form',return_value={'status':'RECEIPT_UI_CONTRACT_VERIFIED'}), \
+             patch.object(module,'check_entry_routes',return_value={'status':'ENTRY_ROUTES_VERIFIED'}), \
+             patch.object(module,'stage_contracts',return_value={'status':'STAGE_CONTRACTS_VERIFIED'}):
+            blocked=module.check_ready(s,dataset,f,projection,allocation)
+            self.assertEqual((blocked['status'],blocked['reason'],blocked.get('other_gates')),
+                             ('BLOCKED_SUITE_READINESS','BUDGET_APPROVAL_MISSING','PASSED'),blocked)
+            self.assertEqual(blocked['request_estimate']['hard_model_calls'],1500);self.assertEqual(blocked['model_calls'],0)
+            f['suite_copy']['budget_approval']=approval(s)
+            ready=module.check_ready(s,dataset,f,projection,allocation)
+        self.assertEqual((ready['status'],ready['budget_approval']['status']),('READY_FOR_SINGLE_SUITE_RUN','BUDGET_APPROVED'))
+        self.assertTrue(ready['request_estimate']['fits_ceiling'])

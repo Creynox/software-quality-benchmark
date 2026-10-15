@@ -10,10 +10,28 @@ class ResourceStop(RuntimeError):
     """Incomplete measurement, never evidence of an application failure."""
 
 
+BASE_CEILINGS = {'hard_seconds': 7200, 'hard_model_calls': 1000}
+# Named, reviewed exceptions. A policy only receives higher ceilings by naming its profile;
+# existing suites and the CORE/LAB pilot budgets keep BASE_CEILINGS. Naming a profile here
+# does not authorize a run: the project runner additionally requires a recorded PO approval.
+EXTENDED_PROFILES = {
+    'NSN014-CALIBRATION-v2': {'hard_seconds': 10800, 'hard_model_calls': 1500},
+}
+
+
+def policy_ceilings(policy):
+    profile = policy.get('profile')
+    if profile is None:
+        return BASE_CEILINGS
+    if type(profile) is not str or profile not in EXTENDED_PROFILES:
+        raise ValueError('Unknown resource profile')
+    return EXTENDED_PROFILES[profile]
+
+
 def validate_policy(policy):
     if not isinstance(policy, dict) or policy.get('mode') != 'calibration':
         raise ValueError('Explicit calibration policy required')
-    for key, ceiling in [('hard_seconds', 7200), ('hard_model_calls', 1000)]:
+    for key, ceiling in policy_ceilings(policy).items():
         value = policy.get(key)
         if type(value) is not int or not 1 <= value <= ceiling:
             raise ValueError('Invalid global resource ceiling')

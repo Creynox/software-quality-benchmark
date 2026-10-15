@@ -280,3 +280,13 @@ nicht vor. Die Freigabe müsste Folgendes festlegen:
 - private Ablage
 
 Befehl nach Freigabe: der Readiness-Befehl aus Abschnitt 7 mit zusätzlich `--execute`.
+
+## 11. Nachtrag: Suite v0.4.1 (Budgetkandidat, nicht freigegeben)
+
+Vorbereitet ist die Budgetvariante aus Abschnitt 8, Option B. Sie ist **nicht aktiv**, solange keine PO-Budgetfreigabe vorliegt.
+
+- **Suite:** `projects/ble-elva/suites/enzberg-nsn014-v0.4.1.json`. Gegenüber v0.4 ändern sich nur `version`, `supersedes`, `change_note` und `resource_policy`: Profil `NSN014-CALIBRATION-v2`, höchstens 1.500 Modellanfragen und 10.800 s. Kein Retry, Ressourcenstopp bleibt INCONCLUSIVE, 600 s / 60 Aktionen bleiben weiche Marken. Stufen, Personas, Oracles und Referenzen sind unverändert (ein Test vergleicht alle Stufen). Die historische v0.4 ist unverändert; ihr Hash ist per Test festgeschrieben.
+- **Validierungsvertrag:** `sqbf/calibration.py` kennt jetzt benannte Profile. Nur eine Policy, die `NSN014-CALIBRATION-v2` ausdrücklich nennt, darf bis 1.500 / 10.800 gehen. Policies ohne Profil, die CORE-/LAB-Pilotbudgets und die Suites v0.1–v0.4 behalten 1.000 / 7.200 bzw. ihre eigenen Grenzen. Tests decken beides ab, dazu die Stopps bei 1.500 Anfragen und 10.800 s.
+- **Freigabe-Gate:** Eine Suite mit erweitertem Profil gilt erst als ausführungsbereit, wenn das private Fixture-Manifest einen Freigabeeintrag `suite_copy.budget_approval` enthält (`approved_by: PO`, Datum, Aussage, Profil, Suite-Hash, Grenzwerte). Fehlt er oder weicht ein Wert ab, ist die Readiness `BLOCKED` mit `BUDGET_APPROVAL_MISSING`; zusätzlich steht dort `other_gates: PASSED`, wenn alle übrigen Gates bestanden haben. Ein Lauf hält Profil und Freigabe im Manifest fest.
+- **Privates Manifest:** `fixture-v041-budget-pending-20261015.json` (neue Datei, Original unverändert). Es ändert nur `suite_version`, den Suite-Hash (neu `451796ac…`, vorher `fbc65e91…`) samt Hash-Historie und den Änderungsvermerk. Datenbank, Container, Sessions und Referenzwerte sind unverändert. Es enthält **keine** Budgetfreigabe.
+- **Offene Entscheidung:** Die PO-Budgetfreigabe (1.500 / 10.800) ist nicht erteilt, ebenso die Einzellauf-Freigabe aus Abschnitt 10. Beide gelten nur für die jeweils genannte Suite-Version, den Commit und das Manifest.

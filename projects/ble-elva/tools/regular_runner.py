@@ -183,6 +183,24 @@ def estimate_requests(suite,projection,allocation,fixture):
             'basis':'lower bound without agent retries, scrolling, dropdowns or navigation detours'}
 
 
+def budget_approval(suite,fixture):
+    """Extended resource profiles need a PO approval recorded in the private manifest.
+
+    The record must name the profile, this exact suite hash and the exact ceilings, so a
+    later suite edit or a larger limit invalidates it. Base-limit suites need no approval.
+    """
+    policy=suite['resource_policy'];profile=policy.get('profile')
+    if profile is None:return {'status':'BASE_LIMITS','profile':None}
+    bound={'profile':profile,'suite_sha256':canonical_hash(suite),
+           'hard_seconds':policy['hard_seconds'],'hard_model_calls':policy['hard_model_calls']}
+    approval=fixture['suite_copy'].get('budget_approval')
+    if (not isinstance(approval,dict) or approval.get('approved_by')!='PO' or not approval.get('approved_at')
+            or not approval.get('statement') or any(approval.get(k)!=v for k,v in bound.items())):
+        return {'status':'BUDGET_APPROVAL_MISSING','profile':profile,'required':bound}
+    return {'status':'BUDGET_APPROVED','profile':profile,'approved_at':approval['approved_at'],
+            'approval_sha256':canonical_hash(approval)}
+
+
 def check_ready(suite,dataset,fixture,projection,allocation):
     blocked={'status':'BLOCKED_SUITE_READINESS','model_calls':0,'database_writes':0}
     try:
@@ -233,8 +251,13 @@ def check_ready(suite,dataset,fixture,projection,allocation):
         if form['status']!='RECEIPT_UI_CONTRACT_VERIFIED':return dict(blocked,reason='RECEIPT_UI_CONTRACT_FAILED',form=form)
         routes=check_entry_routes(fixture,policy,route_probes(suite,fixture))
         if routes['status']!='ENTRY_ROUTES_VERIFIED':return dict(blocked,reason='ENTRY_ROUTE_CONTRACT_FAILED',entry_routes=routes)
+        budget=budget_approval(suite,fixture)
+        if budget['status']=='BUDGET_APPROVAL_MISSING':
+            # Every other gate above passed; only the PO's budget decision is outstanding.
+            return dict(blocked,reason='BUDGET_APPROVAL_MISSING',other_gates='PASSED',budget_approval=budget,
+                        request_estimate=estimate)
         return {'status':'READY_FOR_SINGLE_SUITE_RUN','model_calls':0,'database_writes':0,
-                'source':source,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
+                'budget_approval':budget,'source':source,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
                 'fixture_gates':gates,'dependencies':dependencies,'native_receipt_form':form,'entry_routes':routes,
                 'active_runtime':runtime,'request_estimate':estimate,'persona_context':persona_context(suite,fixture),
                 'fresh_subscription_authorization_required_at_execution':True,'current_provider_catalog_checked':False,
@@ -384,6 +407,7 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         'locale':'de-DE','timezone':'Europe/Berlin',
         'ble_assembly_sha256':fixture['suite_copy']['runtime']['sha256'],
         'active_runtime':ready['active_runtime'],'request_estimate':ready['request_estimate'],
+        'resource_policy':suite['resource_policy'],'budget_approval':ready['budget_approval'],
         'verdict':'NO-GO','technical_status':'NOT_STARTED','functional_status':'NOT_RUN','model_calls':0,'execution_started':False}
     (evidence.path/'run.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
     result={}
@@ -544,7 +568,8 @@ def completion_text(manifest,records):
         f"UX-Rubrik {text(manifest.get('rubric_version'))} (vorläufig)",
         f"- SQBF-Commit: {text(manifest['sqbf_commit'])}; BLE-Build: {text(manifest['software_version'])}",
         f"- Executor: {text(manifest['executor_model'])}; Reviewer: {text(manifest['analyst_model'])}",
-        f"- Modellanfragen: {text(manifest.get('model_calls',0))}",'']
+        f"- Modellanfragen: {text(manifest.get('model_calls',0))} von höchstens {text(manifest['resource_policy']['hard_model_calls'])}; "
+        f"Zeitgrenze {text(manifest['resource_policy']['hard_seconds'])} s; Budgetfreigabe: {text(manifest['budget_approval']['status'])}",'']
     if manifest.get('final_oracles'):
         lines+=['Abschließende unabhängige Oracles: '+text({key:value.get('status') if isinstance(value,dict) else value
                                                        for key,value in manifest['final_oracles'].items()}),'']

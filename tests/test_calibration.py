@@ -136,3 +136,42 @@ class CalibrationTests(unittest.TestCase):
         with self.assertRaises(ValueError): validate_suite(invalid)
         invalid = copy.deepcopy(suite); invalid['cases'][0]['max_actions'] = 60
         with self.assertRaises(ValueError): validate_suite(invalid)
+
+
+class ExtendedProfileTests(unittest.TestCase):
+    def extended(self, **changes):
+        value = policy(); value.update(profile='NSN014-CALIBRATION-v2', hard_seconds=10800, hard_model_calls=1500)
+        value.update(changes); return value
+
+    def test_named_profile_raises_only_its_own_ceilings(self):
+        self.assertEqual(validate_policy(self.extended())['hard_model_calls'], 1500)
+        self.assertEqual(validate_policy(self.extended(hard_seconds=60, hard_model_calls=2))['hard_seconds'], 60)
+        for key, value in [('hard_seconds', 10801), ('hard_model_calls', 1501), ('hard_model_calls', True),
+                           ('profile', 'NSN014-CALIBRATION-v3'), ('profile', ''), ('profile', ['NSN014-CALIBRATION-v2']),
+                           ('automatic_retry', True), ('task_marks_are_hard_limits', True), ('limit_result', 'FAIL')]:
+            with self.assertRaises(ValueError, msg=(key, value)): validate_policy(self.extended(**{key: value}))
+
+    def test_policies_without_the_profile_never_inherit_higher_limits(self):
+        for key, value in [('hard_seconds', 10800), ('hard_model_calls', 1500), ('hard_seconds', 7201)]:
+            with self.assertRaises(ValueError): validate_policy(dict(policy(), **{key: value}))
+        with self.assertRaises(ValueError): validate_policy(dict(policy(), profile=None, hard_model_calls=1500))
+        with self.assertRaises(ValueError): Budget(seconds=301)
+        with self.assertRaises(ValueError): LabBudget(seconds=1501, calls=153)
+        suite = json.loads(Path('projects/ble-elva/suites/enzberg-nsn014-v0.3.json').read_text(encoding='utf-8'))
+        suite['resource_policy']['hard_model_calls'] = 1500
+        with self.assertRaises(ValueError): validate_suite(suite)
+
+    def test_extended_budget_stops_at_its_own_ceilings_as_incomplete_measurement(self):
+        now = [0]; budget = SuiteBudget(self.extended(), clock=lambda: now[0])
+        budget.start_task({'case_id': 'plan', 'observation_marks': {'seconds': 600, 'actions': 60}})
+        for call in range(1500):
+            budget.complete_call(budget.claim('executor' if call % 2 == 0 else 'reviewer'))
+        with self.assertRaises(ResourceStop): budget.claim()
+        report = budget.report()
+        self.assertEqual((report['model_calls'], report['stop_reason'], report['resource_result']),
+                         (1500, 'SUITE_CALL_CEILING', 'INCONCLUSIVE'))
+        now = [0]; budget = SuiteBudget(self.extended(), clock=lambda: now[0])
+        now[0] = 10799; self.assertEqual(budget.remaining(), 1)
+        now[0] = 10800
+        with self.assertRaises(ResourceStop): budget.remaining()
+        self.assertEqual(budget.report()['stop_reason'], 'SUITE_TIME_CEILING')

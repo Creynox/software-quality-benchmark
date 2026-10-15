@@ -4,10 +4,13 @@ Auftrag: Issue #21 (PO-Auftrag vom 15.10.2026), Draft PR #10. Durchgeführt von 
 (Opus 5.5) als alleiniger technischer Hauptagent; der Codex-WIP `a5d712c` wurde ohne Verlust
 übernommen.
 
-**Abschlussstatus: PARTIAL GO.** Der Code ist technisch ausführungsbereit (die modellfreie
-Readiness ist bestanden), aber ein Live-Lauf hat nicht stattgefunden (funktional NOT_RUN). Der einzige verbleibende Blocker
-ist die fehlende ausdrückliche PO-Ausführungsfreigabe für genau diesen v0.4-Lauf (Abschnitt 10).
-Zum Request-Budget ist zusätzlich eine PO-Entscheidung nötig (Abschnitt 8).
+**Abschlussstatus bei Berichtserstellung: PARTIAL GO.** Der Code war technisch ausführungsbereit (die
+modellfreie Readiness war bestanden), ein Live-Lauf hatte nicht stattgefunden. Zum Request-Budget und zur
+Einzellauf-Freigabe war eine PO-Entscheidung nötig (Abschnitte 8, 10, 11).
+
+**Nachtrag nach dem freigegebenen Einzellauf (Abschnitt 12):** Der Lauf `3d9c2706…` endete nach 19,7 s
+als **NO-GO / INVALID_HARNESS**; elf Stufen sind NOT_RUN. Es liegt **keine gültige BLE-Messung** vor.
+Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-Freigabe und eine PO-Entscheidung zu Position P06.
 
 ## 1. Ergebnis in Kürze
 
@@ -290,3 +293,74 @@ Vorbereitet ist die Budgetvariante aus Abschnitt 8, Option B. Sie ist **nicht ak
 - **Freigabe-Gate:** Eine Suite mit erweitertem Profil gilt erst als ausführungsbereit, wenn das private Fixture-Manifest einen Freigabeeintrag `suite_copy.budget_approval` enthält (`approved_by: PO`, Datum, Aussage, Profil, Suite-Hash, Grenzwerte). Fehlt er oder weicht ein Wert ab, ist die Readiness `BLOCKED` mit `BUDGET_APPROVAL_MISSING`; zusätzlich steht dort `other_gates: PASSED`, wenn alle übrigen Gates bestanden haben. Ein Lauf hält Profil und Freigabe im Manifest fest.
 - **Privates Manifest:** `fixture-v041-budget-pending-20261015.json` (neue Datei, Original unverändert). Es ändert nur `suite_version`, den Suite-Hash (neu `451796ac…`, vorher `fbc65e91…`) samt Hash-Historie und den Änderungsvermerk. Datenbank, Container, Sessions und Referenzwerte sind unverändert. Es enthält **keine** Budgetfreigabe.
 - **Offene Entscheidung:** Die PO-Budgetfreigabe (1.500 / 10.800) ist nicht erteilt, ebenso die Einzellauf-Freigabe aus Abschnitt 10. Beide gelten nur für die jeweils genannte Suite-Version, den Commit und das Manifest.
+
+## 12. Live-Lauf 1 (3d9c2706-7e58-4979-8515-6fbc6cac9a1e) — Ergebnis und Folgerungen
+
+**Durchführung.** Auf ausdrückliche PO-Freigabe (v0.4.1, 1.500 Anfragen / 10.800 s, genau ein Lauf) wurde am
+15.10.2026 ein Lauf an Commit `b5f1107` gestartet. Alle Pre-Run-Gates waren bestanden (sauberer Quellstand, vier gültige
+Sessions mit Identität, Tenant, Rolle und Enzberg-Scope, Runtime, Fixture, Hashes, Routen, Stufenverträge, Budgetfreigabe).
+Nach der ChatGPT-Anmeldung lief der Lauf 19,7 s mit **3 Modellanfragen** (Executor 2, Reviewer 1; bekannte Executor-Tokens
+3.381). Privat abgelegt im Lauf-Ordner `sqbf-regular-runs/3d9c2706-7e58-4979-8515-6fbc6cac9a1e` (außerhalb von Git).
+
+**Objektives Ergebnis.**
+
+| Stufe | Status | Grund |
+|---|---|---|
+| PLAN | INVALID_HARNESS | Reviewer-Anfrage fehlgeschlagen; Controller brach die Stufe ab (Abschnitt „Befund 2“) |
+| RECEIPT … RIGHTS (11 Stufen) | NOT_RUN | vorgelagerter kritischer Stopp |
+
+Kein PASS, kein FAIL, keine BLE-Abweichung. Die Datenbank ist unverändert (0 Proben, 0 LIMS, 0 Reports; der statische
+Fixture-Zustand ist unverändert). Die Fixture-Lease ist verbraucht.
+
+**Befund 1 — Voraussetzung der Testdaten, kein BLE-Fehler: Position P06 ist in den Quelldaten inaktiv.**
+Der Executor klickte einmal „Proben anlegen / nachanlegen“. BLE lehnte ab („Das Produkt ist nicht aktiv und kann keine neue
+Probe tragen.“); alle zehn Positionen blieben „noch nicht angelegt“. Das SELECT-only-Oracle bestätigt: genau ein Plan-Produkt
+(Position P06) hat `is_active = false`, die übrigen neun sind aktiv und vollständig (Verwendungsbereich, Produktebene,
+Normzuordnung). BLE verweigert die plan-weite Anlage also alles-oder-nichts. Diese Voraussetzung hat die Readiness nicht
+geprüft; ohne den Reviewer-Fehler wäre die Stufe als `PLAN_SAMPLE_DEVIATION` (FAIL) erschienen und hätte einen Fixture-Zustand
+fälschlich BLE angelastet. Behoben: Die Readiness prüft jetzt je Plan-Produkt Aktivität, Verwendungsbereich, Produktebene,
+Besitzer-Scope und Normzuordnung (`PLAN_PRODUCT_PRECONDITION_FAILED`, nur Positions-IDs). An der echten Fixture meldet das Gate
+exakt P06.
+Beobachtung für BLE (unbestätigt, nicht als Issue angelegt): Die Meldung nennt das betroffene Produkt nicht, und die Planliste
+kennzeichnet die inaktive Position nicht. Eine einzelne inaktive Position blockiert die Anlage aller Proben, ohne Hinweis, welche.
+Evidenz: Screenshot `NSN014-PLAN/001-inspection.png`, Executor-Aussage, Oracle-Abfrage.
+
+**Befund 2 — SQBF-Harness: Ein Reviewer-Ausfall durfte die Messung nicht abbrechen.**
+Die Reviewer-Anfrage schlug nach 2,7 s fehl; die Nutzung ist leer, also kam keine Antwort an. Der Controller setzte daraufhin
+die ganze Stufe auf INVALID_HARNESS und stoppte die Suite. Die Ursache des Anfragefehlers ist **nicht bewiesen**: Der isolierte Worker verschluckt
+Fehlertexte bewusst, und ein weiterer Modellaufruf zur Diagnose war nicht freigegeben. Die kurze Dauer spricht für eine
+sofortige Ablehnung durch den Provider, vermutlich wegen des neuen strikten Review-Schemas (verschachtelte Befunde,
+nullbare Werte). Das ist nur eine Hypothese. Behoben bzw. verbessert:
+
+- Die UX-Ebene ist jetzt „best effort“: Ein Reviewer-Ausfall wird mit festem Code festgehalten, schaltet den Reviewer für den Rest des
+  Laufs ab (kein Retry, kein weiterer Verbrauch) und ändert nie ein objektives Ergebnis oder die Suite. UX bleibt dann NOT_EVALUATED.
+- Der Worker meldet bei Provider-Fehlern einen Code aus einer Allowlist (z. B. `PROVIDER_HTTP_400`, `RESPONSE_SCHEMA_MISMATCH`),
+  nie Provider-Text, Nutzdaten oder Tokens.
+- Der Bericht nennt den Grund einer Stufe auch bei Controller-Fehlern und führt ausgefallene Reviews unter P2.
+
+**Tests nach den Korrekturen:** 323 lokale Tests OK (vorher 311), Commit `65cd318`.
+
+**Antworten auf die Fragen des Auftrags**
+
+1. *Welche BLE-Prozesse funktionieren?* Nicht gemessen. Belegt ist nur, dass BLE die Anlage für ein inaktives Produkt konsistent und ohne Teilanlage
+   verweigert.
+2. *Welche schlagen fehl?* Keine objektiv belegte Abweichung.
+3. *BLE oder SQBF?* Beide Auffälligkeiten liegen im Testaufbau: Fixture-Voraussetzung (P06) und Harness (Reviewer). Eine BLE-Beobachtung ist nur UX-seitig (oben).
+4. *Größte UX-Hürden?* Aus diesem Lauf: fehlender Hinweis auf die inaktive Position und alles-oder-nichts-Anlage (unbestätigt). Sonst nicht bewertbar.
+5. *Stärkste BLE-Verbesserung?* Nicht belegbar; Kandidat siehe 4.
+6. *Reproduzierbar belegt?* Das Verhalten ist einmal beobachtet und durch das Oracle gestützt; nicht wiederholt (kein Retry erlaubt).
+7. *BLE-Issues?* Noch keines; erst nach Bestätigung durch die PO bzw. einen weiteren Lauf.
+8. *Retest nach BLE-Korrektur?* PLAN mit einer inaktiven Position (Meldung, Planliste) und danach alle zwölf Stufen.
+9. *Nicht getestet?* Alle Stufen ab RECEIPT und der gesamte Datenerfassungs-, Rechen-, Bericht- und PDF-Umfang.
+10. *Vollständig und valide?* Nein. Die Messung ist **INVALID** und unvollständig (1 von 12 Stufen versucht, keine gültig).
+
+**Nächste Schritte (PO-Entscheidungen).**
+
+1. **P06:** (a) in der isolierten Fixture das Produkt als dokumentierten Vorbereitungsschritt aktivieren (nur `is_active`; der
+   zehnteilige Datensatz und alle Messwerte bleiben); (b) das Produkt per BLE-Oberfläche durch den Laborleiter aktivieren lassen
+   (zusätzlicher Prozessschritt, Mehrverbrauch, außerhalb des PLAN-Auftrags); (c) P06 aus dem Plan nehmen (ändert den freigegebenen Datensatz).
+   Empfehlung: (a), mit Vermerk im Manifest. Die Ablehnung bleibt als BLE-Beobachtung dokumentiert.
+2. **Fixture und Freigabe:** Der Lauf hat die Lease verbraucht, auch wenn die Datenbank unverändert ist. Ein Folgelauf braucht eine ausdrückliche
+   Freigabe für die Wiederverwendung dieser Fixture (Lease entfernen) oder für eine neue Fixture, dazu eine neue Einzellauf-Freigabe.
+3. **Vorab-Probe des Providers (optional, empfohlen):** zwei Mini-Anfragen (Executor- und Review-Schema, leeres Bild) vor dem Lauf, um das
+   Review-Schema zu bestätigen. Sie sind noch nicht implementiert und würden separat freigegeben.

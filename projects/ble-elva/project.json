@@ -38,11 +38,11 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "TECHNICALLY_READY_LIVE_RUN_NOT_AUTHORIZED",
+    "status": "LIVE_RUN_1_INVALID_HARNESS_FOLLOWUP_APPROVAL_REQUIRED",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
-    "live_suite_executed": false,
+    "live_suite_executed": true,
     "completion_report": "docs/nsn014-v04-completion-report.md",
     "sand_equivalent_source_unit": "cm",
     "sand_equivalent_fixture_unit": "mm",
@@ -115,7 +115,8 @@
         "native plan form",
         "entry routes"
       ],
-      "not_a_benchmark_result": true
+      "not_a_benchmark_result": true,
+      "superseded_by": "Live run 1 exposed a missing plan-product gate; readiness now reports PLAN_PRODUCT_PRECONDITION_FAILED for P06 and FIXTURE_ALREADY_CLAIMED while the lease exists"
     },
     "scoring": {
       "objective": "nsn014-objective-v1",
@@ -136,18 +137,40 @@
       ]
     },
     "live_run_authorization": {
-      "status": "MISSING",
-      "required_from": "PO",
-      "scope": "one v0.4 run, provider chatgpt_plan (gpt-6-luna / gpt-6.1-sol), K3 data, budget, no retry"
+      "status": "CONSUMED",
+      "detail": "One run approved and executed 2026-10-15; a follow-up run needs a new explicit PO approval, a decision on P06 and a fixture/lease decision"
     },
     "budget_candidate": {
       "suite": "suites/enzberg-nsn014-v0.4.1.json",
       "profile": "NSN014-CALIBRATION-v2",
       "hard_model_calls": 1500,
       "hard_seconds": 10800,
-      "status": "PREPARED_NOT_ACTIVE_PO_APPROVAL_MISSING",
+      "status": "APPROVED_AND_USED_ONCE",
       "gate": "suite_copy.budget_approval in the private manifest; readiness BLOCKED BUDGET_APPROVAL_MISSING without it",
       "v0_4_unchanged": true
-    }
+    },
+    "live_runs": [
+      {
+        "run_id": "3d9c2706-7e58-4979-8515-6fbc6cac9a1e",
+        "date": "2026-10-15",
+        "suite": "0.4.1",
+        "sqbf_commit": "b5f1107c24a5e24ef503ff2c4fa081250beed5b2",
+        "result": "NO-GO",
+        "classification": "INVALID_HARNESS",
+        "stages": {
+          "PLAN": "INVALID_HARNESS",
+          "others": "NOT_RUN (11)"
+        },
+        "model_requests": 3,
+        "wall_seconds": 19.7,
+        "database_changed": false,
+        "fixture_lease_consumed": true,
+        "causes": [
+          "plan product P06 inactive in approved source data (BLE refuses the whole plan-wide creation)",
+          "reviewer request failed; controller treated it as stage-invalidating (fixed in 65cd318)"
+        ],
+        "bounded_valid_measurement": false
+      }
+    ]
   }
 }

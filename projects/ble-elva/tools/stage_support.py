@@ -153,21 +153,28 @@ def ux_verdicts(outcomes):
     return 'PASS' if all(v == 'PASS' for v in verdicts) else 'INCONCLUSIVE'
 
 
+REVIEWER_FAILURE_LIMIT = 3
+
+
 def ask_review(ask, reviewer, prompt, images, budget, evidence, **context):
     """Best-effort UX review: returns (data, None) or (None, error_code).
 
-    A failed reviewer request is recorded and the reviewer is switched off for the rest of
-    the run (no retry, no further spend); objective results never depend on it. Only the
-    resource ceiling still stops the run.
+    A failed reviewer request is recorded with a fixed code and never repeated (each later
+    review belongs to another stage or position). After REVIEWER_FAILURE_LIMIT consecutive
+    failures the reviewer is switched off for the rest of the run, so a systematic fault
+    costs at most three requests while an input-specific one does not remove the whole UX
+    layer. Objective results never depend on it; only the resource ceiling still stops the run.
     """
-    if getattr(budget, 'reviewer_error', None):
-        return None, 'REVIEWER_DISABLED_AFTER_FAILURE'
+    if getattr(budget, 'reviewer_failures', 0) >= REVIEWER_FAILURE_LIMIT:
+        return None, 'REVIEWER_DISABLED_AFTER_REPEATED_FAILURES'
     try:
-        return ask(reviewer, prompt, images, budget, 'reviewer').data, None
+        data = ask(reviewer, prompt, images, budget, 'reviewer').data
+        budget.reviewer_failures = 0
+        return data, None
     except ResourceStop:
         raise
     except Exception as error:
         code = getattr(error, 'code', None) or 'REVIEWER_CALL_FAILED'
-        budget.reviewer_error = code
-        evidence.event('reviewer_call_failed', error_code=code, **context)
+        budget.reviewer_failures = getattr(budget, 'reviewer_failures', 0) + 1
+        evidence.event('reviewer_call_failed', error_code=code, consecutive_failures=budget.reviewer_failures, **context)
         return None, code

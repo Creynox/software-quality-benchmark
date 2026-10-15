@@ -311,6 +311,12 @@ class ReviewerFailureDoesNotInvalidateTheStageTests(unittest.TestCase):
         with patch.object(measurement, 'ask_calibrated', side_effect=ask), patch.object(measurement, 'check_action'):
             first = measurement.run_position(b, f, p, PLAN, 'sand', {}, object(), object(), shared, MagicMock())
             second = measurement.run_position(b, f, p, PLAN, 'sand', {}, object(), object(), shared, MagicMock())
+            reviews_after_two = calls.count('reviewer')
+            third = measurement.run_position(b, f, p, PLAN, 'sand', {}, object(), object(), shared, MagicMock())
+            fourth = measurement.run_position(b, f, p, PLAN, 'sand', {}, object(), object(), shared, MagicMock())
         self.assertEqual((first['status'], first['technical_gate'], first['review_error']), ('BLOCKED', 'PASS', 'RESPONSE_SCHEMA_MISMATCH'))
-        self.assertEqual(second['review_error'], 'REVIEWER_DISABLED_AFTER_FAILURE')
-        self.assertEqual(calls.count('reviewer'), 1)
+        self.assertEqual(second['review_error'], 'RESPONSE_SCHEMA_MISMATCH')  # next position, new request, not a retry
+        self.assertEqual(reviews_after_two, 2)
+        self.assertEqual((third['review_error'], fourth['review_error']), ('RESPONSE_SCHEMA_MISMATCH', 'REVIEWER_DISABLED_AFTER_REPEATED_FAILURES'))
+        self.assertEqual(calls.count('reviewer'), 3)
+        self.assertTrue(all(o['technical_gate'] == 'PASS' for o in (first, second, third, fourth)))

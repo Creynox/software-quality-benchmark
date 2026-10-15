@@ -83,7 +83,7 @@ class ReviewerBestEffortTests(unittest.TestCase):
         def event(self, kind, **fields):
             self.events.append((kind, fields))
 
-    def test_reviewer_failure_is_recorded_once_and_switches_the_reviewer_off(self):
+    def test_repeated_reviewer_failures_switch_the_reviewer_off_but_one_does_not(self):
         from sqbf.providers import ModelResponse
         evidence, budget, calls = self.Evidence(), self.Budget(), []
 
@@ -94,10 +94,23 @@ class ReviewerBestEffortTests(unittest.TestCase):
             calls.append(actor)
             raise Failure('provider text that must never be stored')
         self.assertEqual(module.ask_review(ask, 'r', 'p', [b'x'], budget, evidence, persona='lead'), (None, 'PROVIDER_HTTP_400'))
-        self.assertEqual(module.ask_review(ask, 'r', 'p', [b'x'], budget, evidence), (None, 'REVIEWER_DISABLED_AFTER_FAILURE'))
-        self.assertEqual(calls, ['reviewer'])
-        self.assertEqual(evidence.events, [('reviewer_call_failed', {'error_code': 'PROVIDER_HTTP_400', 'persona': 'lead'})])
-        self.assertNotIn('provider text', str(evidence.events))
+        for _ in range(2):module.ask_review(ask, 'r', 'p', [b'x'], budget, evidence)
+        self.assertEqual(module.ask_review(ask, 'r', 'p', [b'x'], budget, evidence), (None, 'REVIEWER_DISABLED_AFTER_REPEATED_FAILURES'))
+        self.assertEqual(calls, ['reviewer'] * module.REVIEWER_FAILURE_LIMIT)
+        self.assertEqual(evidence.events[0], ('reviewer_call_failed', {'error_code': 'PROVIDER_HTTP_400', 'consecutive_failures': 1, 'persona': 'lead'}))
+        self.assertEqual(len(evidence.events), 3);self.assertNotIn('provider text', str(evidence.events))
+
+    def test_a_success_resets_the_consecutive_failure_count(self):
+        from sqbf.providers import ModelResponse
+        budget, evidence, outcomes = self.Budget(), self.Evidence(), ['fail', 'fail', 'ok', 'fail', 'fail', 'ok', 'fail']
+
+        def ask(model, prompt, images, budget_, actor):
+            if outcomes.pop(0) == 'fail':raise RuntimeError('x')
+            return ModelResponse({'verdict': 'PASS'}, {})
+        results = [module.ask_review(ask, 'r', 'p', [], budget, evidence)[1] for _ in range(7)]
+        self.assertEqual(results, ['REVIEWER_CALL_FAILED', 'REVIEWER_CALL_FAILED', None, 'REVIEWER_CALL_FAILED', 'REVIEWER_CALL_FAILED', None,
+                                   'REVIEWER_CALL_FAILED'])
+        self.assertEqual(outcomes, [])
         plain = self.Budget()
         self.assertEqual(module.ask_review(lambda *a: (_ for _ in ()).throw(ValueError('x')), 'r', 'p', [], plain, evidence),
                          (None, 'REVIEWER_CALL_FAILED'))

@@ -377,11 +377,11 @@ class ReviewerIsolationReportTests(unittest.TestCase):
         records=[{'case_id':'NSN014-PLAN','persona':'laboratory_lead','result':'INVALID','objective_status':'INVALID_HARNESS',
                   'technical_gate':'INVALID','error_code':'INSPECTION_RUNNER_ERROR','review_error':'PROVIDER_HTTP_400'},
                  {'case_id':'NSN014-SE','persona':'laboratory_staff','result':'PASS','objective_status':'PASS','technical_gate':'PASS',
-                  'oracle_gate':'PASS','positions':[{'review_error':'REVIEWER_DISABLED_AFTER_FAILURE'}]}]
+                  'oracle_gate':'PASS','positions':[{'review_error':'REVIEWER_DISABLED_AFTER_REPEATED_FAILURES'}]}]
         matrix=module.case_matrix(records)
         self.assertEqual((matrix[0]['reason'],matrix[0]['review_errors']),('INSPECTION_RUNNER_ERROR',['PROVIDER_HTTP_400']))
         self.assertEqual((matrix[1]['objective_status'],matrix[1]['ux_verdict'],matrix[1]['review_errors']),
-                         ('PASS','NOT_EVALUATED',['REVIEWER_DISABLED_AFTER_FAILURE']))
+                         ('PASS','NOT_EVALUATED',['REVIEWER_DISABLED_AFTER_REPEATED_FAILURES']))
         manifest={'run_id':'r','verdict':'NO-GO','technical_status':'INVALID','functional_status':'INVALID','scenario_id':'S',
                   'scenario_version':'0.4.1','sqbf_commit':'c','software_version':'b','executor_model':'e','analyst_model':'a',
                   'suite_sha256':'s','dataset_sha256':'d','case_matrix':matrix,'ux_summary':module.ux_summary(records),

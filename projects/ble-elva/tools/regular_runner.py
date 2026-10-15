@@ -262,7 +262,7 @@ def check_ready(suite,dataset,fixture,projection,allocation,*,provider_probe=Non
         if budget['status']=='BUDGET_APPROVAL_MISSING':
             # Every other gate above passed; only the PO's budget decision is outstanding.
             return dict(blocked,reason='BUDGET_APPROVAL_MISSING',other_gates='PASSED',budget_approval=budget,
-                        request_estimate=estimate)
+                        request_estimate=estimate,provider_probe=probe,plan_products=plan_products)
         return {'status':'READY_FOR_SINGLE_SUITE_RUN','model_calls':0,'database_writes':0,
                 'budget_approval':budget,'provider_probe':probe,'plan_products':plan_products,'source':source,'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'stage_contracts':contracts,
                 'fixture_gates':gates,'dependencies':dependencies,'native_receipt_form':form,'entry_routes':routes,

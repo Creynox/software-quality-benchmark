@@ -98,6 +98,25 @@ Wiederöffnung nur zur Ansicht. Der Screenshot-Agent erhält keine Controller-Da
 Nach jedem Versuch werden Persistenz und alle übrigen geschützten Tabellen sowie
 die Golden-Quelle unabhängig gelesen. FAIL bleibt erhalten, kein automatischer Retry.
 
+## NSN014 v0.4 – reguläre Suite
+
+Modellfreie Readiness unmittelbar vor jedem Lauf (ohne `--execute`, keine Modell- oder
+DB-Schreibzugriffe; prüft unter anderem einen sauberen SQBF-Commit, Stufenverträge, Sessions,
+Runtime, leeren Start, Plan-Formular und Einstiegsrouten):
+
+```powershell
+& $python -m sqbf.cli run-suite --suite projects/ble-elva/suites/enzberg-nsn014-v0.4.json `
+  --fixture <privates-plan-flow-manifest.json> --dataset <privat>\dataset-ux-source-v1.json `
+  --projection <privat>eference-projection-ux-v1.json --allocations <privat>llocation-reference-v1.json
+```
+
+Live-Lauf nur mit ausdrücklicher PO-Ausführungsfreigabe für genau diesen Lauf: derselbe Befehl
+mit `--execute` (Standardausgabe `D:/Temp/sqbf-regular-runs`). Frische ChatGPT-Plan-OAuth,
+einmalige Fixture-Lease, kein Retry; bei abgelaufener Session höchstens eine kontrollierte
+Erneuerung je Persona. Ergebnis: `run.json`, `cases.json`, `accounting.json` und deutscher
+`completion-report.md` im privaten Lauf-Ordner. Details:
+[Abschlussbericht](../../docs/nsn014-v04-completion-report.md).
+
 ## Evidenz und Aufbewahrung
 
 Private lokale Run-Ordner: PNGs mit SHA-256, Events, Usage, gemessene Modell-/Runnerzeit,

@@ -1,5 +1,12 @@
 # NSN014 implementation checkpoint — paused by PO
 
+> **Resolved on 2026-10-15 by Claude Code under issue #21.** The WIP below was taken over
+> without loss (`a5d712c`), completed and accepted locally: 305 tests OK, model-free v0.4
+> readiness READY_FOR_SINGLE_SUITE_RUN. Resume checklist items 1–5 are done; item 6 (live run)
+> still needs an explicit PO execution approval. Current state:
+> [NSN014 v0.4 completion report](../../docs/nsn014-v04-completion-report.md).
+> The text below is the unchanged historical checkpoint.
+
 Status: WIP, paused on 2026-10-15 at the user's request to conserve quota.
 No further implementation, tests, authentication or benchmark execution is authorized by this checkpoint.
 

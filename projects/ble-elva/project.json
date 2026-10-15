@@ -24,8 +24,10 @@
   },
   "source": "sqbf-project-profile",
   "related_issues": [
-    "https://github.com/Creynox/software-quality-benchmark/issues/9",
-    "https://github.com/Creynox/software-quality-benchmark/issues/11"
+    "https://github.com/Creynox/software-quality-benchmark/issues/11",
+    "https://github.com/Creynox/software-quality-benchmark/issues/16",
+    "https://github.com/Creynox/software-quality-benchmark/issues/21",
+    "https://github.com/Creynox/software-quality-benchmark/issues/9"
   ],
   "active_product_scenario": "scenarios/sts-0-45-product-core-v0.3.json",
   "latest_lab01_attempt": {
@@ -36,13 +38,12 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "IN_IMPLEMENTATION",
-    "active_candidate": "suites/enzberg-nsn014-v0.3.json",
+    "status": "TECHNICALLY_READY_LIVE_RUN_NOT_AUTHORIZED",
+    "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
-    "superseded_candidate": "suites/enzberg-nsn018-v0.1.json",
     "live_suite_executed": false,
-    "completion_report": "docs/regular-suite-setup.md",
+    "completion_report": "docs/nsn014-v04-completion-report.md",
     "sand_equivalent_source_unit": "cm",
     "sand_equivalent_fixture_unit": "mm",
     "unit_decision_by": "PO reconfirmed original cm entries after method clarification, 2026-10-14",
@@ -56,24 +57,25 @@
       "status": "FIXTURE_GATES_VERIFIED",
       "target_url": "http://127.0.0.1:5082/",
       "postgres_port": 55434,
-      "start_state": "10 products, 1 plan, 10 items; zero probes/LIMS/reports",
+      "start_state": "10 products, 1 plan, 10 items, 2 projects; zero probes/LIMS/reports",
       "personas": {
         "laboratory_lead": "Laborleiter",
         "laboratory_staff": "Mitarbeiter",
-        "wpk_lead": "Laborleiter (separate account)",
+        "wpk_lead": "Laborleiter (separate account, no fpc.view; WPK stage starts on the plan)",
         "plant_lead": "Viewer"
       },
       "runtime_build": "c51ea2229b3513aa59e659774fe8ce44cdd81859",
       "acceptance_command": "sqbf.cli suite-fixture-check",
-      "executor_integration": "pending",
+      "executor_integration": "implemented: twelve stage adapters, objective verdicts, separate UX layer",
       "normative_conformity_scoring": false,
       "latest_session_gate": {
-        "status": "BLOCKED_SESSION",
+        "status": "SESSIONS_VERIFIED",
         "checked_at": "2026-10-15",
-        "actor": "laboratory_staff",
-        "reason": "Saved session redirects home to /login; no login retried",
-        "historical_fixture_acceptance": "FIXTURE_GATES_VERIFIED on earlier check; not current session proof"
-      }
+        "scope": "all four personas",
+        "renewal_performed": false,
+        "evidence": "model-free run-suite readiness"
+      },
+      "receipt_entrypoint": "plan_replenish_once by laboratory_lead"
     },
     "execution_policy": {
       "mode": "calibration",
@@ -82,7 +84,61 @@
       "task_observation_seconds": 600,
       "task_observation_actions": 60,
       "active_endpoint": "evaluation/PDF; release/signature/delivery excluded",
-      "runtime_integration": "pending; accounting component locally tested only"
+      "runtime_integration": "implemented; shared accounting used by all stage adapters",
+      "minimum_model_requests_estimate": 646,
+      "budget_decision_required": "Lower bound uses 65% of the 1000-request ceiling; PO to confirm v0.4 limits or approve v0.4.1 resource-only change"
+    },
+    "superseded_candidates": [
+      "suites/enzberg-nsn014-v0.3.json",
+      "suites/enzberg-nsn018-v0.1.json"
+    ],
+    "setup_history": "docs/regular-suite-setup.md",
+    "readiness": {
+      "status": "READY_FOR_SINGLE_SUITE_RUN",
+      "checked_at": "2026-10-15",
+      "sqbf_commit": "f4ecc0d",
+      "model_calls": 0,
+      "database_writes": 0,
+      "local_tests": 305,
+      "gates": [
+        "clean SQBF source",
+        "plan workflow and permissions",
+        "reference hashes",
+        "suite bound to fixture",
+        "stage contracts and vocabulary round trip",
+        "request lower bound",
+        "method fixture",
+        "fixture and sessions",
+        "static start state",
+        "active runtime identity",
+        "unused start state",
+        "native plan form",
+        "entry routes"
+      ],
+      "not_a_benchmark_result": true
+    },
+    "scoring": {
+      "objective": "nsn014-objective-v1",
+      "ux_rubric": "nsn014-ux-rubric-v1 (provisional)",
+      "statuses": [
+        "PASS",
+        "FAIL",
+        "BLOCKED",
+        "INVALID_HARNESS",
+        "INCONCLUSIVE",
+        "NOT_RUN",
+        "NOT_IMPLEMENTED"
+      ],
+      "global_score": null,
+      "calculation_oracle_not_covered": [
+        "shape index (sieve-line weighted)",
+        "partial or wash-coupled sieving"
+      ]
+    },
+    "live_run_authorization": {
+      "status": "MISSING",
+      "required_from": "PO",
+      "scope": "one v0.4 run, provider chatgpt_plan (gpt-6-luna / gpt-6.1-sol), K3 data, budget, no retry"
     }
   }
 }

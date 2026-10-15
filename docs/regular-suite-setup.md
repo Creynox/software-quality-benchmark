@@ -256,6 +256,14 @@ ten products/positions, zero probes and four independently verified actor sessio
 Receipt guard and Oracle have local regressions; full stage Runner integration
 remains pending. No regular-suite live run yet.
 
+## v0.4 integration and readiness — 2026-10-15
+
+All twelve v0.4 stages are integrated with objective verdicts, an independent
+calculation Oracle and a separate provisional UX layer. Local regression and the
+model-free readiness passed; no live run has been executed. Current state, stage
+matrix, budget decision and the open execution approval:
+[NSN014 v0.4 completion report](nsn014-v04-completion-report.md).
+
 ## Calibration and task boundaries — 2026-10-15
 
 See [current calibration completion report](nsn014-calibration-contract.md).

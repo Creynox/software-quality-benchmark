@@ -11,6 +11,10 @@ auf BLE 5081 / PostgreSQL 55433. Golden-Quelle 5080 / 55432 bleibt leer und gesc
 normale BLE-/PostgreSQL-Instanzen bleiben unverändert. Synthetische Materialwerte
 Kalkstein / gebrochen sind ausdrücklich Testdaten, keine realen Werkdaten.
 
+NSN014 v0.4 (reguläre Suite, zwölf Stufen, vier Personas) ist technisch ausführungsbereit:
+305 lokale Tests OK, modellfreie Readiness READY_FOR_SINGLE_SUITE_RUN. Ein Live-Lauf braucht eine
+ausdrückliche PO-Ausführungsfreigabe. Siehe [Abschlussbericht](../../docs/nsn014-v04-completion-report.md).
+
 ## Ausführung und Nachweise
 
 - [Betriebsanleitung](operations.md): Start, Working Copy, Session, OAuth, Gates,

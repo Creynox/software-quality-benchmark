@@ -43,8 +43,10 @@ class FakeDocker:
         self.source, self.log, self.updated = source_container, [], False
         self.corrupt_clone, self.exit_code, self.checksum_mismatch = corrupt_clone, exit_code, checksum_mismatch
         self.row_active = row_active
+        self.encodings = []
 
-    def __call__(self, args, input=None, capture_output=True, text=True, timeout=None):
+    def __call__(self, args, input=None, capture_output=True, text=True, timeout=None, encoding=None, errors=None):
+        self.encodings.append((args[0], encoding, errors))
         self.log.append('taskkill' if args[0] == 'taskkill' else ' '.join(args[:3]))
         ok = lambda out='': CompletedProcess(args, 0, stdout=out)
         if args[0] == 'taskkill' or args[:3] == ['docker', 'volume', 'create']:
@@ -194,6 +196,9 @@ class CloneFlowTests(unittest.TestCase):
                                   'clone_verified_identical', 'override_applied', 'web_started'])
         self.assertEqual(popen.call_args.kwargs['env']['ConnectionStrings__DefaultConnection'].count('Database=' + manifest['database']['name']), 1)
         self.assertFalse(any('workspace_products' in str(c) and 'DELETE' in str(c) for c in docker.log))
+        self.assertTrue(all(enc == 'utf-8' for _, enc, _ in docker.encodings))
+        self.assertEqual({err for tool, _, err in docker.encodings if tool == 'taskkill'}, {'replace'})
+        self.assertEqual({err for tool, _, err in docker.encodings if tool == 'docker'} - {'replace'}, {'strict'})
 
     def test_a_clone_that_differs_from_the_source_is_never_modified(self):
         result, docker, _, _, _ = self.run_clone(corrupt_clone=True)

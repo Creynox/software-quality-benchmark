@@ -42,8 +42,10 @@ class CloneError(RuntimeError):
         self.phase, self.reason = phase, reason
 
 
-def _run(run, args, *, phase, input=None, timeout=120):
-    result = run(args, input=input, capture_output=True, text=True, timeout=timeout)
+def _run(run, args, *, phase, input=None, timeout=120, errors='strict'):
+    # Explicit UTF-8: the platform default (cp1252) silently loses the output of a failed reader thread.
+    # Localized OS tools (taskkill) print in the OEM code page and are decoded leniently.
+    result = run(args, input=input, capture_output=True, text=True, encoding='utf-8', errors=errors, timeout=timeout)
     if result.returncode != 0:
         raise CloneError(phase, 'COMMAND_FAILED ' + ' '.join(args[:3]))
     return result.stdout
@@ -197,7 +199,7 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
     before = table_hashes(run, db['container'], controller, db['name'], phase='source_hash')
     done('source_hashed', tables=len(before))
     # The only processes touched are the verified source web process and the source container (stopped, kept).
-    _run(run, ['taskkill', '/PID', str(runtime['pid']), '/T', '/F'], phase='stop_web')
+    _run(run, ['taskkill', '/PID', str(runtime['pid']), '/T', '/F'], phase='stop_web', errors='replace')
     sleep(2)
     _run(run, ['docker', 'stop', '-t', '120', db['container']], phase='stop_source')
     info = json.loads(_run(run, ['docker', 'inspect', db['container']], phase='stop_source'))[0]
@@ -212,7 +214,7 @@ def clone_fixture(source_path, source_controller_credentials, output_dir, *, pro
                               '-v', identity['volume'] + ':/var/lib/postgresql/data', db['image']], phase='new_container').strip()
     for _ in range(120):
         ready = run(['docker', 'exec', container_id, 'pg_isready', '-h', '127.0.0.1', '-U', controller, '-d', 'postgres'],
-                    capture_output=True, text=True, timeout=10)
+                    capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10)
         if ready.returncode == 0:
             break
         sleep(.5)

@@ -8,7 +8,9 @@ import json
 from pathlib import Path
 from .calibration import validate_policy
 
-RESULTS = {'PASS','FAIL','BLOCKED','NOT_IMPLEMENTED','INVALID','INCONCLUSIVE'}
+# INVALID is the harness-invalid status (reported as INVALID_HARNESS); NOT_RUN marks
+# cases skipped after an upstream critical stop.
+RESULTS = {'PASS','FAIL','BLOCKED','NOT_IMPLEMENTED','NOT_RUN','INVALID','INCONCLUSIVE'}
 
 
 def canonical_hash(value):
@@ -130,7 +132,8 @@ def aggregate(suite,records):
     missing=sorted(expected-set(by_id))
     valid=sum(r['result'] in ('PASS','FAIL') for r in records)
     overall=('INVALID' if counts['INVALID'] else 'FAIL' if counts['FAIL'] else
-             'INCOMPLETE' if missing or counts['BLOCKED'] or counts['NOT_IMPLEMENTED'] or counts['INCONCLUSIVE'] else 'PASS')
+             'INCOMPLETE' if missing or counts['BLOCKED'] or counts['NOT_IMPLEMENTED'] or counts['NOT_RUN']
+             or counts['INCONCLUSIVE'] else 'PASS')
     measured=('INVALID' if counts['INVALID'] else 'COMPLETE_VALID' if valid==len(expected) and not missing else 'INCOMPLETE')
     return {'suite_id':suite['suite_id'],'version':suite['version'],'result':overall,
             'measurement_status':measured,

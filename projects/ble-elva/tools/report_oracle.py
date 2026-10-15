@@ -53,7 +53,21 @@ def expected_numbers(position):
     return expected
 
 
-def verify_reports(records,receipts,projection,fixture,downloads):
+def pdf_status(files):
+    """MISSING (no download), INVALID_ARTIFACT, IDENTITY_TEXT_MISSING or PASS."""
+    if len(files)!=1:return 'MISSING' if not files else 'DUPLICATE_DOWNLOAD'
+    integrity=files[0].get('pdf_integrity')
+    if integrity=='PASS':return 'PASS'
+    if integrity=='INVALID_ARTIFACT':return 'INVALID_ARTIFACT'
+    return 'IDENTITY_TEXT_MISSING'
+
+
+def verify_reports(records,receipts,projection,fixture,downloads,*,basis=None):
+    """Compare reports with source values, or with persisted raw data when basis is given.
+
+    The basis variant attributes report content to the report itself: a report that
+    faithfully shows incompletely persisted measurements is not a report deviation.
+    """
     blocked={'status':'BLOCKED_REPORT_EVIDENCE','model_calls':0,'database_writes':0}
     try:
         validate_target(fixture)
@@ -61,32 +75,41 @@ def verify_reports(records,receipts,projection,fixture,downloads):
             return dict(blocked,reason='REFERENCE_CHANGED')
         positions={r['sample_code']:r for r in projection['positions']};probes={p['id']:p for p in receipts['samples']}
         if len(positions)!=10 or len(probes)!=len(receipts['samples']):raise ValueError()
-        seen=set();failures=[];checked=[]
+        seen=set();failures=[];checked=[];details=[]
         for report in records:
             probe=probes[report['probe_id']];position=positions[probe['sample_code']];key=position['position_id']
             if probe['id'] in seen:return dict(blocked,reason='DUPLICATE_OR_UNEXPECTED_REPORT')
             seen.add(probe['id']);snap=report['snapshot']
             files=[d for d in downloads if d['report_id']==report['id']]
-            valid=(report['tenant_id']==fixture['fixture_data']['tenant_id'] and report['plant_id']==fixture['fixture_data']['plant_id']
+            relations=(report['tenant_id']==fixture['fixture_data']['tenant_id'] and report['plant_id']==fixture['fixture_data']['plant_id']
                 and report['laboratory_id'] is None and report['is_official'] is False and report['status']=='Draft' and snap['is_official'] is False
                 and probe['tenant_id']==fixture['fixture_data']['tenant_id'] and probe['plant_id']==fixture['fixture_data']['plant_id']
                 and snap['probe_id']==probe['id'] and snap['sample_code']==probe['sample_code']
                 and snap['product']==position['product'] and snap['plant']=='Enzberg'
-                and probe['product_id']==fixture['suite_copy']['mapping']['positions'][key]
-                and len(files)==1 and files[0].get('pdf_integrity')=='PASS')
+                and probe['product_id']==fixture['suite_copy']['mapping']['positions'][key])
+            pdf=pdf_status(files)
+            valid=relations and pdf=='PASS'
+            if basis is None:source=position
+            else:
+                persisted=basis.get(probe['sample_code'],{})
+                source={'measurements':{kind:persisted.get(kind,[]) for kind in ('sieves','wash','shape','boiling','sand')}}
             mismatched=[]
-            for name,expected in expected_numbers(position).items():
+            for name,expected in expected_numbers(source).items():
                 actual=snap.get(name)
                 # Report UI uses up to two decimal places for masses/heights.
                 numeric=Decimal(str(actual)) if actual is not None else None
                 if numeric is None or not numeric.is_finite() or numeric.quantize(Decimal('.01'),rounding=ROUND_HALF_UP)!=Decimal(str(expected)).quantize(Decimal('.01'),rounding=ROUND_HALF_UP):
                     mismatched.append(name)
-            if not valid or mismatched:failures.append({'position_id':key,'numeric_fields':mismatched,'relations_pdf_valid':valid})
+            details.append({'position_id':key,'report_id':report['id'],'relations_valid':relations,'pdf_status':pdf,
+                            'numeric_fields':mismatched})
+            if not valid or mismatched:failures.append({'position_id':key,'numeric_fields':mismatched,'relations_pdf_valid':valid,
+                                                         'relations_valid':relations,'pdf_status':pdf})
             checked.append(key)
         missing=sorted(set(p['position_id'] for p in positions.values())-set(checked))
         unknown_files=any(d['report_id'] not in {r['id'] for r in records} for d in downloads)
         return {'status':'PASS' if not failures and not missing and not unknown_files else 'FAIL',
-                'report_count':len(records),'missing_positions':missing,'failures':failures,
+                'report_count':len(records),'missing_positions':missing,'failures':failures,'positions':details,
+                'basis':'persisted' if basis is not None else 'source',
                 'unexpected_download':unknown_files,'model_calls':0,'database_writes':0,'normative_release':False}
     except (ValueError,TypeError,KeyError,AttributeError,InvalidOperation):
         return dict(blocked,reason='INCOMPLETE_OR_WRONG_REPORT_RELATION')

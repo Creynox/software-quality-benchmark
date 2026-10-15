@@ -80,3 +80,46 @@ def check_plan_form(fixture,dataset,policy):
         return result
     except Exception as error:
         return dict(result,reason='PLAN_FORM_CHECK_FAILED',error_type=type(error).__name__)
+
+
+ACCESS_DENIED_TITLE='Kein Zugriff auf diesen Bereich'
+
+
+def check_entry_routes(fixture,policy,probes):
+    """Model-free GET probe of each stage entry route per persona; no click, input or save.
+
+    A route counts as reachable when the persona stays on the exact path, is not sent
+    to /login and BLE does not render its access-denied state.
+    """
+    from playwright.sync_api import sync_playwright
+    from .inspection_guard import contract,event_guard,transport_allowed
+    result={'status':'BLOCKED_ENTRY_ROUTE_CONTRACT','model_calls':0,'save_attempts':0,'routes':[]}
+    try:
+        before=snapshot(fixture)
+        with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True,timeout=15000)
+            try:
+                for persona,path,stages in probes:
+                    config=contract(fixture,[path])
+                    context=browser.new_context(storage_state=fixture['personas'][persona]['storage_state'],
+                        viewport={'width':1280,'height':800},service_workers='block',accept_downloads=False)
+                    try:
+                        context.add_init_script(event_guard(config))
+                        context.route('**/*',lambda route,config=config:route.continue_() if transport_allowed(
+                            route.request.url,route.request.method,config,policy) else route.abort())
+                        page=context.new_page();page.set_default_timeout(3000)
+                        page.goto(config['origin']+path,wait_until='domcontentloaded',timeout=15000);page.wait_for_timeout(800)
+                        reached=page.url==config['origin']+path
+                        denied=page.get_by_text(ACCESS_DENIED_TITLE,exact=True).count()>0
+                        result['routes'].append({'persona':persona,'stages':list(stages),'route':'plan' if path.startswith('/beprobung/') else path,
+                                                 'reached':reached,'access_denied_shown':denied})
+                    finally:context.close()
+            finally:browser.close()
+        result['protected_data_unchanged']=snapshot(fixture)==before
+        if result['protected_data_unchanged'] and result['routes'] and all(
+                r['reached'] and not r['access_denied_shown'] for r in result['routes']):
+            result['status']='ENTRY_ROUTES_VERIFIED'
+        else:result['reason']='ENTRY_ROUTE_UNREACHABLE_OR_DENIED'
+        return result
+    except Exception as error:
+        return dict(result,reason='ENTRY_ROUTE_CHECK_FAILED',error_type=type(error).__name__)

@@ -52,6 +52,23 @@ class ReportOracleTests(unittest.TestCase):
             self.assertEqual(result['status'],'FAIL',status);self.assertFalse(result['positions'][0]['relations_valid'])
         self.assertTrue(module.is_draft('DRAFT'));self.assertFalse(module.is_draft(1))
 
+    def test_half_entered_measurements_give_no_expectation_instead_of_blocking_the_whole_report_stage(self):
+        # Guarded dry run 16.10.2026: one shape fraction with a missing value raised TypeError and made REPORT BLOCKED, which stops the suite.
+        position={'measurements':{'sieves':[{'input_g':None}],'wash':[{'container_g':'100','container_dry_g':None,'container_washed_g':'230'}],
+                                  'shape':[{'total_g':'100','poor_g':None},{'total_g':'50','poor_g':'2'}],'boiling':[{'initial_g':None,'final_g':'99.5'}],
+                                  'sand':[{'sand_height':'95','suspension_height':None},{'sand_height':None,'suspension_height':'121'}]}}
+        self.assertEqual(module.expected_numbers(position),{'washed_g':130,'shape_total_g':150,'boiling_final_g':'99.5','sand_a_mm':'95','suspension_b_mm':'121'})
+        complete={'measurements':{'sieves':[{'input_g':'2000'}],'wash':[{'container_g':'100','container_dry_g':'290','container_washed_g':'280'}],
+                                  'shape':[{'total_g':'100','poor_g':'3'}],'boiling':[{'initial_g':'100','final_g':'99.5'}],'sand':[]}}
+        self.assertEqual(module.expected_numbers(complete),{'sieve_input_g':'2000','dry_g':190,'washed_g':180,'shape_total_g':100,'shape_poor_g':3,
+                                                            'boiling_initial_g':'100','boiling_final_g':'99.5'})
+        # The report oracle on persisted data with gaps compares what exists and does not block.
+        f,p,r,probes,pdfs=reports()
+        basis={pos['sample_code']:{'wash':[{'container_g':None,'container_dry_g':None,'container_washed_g':None}],'shape':[{'total_g':None,'poor_g':None}],
+                                   'sieves':[],'boiling':[],'sand':[]} for pos in p['positions']}
+        result=module.verify_reports(r,probes,p,f,pdfs,basis=basis)
+        self.assertEqual(result['status'],'PASS')
+
     def test_duplicate_record_and_malformed_or_unknown_probe_blocks(self):
         f,p,r,probes,pdfs=reports();r.append(copy.deepcopy(r[0]))
         self.assertEqual(module.verify_reports(r,probes,p,f,pdfs)['status'],'BLOCKED_REPORT_EVIDENCE')

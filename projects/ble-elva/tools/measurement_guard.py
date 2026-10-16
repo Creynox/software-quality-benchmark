@@ -114,6 +114,9 @@ const field=(e,ignoreSaveLatch)=>{
 const classify=e=>{
  if(location.pathname!==config.path&&location.pathname!==config.root)return {kind:'blocked'};
  const a=e?.closest('a');if(a){let u=new URL(a.href,location.href);if(u.origin===config.origin&&[config.root,config.path].includes(u.pathname)&&!u.search&&!u.hash)return {kind:'navigation'};}
+ // BLE's own first step of module work: the sample page offers "Testauftrag erzeugen" as its primary action (it writes only the work items
+ // of the sample and its status; live run 413f7abe, dry run 16.10.2026). Allowed once per sample, on the sample page only.
+ if(location.pathname===config.root&&norm(e?.closest('button')?.innerText)==='Testauftrag erzeugen')return {kind:'setup',scope:'test_order'};
  if(location.pathname!==config.path)return {kind:'blocked'};
  const name=field(e);if(name&&!e?.closest('button'))return {kind:'field',field:name};
  if(e?.closest('.mud-expand-panel-header'))return {kind:'expand'};
@@ -148,7 +151,9 @@ document.addEventListener('keydown',e=>{
  if(!field(e.target)||e.altKey||e.metaKey||(e.ctrlKey&&e.key.toLowerCase()!=='a')||e.key==='Enter')stop(e);
 },true);
 for(const kind of ['input','change','beforeinput'])document.addEventListener(kind,e=>{if(!field(e.target))stop(e);},true);
-document.addEventListener('wheel',e=>{if(field(e.target))stop(e);},{capture:true,passive:false});
+// The wheel must not change a value, but it must still scroll the page: only the focused field is protected. Blocking every field made the
+// page unscrollable whenever the pointer was over the (wide) input column, which stalled the scripted executor and would stall a model.
+document.addEventListener('wheel',e=>{if(field(e.target)&&e.target===document.activeElement)stop(e);},{capture:true,passive:false});
 })()""".replace('__CONFIG__',json.dumps(contract)).replace('__CLASSIFY__',CLASSIFY)
 
 

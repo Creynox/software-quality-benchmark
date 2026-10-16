@@ -18,7 +18,8 @@ from .measurement_guard import make_contract, event_guard, check_action, transpo
 from .measurement_oracle import collect_inputs, verify_inputs
 from .receipt_oracle import collect_receipts
 from .allocation_oracle import collect_allocations, verify_allocations
-from .stage_support import StallDetector, ask_review, classify_rejection, incomplete_reason, review_prompt, ux_verdicts
+from .stage_support import (StallDetector, ask_review, classify_rejection, incomplete_reason, review_prompt, ux_verdicts,
+                            MAX_REJECTIONS_PER_TASK, REJECTION_NOTE, describe_target, rejection_marker)
 from sqbf.suites import canonical_hash
 from sqbf.no_write_oracle import snapshot
 
@@ -26,12 +27,14 @@ INSTRUCTIONS='''Work only from the displayed screenshots, source inputs below an
 Return one strict JSON UI action. No tools, files, DOM, APIs, hidden URLs, passwords or browser shortcuts.
 Enter only the supplied original numbers in their corresponding visible fields. Do not invent missing values.
 The numbers are given in German notation (decimal comma, no thousands separator). Type each number exactly as given; a point is read as a thousands separator and changes the value.
+A field may be pre-filled: select its content first (ControlOrMeta+A), then type, so that the field shows exactly the given number.
 Physical laboratory operations are simulated. Existing norms, method profiles and product settings stay unchanged.
 Save each module or individual shape fraction once only, then inspect the resulting state. No save retry.
 No release, signature, finalization, delete, dispatch, master data or optional notes.
+If the sample page asks for a test order ("Testauftrag erzeugen"), creating it once with that visible button is permitted; then open the module with its "Erfassen" button. Do not use "Anforderungen anlegen".
 Allowed keys: ControlOrMeta+A, Backspace, Delete, Tab, Escape. Select controls only through visible UI.
 If a field or prerequisite is unavailable or validation fails, explain blocked instead of bypassing it.
-'''
+'''+REJECTION_NOTE+'\n'
 RAW_KINDS={'allocations':set(),'wash':{'wash'},'sieve':{'sieves'},'partial':{'partial_series','preparation','sieves'},
            'shape':{'shape'},'boiling':{'boiling','boiling_repetitions'},'sand':{'sand'}}
 
@@ -43,6 +46,13 @@ def required_saves(contract):
     return {'module'}
 
 
+def field_shows(page,text):
+    """True when the focused input now holds exactly the typed number (whitespace aside)."""
+    try:shown=page.evaluate("()=>document.activeElement&&document.activeElement.value!==undefined?document.activeElement.value:null")
+    except Exception:return False
+    return isinstance(shown,str) and isinstance(text,str) and ''.join(shown.split())==''.join(text.split())
+
+
 def fields_not_offered(contract,offered):
     """Approved fields the page never offered. Boiling repetition rows are created by the executor, so they never count."""
     missing=set(contract['fields'])-offered
@@ -50,12 +60,13 @@ def fields_not_offered(contract,offered):
     return sorted(missing)
 
 
-def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer,budget,evidence):
+def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer,budget,evidence,*,test_order_done=False):
     contract=make_contract(fixture,probe_id,position,kind)
     context=browser.new_context(viewport={'width':1280,'height':800},
         locale='de-DE',timezone_id='Europe/Berlin',
         storage_state=fixture['personas']['laboratory_staff']['storage_state'],accept_downloads=False,service_workers='block')
-    images,actions,saved,filled,offered=[],[],set(),set(),set();stall=StallDetector()
+    # The test order of a sample is created once, in whichever module visit needs it first.
+    images,actions,saved,filled,offered=[],[],({'test_order'} if test_order_done else set()),set(),set();stall=StallDetector();rejected=[];wrongly_typed=[]
     outcome={'position_id':position['position_id'],'kind':kind,'status':'INCONCLUSIVE','technical_gate':'PASS','review':None}
     try:
         context.add_init_script(event_guard(contract))
@@ -83,19 +94,27 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
             except (ReadOnlyViolation,ActionValidationError) as error:
                 code,critical=classify_rejection(error)
                 if critical:raise
-                name=action.get('action')
-                evidence.event('action_rejected',position=position['position_id'],module=kind,error_code=code,
-                               action=name if isinstance(name,str) and name in ALLOWED_ACTIONS else 'REDACTED')
-                outcome.update(status='REJECTED',rejected_action_code=code);break
+                name=action.get('action');name=name if isinstance(name,str) and name in ALLOWED_ACTIONS else 'REDACTED'
+                target=describe_target(page,action)
+                evidence.event('action_rejected',position=position['position_id'],module=kind,error_code=code,action=name,target=target)
+                rejected.append({'error_code':code,'action':name,'target':target});stall.record(action)
+                if len(rejected)>MAX_REJECTIONS_PER_TASK:
+                    outcome.update(status='REJECTED',rejected_action_code=code);break
+                # No effect on the page: tell the executor and let it choose another action.
+                actions.append(rejection_marker(code,action,target));continue
             evidence.event('measurement_action',position=position['position_id'],module=kind,**safe_action_log(action))
             stall.record(action)
             if action['action'] in ('done','blocked'):
                 outcome['status']='DONE' if action['action']=='done' else 'BLOCKED'
                 outcome['executor_statement']=safe_action_log(action);break
             if action['action']=='click' and state['target']['kind'] in ('save','setup'):saved.add(state['target']['scope'])
-            # The guard admitted this text only as the exact approved value of the focused field.
-            if action['action']=='type' and state.get('focused') in contract['fields']:filled.add(state['focused'])
             budget.action();apply_action(page,action);actions.append(action);page.wait_for_timeout(500)
+            # The guard admitted the typed text as the exact approved value of the focused field, but a pre-filled field keeps its old content
+            # ("250" + "250" = "250250", guarded dry run 16.10.2026). Only a field that now shows exactly the approved number counts as entered;
+            # otherwise the later deviation is an entry problem of the executor, never a persisted-value FAIL of BLE.
+            if action['action']=='type' and state.get('focused') in contract['fields']:
+                if field_shows(page,action.get('text')):filled.add(state['focused'])
+                else:wrongly_typed.append(state['focused'])
         if images:
             review,review_error=ask_review(ask_calibrated,reviewer,review_prompt(
                 'Independently review this laboratory data-entry attempt from screenshots and visible actions only. '
@@ -120,6 +139,7 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
         outcome.update(status='INVALID',technical_gate='INVALID',error_code='MEASUREMENT_RUNNER_ERROR')
     finally:
         context.close()
+    outcome.update(rejected_actions=rejected,fields_not_matching_after_typing=sorted(set(wrongly_typed)-filled),test_order_created='test_order' in saved and not test_order_done)
     outcome.update(screenshots=len(images),fields_required=len(contract['fields']),fields_entered=len(filled),
                    fully_entered=set(contract['fields'])<=filled and required_saves(contract)<=saved,
                    fields_offered=len(offered),fields_not_offered=fields_not_offered(contract,offered),
@@ -156,7 +176,7 @@ def run_measurements(browser,fixture,projection,case_kinds,policy,executor,revie
     if set(actual)-expected_codes:
         return {'result':'BLOCKED','technical_gate':'BLOCKED','reason':'UNEXPECTED_SAMPLE_CODES'}
     before=snapshot(fixture,enforce_counts=False)
-    outcomes=[];prerequisite_missing=[]
+    outcomes=[];prerequisite_missing=[];ordered=set()
     for position in projection['positions']:
         position=copy.deepcopy(position)
         if allocated:position['allocations']=allocated[position['position_id']]
@@ -170,7 +190,9 @@ def run_measurements(browser,fixture,projection,case_kinds,policy,executor,revie
                 prerequisite_missing.append({'position_id':position['position_id'],'kind':kind});continue
             if probe['product_id']!=fixture['suite_copy']['mapping']['positions'][position['position_id']]:
                 return {'result':'BLOCKED','technical_gate':'BLOCKED','reason':'WRONG_PROBE_PRODUCT'}
-            outcome=run_position(browser,fixture,position,probe['id'],kind,policy,executor,reviewer,budget,evidence)
+            outcome=run_position(browser,fixture,position,probe['id'],kind,policy,executor,reviewer,budget,evidence,
+                                 test_order_done=probe['id'] in ordered)
+            if outcome.get('test_order_created'):ordered.add(probe['id'])
             outcomes.append(outcome)
             # Only critical faults stop the case; a prevented or unfinished task does not.
             if outcome['technical_gate']!='PASS' or outcome.get('stop_reason'):
@@ -178,7 +200,11 @@ def run_measurements(browser,fixture,projection,case_kinds,policy,executor,revie
                         'technical_gate':outcome['technical_gate'],'stop_reason':outcome.get('stop_reason'),'positions':outcomes}
     after=snapshot(fixture,enforce_counts=False)
     mutable={'samples','lims_sample','sqbf_measurement_inputs_v1','sqbf_allocation_inputs_v1'}
-    if collect_receipts(fixture)!=receipts or any(after['tables'][k]!=v for k,v in before['tables'].items() if k not in mutable):
+    # Sample identities and the plan items must be unchanged. LIMS rows are not compared: starting the partial sieve legitimately creates the
+    # lazy LIMS sample (the receipt Oracle checks them later, phase after_modules); the whole-dict comparison made SIEVE INVALID_HARNESS in the
+    # first guarded dry run (16.10.2026).
+    now=collect_receipts(fixture)
+    if now['samples']!=receipts['samples'] or now['plan_items']!=receipts['plan_items'] or any(after['tables'][k]!=v for k,v in before['tables'].items() if k not in mutable):
         return {'result':'INVALID','technical_gate':'INVALID','reason':'UNRELATED_MEASUREMENT_WRITE'}
     kinds=set({'sieve':'sieves','partial':'partial_series'}.get(k,k) for k in case_kinds if k!='allocations')
     if 'boiling' in kinds:kinds.add('boiling_repetitions')

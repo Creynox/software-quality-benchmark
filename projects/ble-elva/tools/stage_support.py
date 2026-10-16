@@ -94,6 +94,37 @@ def classify_rejection(error):
     return code, code in CRITICAL_REJECTIONS
 
 
+# A rejected action has no effect on the page (the guard runs before it is applied). The first live run (413f7abe) ended
+# eleven of twelve tasks at the very first rejection, so nothing could be observed. A task now continues after a rejection,
+# is told that the action had no effect, and ends only after this many of them.
+MAX_REJECTIONS_PER_TASK = 3
+REJECTION_NOTE = ('An entry with "rejected_by_controller" in the previous actions had no effect on the page; do not repeat it, '
+                  'choose another permitted action or report blocked.')
+TARGET_JS = r"""({x,y})=>{const nm=s=>(s||'').replace(/\s+/g,' ').trim().slice(0,60);
+ const e=Number.isFinite(x)&&Number.isFinite(y)?document.elementFromPoint(x,y):null;if(!e)return null;
+ const c=e.closest('button,a,input,select,textarea,[role=tab],[role=menuitem],[role=option],.mud-menu-item,.mud-list-item,.mud-select,.mud-chip,tr,.mud-expand-panel-header')||e;
+ const tag=c.tagName.toLowerCase();let label=c.getAttribute('aria-label')||'';
+ if(!label){label=['input','select','textarea'].includes(tag)?nm(c.closest('.mud-input-control')?.querySelector('label')?.innerText):nm(c.innerText);}
+ return {tag,role:c.getAttribute('role'),label:nm(label),href:(c.getAttribute('href')||'').replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g,'<id>').slice(0,80)};}"""
+
+
+def describe_target(page, action):
+    """Role and visible label (never a field value) of the element a rejected click or text entry aimed at; None if unknown."""
+    try:
+        target = page.evaluate(TARGET_JS, {'x': action.get('x'), 'y': action.get('y')})
+    except Exception:
+        return None
+    return target if isinstance(target, dict) else None
+
+
+def rejection_marker(code, action, target):
+    """Entry for the executor's list of previous actions: what was rejected and what it aimed at, without typed text."""
+    safe = {k: v for k, v in action.items() if k != 'text'}
+    if action.get('action') == 'type':
+        safe['typed_chars'] = len(action.get('text') or '')
+    return {'rejected_by_controller': code, 'action': safe, 'target': target}
+
+
 class StallDetector:
     """Harness safety: unchanged screen while the same action repeats.
 

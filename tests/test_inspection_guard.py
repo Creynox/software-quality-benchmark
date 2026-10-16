@@ -55,6 +55,51 @@ class InspectionGuardTests(unittest.TestCase):
         page.evaluate.return_value={'kind':'blocked'}
         with self.assertRaises(ReadOnlyViolation):module.check_action(page,{'action':'click'},config,set())
 
+    def classify(self,html,selector,*,config=None,path='/samples'):
+        """Classification of the element a click at the centre of `selector` would hit, in real Chromium with the real guard script."""
+        from playwright.sync_api import sync_playwright
+        config=config or module.contract(owned_fixture(),[path,'/beprobung'],report=True)
+        with sync_playwright() as p:
+            browser=p.chromium.launch();context=browser.new_context(viewport={'width':1280,'height':800});context.add_init_script(module.event_guard(config))
+            context.route(config['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(config['origin']+path)
+            state=page.evaluate("""({config,selector})=>{__C__
+              const e=document.querySelector(selector);const r=e.getBoundingClientRect();
+              return classify(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}""".replace('__C__',module.CLASSIFY),{'config':config,'selector':selector})
+            context.close();browser.close()
+        return state['kind']
+
+    def test_menu_entry_is_a_div_in_ble_and_must_be_recognised_while_deleting_stays_blocked(self):
+        # Live run 413f7abe: "Prüfbericht" is a div.mud-menu-item, the guard only knew button and .mud-list-item, so no report could be generated.
+        menu='<div class="mud-popover mud-popover-open"><div class="mud-menu-item mud-ripple mud-list-item-clickable" id="%s"><p class="mud-typography mud-menu-item-text">%s</p></div></div>'
+        path='/samples/11111111-1111-4111-8111-111111111111'
+        config=module.contract(owned_fixture(),[path],report=True)
+        self.assertEqual(self.classify(menu%('x','Prüfbericht'),'#x',config=config,path=path),'generate')
+        self.assertEqual(self.classify(menu%('x','Probe löschen'),'#x',config=config,path=path),'blocked')
+        self.assertEqual(self.classify('<div role="menuitem" id="x">Prüfbericht</div>','#x',config=config,path=path),'generate')
+        # Without the report capability the same entry is not a generate action.
+        read_only=module.contract(owned_fixture(),[path])
+        self.assertEqual(self.classify(menu%('x','Prüfbericht'),'#x',config=read_only,path=path),'blocked')
+
+    def test_presentational_controls_are_read_controls_and_every_writing_control_stays_blocked(self):
+        read=('<button id="x">Meine</button>','<button id="x">Nach Probencode sortieren</button>','<button id="x">Neu: 7</button>','<button id="x">Weitere Filter</button>',
+              '<button id="x">Woche</button>','<button id="x" aria-label="Navigation umschalten">&#9776;</button>','<button id="x">ENZBERG-20260508-NSN-014-04</button>',
+              '<button role="tab" id="x">Übersicht</button>','<div class="mud-select"><div id="x">Werk</div></div>','<div class="mud-expand-panel-header" id="x">Panel</div>')
+        for html in read:self.assertEqual(self.classify(html,'#x'),'read_control',html)
+        write=('<button id="x">Neue Probe</button>','<button id="x">Plan bearbeiten</button>','<button id="x">Abschliessen</button>','<button id="x">Archivieren</button>',
+               '<button id="x">Loeschen</button>','<button id="x">Prüfbericht erstellen</button>','<button id="x">Produkt hinzufügen</button>','<button id="x">Aus Plan entfernen</button>',
+               '<button id="x">Proben anlegen / nachanlegen</button>','<button id="x">Freigeben</button>','<button id="x">Speichern</button>','<button id="x">Anforderungen anlegen</button>',
+               '<button role="tab" id="x">Proben schließen</button>','<button id="x" aria-label="Probe ENZBERG-20260508-NSN-014-05 schließen">x</button>',
+               '<form><button id="x">Meine</button></form>','<button id="x">Benutzermenü öffnen</button>','<button id="x">Dunkles Design aktivieren</button>')
+        for html in write:self.assertEqual(self.classify(html,'#x'),'blocked',html)
+
+    def test_same_page_anchor_scrolls_but_other_anchors_and_links_stay_scoped(self):
+        path='/samples/11111111-1111-4111-8111-111111111111'
+        config=module.contract(owned_fixture(),[path,'/beprobung'])
+        for href,expected in ((path+'#module-bereich','navigation'),('/beprobung','navigation'),('/samples/22222222-2222-4222-8222-222222222222','blocked'),
+                              ('/admin/users','blocked'),('/beprobung#x','blocked'),(path+'?edit=1','blocked'),('http://evil.example/'+path,'blocked')):
+            self.assertEqual(self.classify('<a id="x" href="%s">link</a>'%href,'#x',config=config,path=path),expected,href)
+
     def test_native_guard_blocks_release_sign_delete_and_latches_report_generation(self):
         from playwright.sync_api import sync_playwright
         path='/samples/11111111-1111-4111-8111-111111111111'

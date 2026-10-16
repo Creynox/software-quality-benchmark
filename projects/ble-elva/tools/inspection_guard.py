@@ -20,21 +20,33 @@ def contract(fixture,paths,*,report=False,plan_samples=False):
 CLASSIFY=r"""
 const allowed=p=>config.paths.includes(p)||(config.report&&/^\/reports\/[0-9a-f-]{36}$/.test(p));
 const norm=e=>(e?.innerText||'').replace(/\s+/g,' ').trim();
+const text=s=>(s||'').replace(/\s+/g,' ').trim();
+// Purely presentational controls of BLE's list, plan and analytics views: quick filters, view switches, sorting, time ranges,
+// sidebar toggles, KPI tiles and the sample code that opens a sample. They change what is shown, never a record (live run 413f7abe: the
+// first click of four read tasks was rejected because only two controls per page were known).
+const READONLY=/^(Alle|Meine|Offen|Heute|Überfällig|Final|Tabelle|Nach (Besitzer|Plan)|Karten|Weitere Filter( öffnen)?|Woche|Monat|Quartal|Jahr|Benutzerdefiniert|Navigation (umschalten|verkleinern))$|^Nach .+ sortieren$|^(Gesamt|Neu|In Bearbeitung|Wartet auf Freigabe|Überfällig|Final|Proben|Bewertungsabdeckung)\b.*\d|^[A-Z]{2,}-\d{8}-[A-Z]+-\d+-\d+$/;
 const classify=e=>{
  if(!allowed(location.pathname))return {kind:'blocked'};
  const a=e?.closest('a');if(a){
    if(config.report&&a.download&&a.href.startsWith('blob:'+config.origin+'/')&&window.__sqbfPdfDownload===location.pathname)return {kind:'blob_download'};
    const u=new URL(a.href,location.href);if(u.origin===config.origin&&!u.search&&!u.hash&&allowed(u.pathname))return {kind:'navigation'};
+   // Anchor on the same page ("Zu den Modulen"): scrolls only.
+   if(u.origin===config.origin&&u.pathname===location.pathname&&u.hash&&!u.search)return {kind:'navigation'};
  }
+ const tab=e?.closest('[role="tab"]');
+ if(tab&&!/schlie(ß|ss)en/i.test(text(tab.getAttribute('aria-label')||tab.innerText)))return {kind:'read_control'};
  if(e?.closest('.mud-expand-panel-header')||e?.closest('.mud-tabs-toolbar [role="tab"]')||e?.closest('.mud-table-pagination button'))return {kind:'read_control'};
+ if(e?.closest('.mud-select,.mud-select-item,[role="option"],[role="listbox"]'))return {kind:'read_control'};
  const b=e?.closest('button');
+ if(b&&!b.closest('form')&&READONLY.test(text(b.getAttribute('aria-label')||b.innerText)))return {kind:'read_control'};
  if(config.plan_samples&&location.pathname===config.plan_path&&norm(b)==='Proben anlegen / nachanlegen')return {kind:'plan_samples',scope:location.pathname};
  if(location.pathname==='/samples'&&e?.closest('tr[aria-selected][aria-label^="Probe "]'))return {kind:'read_control'};
  if(b?.getAttribute('title')==='Probe oeffnen'&&location.pathname.startsWith('/beprobung/'))return {kind:'read_control'};
  if(location.pathname==='/samples'&&['Detail anzeigen','Probe vollständig öffnen'].includes(norm(b)))return {kind:'read_control'};
  if(b?.getAttribute('aria-label')==='Weitere Aktionen')return {kind:'read_control'};
  if(config.report){
-   const item=e?.closest('button,.mud-list-item');
+   // BLE's menu entries are div.mud-menu-item (MudMenuItem), not buttons: the first version never recognised "Prüfbericht".
+   const item=e?.closest('button,.mud-list-item,.mud-menu-item,[role="menuitem"]');
    if(norm(item)==='Prüfbericht'&&config.paths.includes(location.pathname))return {kind:'generate',scope:location.pathname};
    if(norm(item)==='PDF herunterladen'&&/^\/reports\/[0-9a-f-]{36}$/.test(location.pathname))return {kind:'download',scope:location.pathname};
  }

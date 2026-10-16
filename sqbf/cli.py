@@ -204,6 +204,10 @@ def main(argv=None) -> int:
     suite_run.add_argument('--execute',action='store_true',help='Explicit single live run after gates and fresh subscription OAuth')
     suite_run.add_argument('--headed',action='store_true')
     suite_run.add_argument('--provider-probe',help='Stored provider-probe result; a failed or stale probe blocks readiness')
+    dry=sub.add_parser('suite-dry-run',help='Modelless dry run of the whole suite path with the real guards and a scripted executor; scratch clones only',allow_abbrev=False)
+    for name in ('suite','dataset','fixture','projection','allocations','output'):
+        dry.add_argument('--'+name,required=True)
+    dry.add_argument('--headed',action='store_true')
     probe=sub.add_parser('suite-provider-probe',help='Two synthetic provider requests for the suite schemas; plan only without --execute',allow_abbrev=False)
     probe.add_argument('--suite',required=True)
     probe.add_argument('--output',default='D:/Temp/sqbf-provider-probes')
@@ -283,6 +287,20 @@ def main(argv=None) -> int:
         print(json.dumps(report,indent=2))
         return 0 if (report['status']=='READY_FOR_SINGLE_SUITE_RUN' or
                      report['status']=='SUITE_RUN_RECORDED' and report.get('technical_status')=='COMPLETED') else 2
+    if args.command=='suite-dry-run':
+        from importlib import import_module
+        runner=import_module('projects.ble-elva.tools.regular_runner');tool=import_module('projects.ble-elva.tools.dry_run')
+        try:
+            inputs=runner.load_inputs(args.suite,args.dataset,args.fixture,args.projection,args.allocations)
+            report=tool.run_dry(*inputs,args.output,headed=args.headed)
+        except tool.DryRunRefused as error:
+            print('BLOCKED_DRY_RUN: '+str(error)+'; only a scratch clone that no run has claimed may be used.')
+            return 2
+        except Exception as error:
+            print('BLOCKED_DRY_RUN: error_type='+type(error).__name__)
+            return 2
+        print(json.dumps(report,indent=2,ensure_ascii=False,default=str))
+        return 0 if report['status']=='DRY_RUN_COMPLETED' else 1
     if args.command=='suite-fixture-clone':
         from importlib import import_module
         tool=import_module('projects.ble-elva.tools.fixture_clone')

@@ -35,21 +35,32 @@ FROM public.ble_reports; ROLLBACK;"""
     return rows[1]
 
 
+def _dec(value):
+    return None if value is None else Decimal(str(value))
+
+
 def expected_numbers(position):
+    """Numbers a report must show for the given raw measurements. Values that were not entered (None) yield no expectation:
+    a report that faithfully shows incompletely persisted data is not a report deviation, and the missing input is the measurement
+    stage's finding. Without this a single half-entered shape fraction made the whole REPORT stage BLOCKED and stopped the suite
+    (guarded dry run 16.10.2026)."""
     raw=position['measurements'];expected={}
-    if len(raw['sieves'])==1:expected['sieve_input_g']=raw['sieves'][0]['input_g']
+    if len(raw['sieves'])==1 and raw['sieves'][0]['input_g'] is not None:expected['sieve_input_g']=raw['sieves'][0]['input_g']
     if len(raw['wash'])==1:
-        row=raw['wash'][0]
-        expected.update(dry_g=Decimal(row['container_dry_g'])-Decimal(row['container_g']),
-                        washed_g=Decimal(row['container_washed_g'])-Decimal(row['container_g']))
+        row=raw['wash'][0];container,dry,washed=_dec(row['container_g']),_dec(row['container_dry_g']),_dec(row['container_washed_g'])
+        if container is not None and dry is not None:expected['dry_g']=dry-container
+        if container is not None and washed is not None:expected['washed_g']=washed-container
     if raw['shape']:
-        expected.update(shape_total_g=sum(Decimal(r['total_g']) for r in raw['shape']),
-                        shape_poor_g=sum(Decimal(r['poor_g']) for r in raw['shape']))
+        totals=[_dec(r['total_g']) for r in raw['shape']];poors=[_dec(r['poor_g']) for r in raw['shape']]
+        if all(v is not None for v in totals):expected['shape_total_g']=sum(totals)
+        if all(v is not None for v in poors):expected['shape_poor_g']=sum(poors)
     if len(raw['boiling'])==1:
-        expected.update(boiling_initial_g=raw['boiling'][0]['initial_g'],boiling_final_g=raw['boiling'][0]['final_g'])
+        for name,key in (('boiling_initial_g','initial_g'),('boiling_final_g','final_g')):
+            if raw['boiling'][0][key] is not None:expected[name]=raw['boiling'][0][key]
     if len(raw['sand'])==2:
-        a,b=raw['sand'];expected.update(sand_a_mm=a['sand_height'],suspension_a_mm=a['suspension_height'],
-                                       sand_b_mm=b['sand_height'],suspension_b_mm=b['suspension_height'])
+        a,b=raw['sand']
+        for name,value in (('sand_a_mm',a['sand_height']),('suspension_a_mm',a['suspension_height']),('sand_b_mm',b['sand_height']),('suspension_b_mm',b['suspension_height'])):
+            if value is not None:expected[name]=value
     return expected
 
 

@@ -21,8 +21,10 @@ from .measurement_oracle import collect_inputs
 from .persona_scope import check_persona
 from .receipt_oracle import collect_receipts,verify_receipts
 from .report_oracle import collect_reports, verify_reports, expected_numbers
-from .stage_support import StallDetector, ask_review, classify_rejection, incomplete_reason, review_prompt, ux_verdicts
+from .stage_support import (StallDetector, ask_review, classify_rejection, incomplete_reason, review_prompt, ux_verdicts,
+                            MAX_REJECTIONS_PER_TASK, REJECTION_NOTE, describe_target, rejection_marker)
 
+MODULE_ROUTES=('sieve-analysis','kornform','kochversuch','sand-equivalent','partial-sieve','uf-fine')  # read-only views; the guard blocks every input and save there
 INSTRUCTIONS='''Use only screenshots, the task and prior visible actions. Return one strict JSON UI action.
 No tools, code, files, DOM, DB, APIs, browser shortcuts, hidden URLs or passwords.
 Inspect permitted screens; do not create, change, save, delete, release, sign, finalize or send data.
@@ -30,7 +32,7 @@ Only if this task explicitly allows a non-official report: generate one Prüfber
 and download its PDF once. Never regenerate, archive, delete or mark a report official.
 Only if this task explicitly allows plan sample creation: create the designated existing plan's samples once. No manual extra samples or second creation attempt.
 If unavailable, explain blocked. Completion requires visible evidence; never invent missing data.
-'''
+'''+REJECTION_NOTE+'\n'
 
 
 def run_view(browser,fixture,persona,entry,paths,task,policy,executor,reviewer,budget,evidence,*,report_position=None,plan_samples=False):
@@ -38,7 +40,7 @@ def run_view(browser,fixture,persona,entry,paths,task,policy,executor,reviewer,b
     context=browser.new_context(viewport={'width':1280,'height':800},storage_state=fixture['personas'][persona]['storage_state'],
         locale='de-DE',timezone_id='Europe/Berlin',
         service_workers='block',accept_downloads=report_position is not None)
-    images,actions,downloads=[],[],[];generated=set();downloaded=set();stall=StallDetector()
+    images,actions,downloads=[],[],[];generated=set();downloaded=set();stall=StallDetector();rejected=[]
     outcome={'status':'INCONCLUSIVE','technical_gate':'PASS','review':None,'downloads':downloads,
              'download_failures':[],'capability_actions':[]}
     try:
@@ -66,10 +68,14 @@ def run_view(browser,fixture,persona,entry,paths,task,policy,executor,reviewer,b
             except (ReadOnlyViolation,ActionValidationError) as error:
                 code,critical=classify_rejection(error)
                 if critical:raise
-                kind=action.get('action')
-                evidence.event('action_rejected',persona=persona,error_code=code,
-                               action=kind if isinstance(kind,str) and kind in ALLOWED_ACTIONS else 'REDACTED')
-                outcome.update(status='REJECTED',rejected_action_code=code);break
+                kind=action.get('action');kind=kind if isinstance(kind,str) and kind in ALLOWED_ACTIONS else 'REDACTED'
+                target=describe_target(page,action)
+                evidence.event('action_rejected',persona=persona,error_code=code,action=kind,target=target)
+                rejected.append({'error_code':code,'action':kind,'target':target});stall.record(action)
+                if len(rejected)>MAX_REJECTIONS_PER_TASK:
+                    outcome.update(status='REJECTED',rejected_action_code=code);break
+                # No effect on the page: tell the executor and let it choose another action.
+                actions.append(rejection_marker(code,action,target));continue
             evidence.event('inspection_action',persona=persona,**safe_action_log(action));stall.record(action)
             if action['action'] in ('done','blocked'):
                 outcome['status']='DONE' if action['action']=='done' else 'BLOCKED'
@@ -132,7 +138,7 @@ def run_view(browser,fixture,persona,entry,paths,task,policy,executor,reviewer,b
         evidence.event('inspection_harness_failure',error_code='INSPECTION_RUNNER_ERROR')
         outcome.update(status='INVALID',technical_gate='INVALID',error_code='INSPECTION_RUNNER_ERROR')
     finally:context.close()
-    outcome.update(screenshots=len(images),visible_actions=len(actions))
+    outcome.update(screenshots=len(images),visible_actions=len([a for a in actions if 'rejected_by_controller' not in a]),rejected_actions=rejected)
     return outcome
 
 
@@ -162,8 +168,9 @@ def run_inspection(browser,fixture,projection,case,policy,executor,reviewer,budg
         if any(not p.endswith(('.view','.read')) for p in permissions):
             return {'result':'BLOCKED','technical_gate':'BLOCKED','reason':'VIEWER_HAS_MUTATING_CAPABILITY'}
     before=snapshot(fixture,enforce_counts=False)
-    paths=['/beprobung/'+fixture['suite_copy']['mapping']['plan_id'],'/samples','/quality/wpk','/analytics']
-    for row in collect_receipts(fixture)['samples']:paths.append('/samples/'+row['id'])
+    paths=['/','/beprobung','/beprobung/'+fixture['suite_copy']['mapping']['plan_id'],'/samples','/quality/wpk','/analytics']
+    for row in collect_receipts(fixture)['samples']:
+        paths.append('/samples/'+row['id']);paths+=['/samples/'+row['id']+'/'+route for route in MODULE_ROUTES]
     entry=ENTRY_PATHS[case['case_id']](fixture)
     outcome=run_view(browser,fixture,case['persona'],entry,paths,case['task'],policy,executor,reviewer,budget,evidence)
     after=snapshot(fixture,enforce_counts=False)

@@ -43,6 +43,55 @@ class MeasurementGuardTests(unittest.TestCase):
         self.assertEqual(sorted(c['fields']),['Einwaage Siebturm A','Einwaage Siebturm B','partial:2:A','partial:2:B'])
         self.assertFalse([name for name in c['fields'] if 'pan' in name or 'K-Basis' in name])
 
+    def test_the_test_order_is_a_once_per_sample_setup_on_the_sample_page_and_nothing_else_there_writes(self):
+        # BLE's primary action on a new sample; the first live run was rejected on it, and a dry run showed it writes only the work items
+        # and the status of the sample (not the probe module rows that decide which allocation cards exist).
+        from playwright.sync_api import sync_playwright
+        c=self.contract('wash');root=c['root']
+        html=('<script>window.orders=0</script><button id="order" onclick="window.orders++">Testauftrag erzeugen</button><button id="req">Anforderungen anlegen</button>'
+              '<a id="mod" href="%s">Erfassen</a><a id="other" href="%s/kornform">Erfassen</a>'%(c['path'],root))
+        with sync_playwright() as p:
+            browser=p.chromium.launch();context=browser.new_context();context.add_init_script(module.event_guard(c))
+            context.route(c['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(c['origin']+root)
+            def kind(selector,at=None):
+                return page.evaluate("""({config,selector})=>{__C__const e=document.querySelector(selector);const r=e.getBoundingClientRect();
+                  return classify(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}""".replace('__C__',module.CLASSIFY),{'config':c,'selector':selector})
+            self.assertEqual(kind('#order'),{'kind':'setup','scope':'test_order'})
+            self.assertEqual(kind('#req')['kind'],'blocked');self.assertEqual(kind('#mod')['kind'],'navigation');self.assertEqual(kind('#other')['kind'],'blocked')
+            page.locator('#order').click();page.locator('#order').click();self.assertEqual(page.evaluate('window.orders'),1)
+            page.locator('#req').click()
+            page.reload();page.locator('#order').click();self.assertEqual(page.evaluate('window.orders'),0)  # latched for this browser context
+            context.close()
+            # On the module page itself the button is not a permitted control.
+            context=browser.new_context();context.add_init_script(module.event_guard(c))
+            context.route(c['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(c['origin']+c['path']);self.assertEqual(kind('#order')['kind'],'blocked')
+            context.close();browser.close()
+
+    def test_the_wheel_scrolls_the_page_over_a_field_but_never_changes_the_focused_field(self):
+        # Live-run lesson (dry run 16.10.2026): blocking every wheel event over a field made the page unscrollable over the input column.
+        from playwright.sync_api import sync_playwright
+        c=self.contract('wash');label=list(c['fields'])[0]
+        html=('<div class="mud-input-control"><label>'+escape(label)+'</label><input id="f" type="number" value="1" style="width:400px"></div>'
+              '<div style="height:3000px">tall</div>')
+        with sync_playwright() as p:
+            browser=p.chromium.launch();context=browser.new_context(viewport={'width':1280,'height':800});context.add_init_script(module.event_guard(c))
+            context.route(c['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(c['origin']+c['path'])
+            box=page.locator('#f').bounding_box();page.mouse.move(box['x']+20,box['y']+10);page.mouse.wheel(0,400);page.wait_for_timeout(300)
+            self.assertGreater(page.evaluate('window.scrollY'),0)           # unfocused field: the page scrolls
+            page.evaluate('window.scrollTo(0,0)');page.locator('#f').focus();page.mouse.move(box['x']+20,box['y']+10);page.mouse.wheel(0,400);page.wait_for_timeout(300)
+            self.assertEqual(page.evaluate('window.scrollY'),0)             # focused field: protected, nothing moves
+            self.assertEqual(page.input_value('#f'),'1')
+            context.close();browser.close()
+
+    def test_controller_admits_the_test_order_click_once_per_sample(self):
+        c=self.contract('wash');page=MagicMock();page.url=c['origin']+c['root']
+        page.evaluate.return_value={'focused':None,'target':{'kind':'setup','scope':'test_order'}}
+        module.check_action(page,{'action':'click','x':5,'y':5},c,set())
+        with self.assertRaises(ReadOnlyViolation):module.check_action(page,{'action':'click','x':5,'y':5},c,{'test_order'})
+
     def test_native_guard_blocks_delete_and_second_save_and_latches_across_reload(self):
         from playwright.sync_api import sync_playwright
         c=self.contract('wash')

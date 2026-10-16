@@ -56,12 +56,36 @@ class ViewControllerTests(unittest.TestCase):
                                         report_position=report_position)
         return outcome,ask,page,evidence
 
-    def test_prevented_agent_action_ends_only_the_task_and_is_still_reviewed(self):
-        outcome,ask,_,evidence=self.view([act('click',x=10,y=10),review()],[ReadOnlyViolation('BLOCKED_INSPECTION_TARGET')])
+    def test_a_rejected_action_has_no_effect_is_reported_to_the_executor_and_the_task_continues(self):
+        # Live run 413f7abe ended eleven of twelve tasks at the first rejection; now the executor may choose another action.
+        outcome,ask,page,evidence=self.view([act('click',x=10,y=10),act('done',reason='seen'),review()],[ReadOnlyViolation('BLOCKED_INSPECTION_TARGET'),{'kind':'blocked'}])
+        self.assertEqual((outcome['status'],outcome['technical_gate']),('DONE','PASS'))
+        self.assertEqual([(r['error_code'],r['action']) for r in outcome['rejected_actions']],[('BLOCKED_INSPECTION_TARGET','click')])
+        second_prompt=ask.call_args_list[1].args[1]
+        self.assertIn('rejected_by_controller',second_prompt);self.assertIn('BLOCKED_INSPECTION_TARGET',second_prompt)
+        self.assertIn('had no effect on the page',second_prompt)
+        rejection=[c for c in evidence.event.call_args_list if c.args[0]=='action_rejected'][0]
+        self.assertEqual((rejection.kwargs['action'],rejection.kwargs['error_code']),('click','BLOCKED_INSPECTION_TARGET'))
+        self.assertIn('target',rejection.kwargs)
+        self.assertEqual(outcome['visible_actions'],0)  # the rejected click never reached the page, so it is not a visible action
+
+    def test_too_many_rejections_end_only_that_task_and_it_is_still_reviewed(self):
+        states=[ReadOnlyViolation('BLOCKED_INSPECTION_TARGET')]*4
+        answers=[act('click',x=10*(i+1),y=10) for i in range(4)]+[review()]
+        outcome,ask,_,_=self.view(answers,states)
         self.assertEqual((outcome['status'],outcome['technical_gate']),('REJECTED','PASS'))
-        self.assertEqual(outcome['rejected_action_code'],'BLOCKED_INSPECTION_TARGET');self.assertEqual(ask.call_count,2)
+        self.assertEqual(outcome['rejected_action_code'],'BLOCKED_INSPECTION_TARGET');self.assertEqual(len(outcome['rejected_actions']),4)
+        self.assertEqual(ask.call_count,5)
         self.assertIn('AGENT_ACTION_REJECTED',ask.call_args_list[-1].args[1])
-        self.assertEqual(evidence.event.call_args_list[0].kwargs['action'],'click')
+        # An invalid action (outside the schema) is rejected the same way, without ending the task early.
+        outcome,_,_,_=self.view([act('teleport'),act('done',reason='x'),review()],[{'kind':'blocked'}])
+        self.assertEqual((outcome['status'],outcome['rejected_actions'][0]['error_code']),('DONE','ACTION_NOT_ALLOWED'))
+
+    def test_the_session_invalidation_still_stops_immediately(self):
+        b,page=browser('/samples');page.url='http://127.0.0.1:5082/login'
+        with patch.object(inspection,'ask_calibrated') as ask:
+            outcome=inspection.run_view(b,fixture(),'laboratory_lead','/samples',['/samples'],'task',{},object(),object(),budget(),MagicMock())
+        ask.assert_not_called();self.assertEqual(outcome['error_code'],'SESSION_INVALIDATED')
 
     def test_invalidated_session_is_a_critical_technical_stop(self):
         b,page=browser('/samples');page.url='http://127.0.0.1:5082/login'
@@ -115,7 +139,7 @@ class ViewControllerTests(unittest.TestCase):
         self.assertEqual(outcome['capability_actions'],[generate])
 
     def test_second_download_of_the_same_report_is_prevented(self):
-        answers=[act('click',x=10,y=10),act('click',x=10,y=10),review()]
+        answers=[act('click',x=10,y=10),act('click',x=10,y=10),act('done',reason='downloaded once'),review()]
         with tempfile.TemporaryDirectory() as folder:
             b,page=browser('/reports/'+REPORT);evidence=MagicMock();evidence.path=Path(folder)
             valid={'pdf_integrity':'PASS','artifact_error':None,'pages':1,'images':[],'sha256':'a'*64}
@@ -124,7 +148,7 @@ class ViewControllerTests(unittest.TestCase):
                  patch.object(inspection,'apply_action'),patch.object(inspection,'invoke_worker',return_value=valid):
                 outcome=inspection.run_view(b,fixture(),'laboratory_lead','/reports/'+REPORT,['/reports/'+REPORT],'task',{},
                                             object(),object(),budget(),evidence,report_position={'sample_code':'S','product':'P'})
-        self.assertEqual((outcome['status'],outcome['rejected_action_code']),('REJECTED','DUPLICATE_PDF_DOWNLOAD'))
+        self.assertEqual((outcome['status'],outcome['rejected_actions'][0]['error_code']),('DONE','DUPLICATE_PDF_DOWNLOAD'))
         self.assertEqual(len(outcome['downloads']),1)
 
 
@@ -253,13 +277,15 @@ class MeasurementClassificationTests(unittest.TestCase):
             answers.append(act('type',text=value));states.append({'target':{'kind':'field'},'focused':label})
         answers+=[act('click',x=5,y=5),act('done',reason='saved'),review()]
         states+=[{'target':{'kind':'save','scope':'module'},'focused':None},{'target':{'kind':'none'},'focused':None}]
+        shown={}
+        page.evaluate.side_effect=lambda script,*a,**k:shown.get('v') if 'activeElement' in script else []   # the focused field holds exactly what was typed
         with patch.object(measurement,'ask_calibrated',side_effect=answers),patch.object(measurement,'check_action',side_effect=states), \
-             patch.object(measurement,'apply_action'):
+             patch.object(measurement,'apply_action',side_effect=lambda pg,action:shown.update(v=action.get('text'))):
             value=measurement.run_position(b,f,p,PLAN,'sand',{},object(),object(),budget(),MagicMock())
         self.assertEqual((value['status'],value['fields_required'],value['fields_entered'],value['fully_entered']),('DONE',4,4,True))
 
     def test_case_result_attributes_deviations_per_position(self):
-        f=fixture();projection={'positions':[]};receipts={'samples':[]}
+        f=fixture();projection={'positions':[]};receipts={'samples':[],'lims':[],'plan_items':[]}
         for i in (1,2,3):
             key='P'+str(i);product=str(UUID(int=100+i));f['suite_copy']['mapping']['positions'][key]=product
             measurements={k:[] for k in ('wash','shape','boiling','boiling_repetitions','sand','sieves','preparation','partial_series')}
@@ -268,7 +294,7 @@ class MeasurementClassificationTests(unittest.TestCase):
             if i<3:receipts['samples'].append({'id':str(UUID(int=500+i)),'sample_code':'S'+str(i),'product_id':product})
         f['suite_copy']['measurement_reference_sha256']=canonical_hash(projection)
         runs={'P1':{'status':'DONE','fully_entered':True},'P2':{'status':'REJECTED','rejected_action_code':'X','fully_entered':False}}
-        def run_position(browser,fixture,position,probe,kind,*args):
+        def run_position(browser,fixture,position,probe,kind,*args,**kwargs):
             return dict(runs[position['position_id']],position_id=position['position_id'],kind=kind,technical_gate='PASS')
         oracle={'status':'FAIL','mismatches':[{'position_id':k,'kind':'sand'} for k in ('P1','P2','P3')]}
         with patch.object(measurement,'collect_receipts',return_value=receipts),patch.object(measurement,'snapshot',return_value={'tables':{}}), \

@@ -12,6 +12,8 @@ Einzellauf-Freigabe war eine PO-Entscheidung nötig (Abschnitte 8, 10, 11).
 als **NO-GO / INVALID_HARNESS**; elf Stufen sind NOT_RUN. Es liegt **keine gültige BLE-Messung** vor.
 Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-Freigabe und eine PO-Entscheidung zu Position P06.
 
+**Nachtrag Lauf 3 (Abschnitt 17):** `413f7abe…`, 16.10.2026: PARTIAL GO, alle zwölf Stufen durchgelaufen, PLAN und WPK PASS, zehn Stufen INCONCLUSIVE durch einen zu engen Guard (Menüeintrag „Prüfbericht“ nicht erkannt, Ablehnung beendet die Aufgabe, Hauptaktion „Testauftrag erzeugen“ nicht erlaubt). 124 Anfragen, 271.478 Tokens, 24 min. Keine Messung erfasst.
+
 **Nachtrag nach Lauf 2 und der Vorbereitung (Abschnitte 15 und 16):** Lauf `45eb301f…` endete als
 INVALID_HARNESS (Audit-Stempel). Die Vorbereitung für einen dritten Lauf ist modellfrei abgeschlossen: neue Fixture,
 Seiteneffekt-Vertrag je Stufe, vollständiger Trockenlauf aller zwölf Stufen ohne Harness-Abbruch, neun dabei gefundene und behobene bzw. im Vertrag erfasste Befunde (16.2),
@@ -566,3 +568,39 @@ Zusätzlich beobachtet (kein Fehlalarm, aber relevant für die Reihenfolge): Fü
 - Die Trockenlauf-Skripte liegen privat im Scratchpad dieser Sitzung (Pfade siehe Bericht in Issue #21), nicht im Repository.
 - Zwei BLE-Beobachtungen sind **unbestätigt** und noch nicht als Issue angelegt (Vorschlag an den PO): (1) stille Fehlinterpretation von Dezimalpunkten in Messfeldern (kein Hinweis, Wert ×10); (2) Entnahmekarten hängen davon ab, ob die Probe schon ein gespeichertes Ergebnis hat (Rückfallpfad über Produktmodule, danach Pfad über Probenmodule mit Ausschlüssen).
 - Die Provider-Probe gilt bis 16.10.2026, 01:18 UTC; danach ist eine neue nötig (zwei synthetische Anfragen, OAuth-Anmeldung des PO).
+
+## 17. Live-Lauf 3 (413f7abe-71ad-4027-97a8-27760a5c5378) — Ergebnis
+
+**Bewertung: PARTIAL GO. Technisch vollständig durchgelaufen (alle zwölf Stufen, kein Harness-Abbruch), funktional aber nur zwei Stufen entschieden.** PLAN und WPK sind PASS, zehn Stufen INCONCLUSIVE. Es liegt keine objektiv belegte BLE-Abweichung vor und keine einzige Messung wurde erfasst. Der Lauf ist nach Vertrag beendet, es gibt keinen zweiten Versuch; die Fixture `nsn014-ux-e781d1466b55` ist verbraucht (Lease).
+
+**Durchführung.** Genau ein Lauf auf PO-Freigabe vom 16.10.2026 (Antwort „Ja, 1 Lauf so starten“): SQBF `ef06e389…`, Suite v0.4.1 (`451796ac…`), `chatgpt_plan`, Executor `gpt-6-luna`, Reviewer `gpt-6.1-sol`, Profil `NSN014-CALIBRATION-v2`. Die Freigabe stand in einer neuen, privaten Manifest-Kopie. Davor: Sessions erneuert (je Persona ein Login), neue Provider-Probe `PROBE_PASSED`, Readiness `READY_FOR_SINGLE_SUITE_RUN` (Budget freigegeben).
+
+**Verbrauch (für die Einschätzung des Abo-Kontingents).** 124 von höchstens 1.500 Anfragen (Executor 73, Reviewer 51), 271.478 Tokens gesamt (Executor 126.415, Reviewer 145.063; alle Werte bekannt), 1.461 s von 10.800 s (Modellwartezeit 1.315 s). Eine Anfrage kostet im Mittel rund 2.200 Tokens, der Reviewer rund 2.800, der Executor rund 1.700. Ein vollständiger Durchlauf mit allen Eingaben braucht nach der Untergrenze mindestens 640 Anfragen, also grob das Fünffache dieses Laufs.
+
+| Stufe | Status | Anfragen (Exec/Rev) | Aktionen und Grund |
+|---|---|---|---|
+| PLAN | **PASS** | 2/1 | 1 Klick, Oracle `after_plan` 10 von 10 |
+| RECEIPT | INCONCLUSIVE | 1/1 | erste Aktion (Klick) abgelehnt (`INSPECTION_ACTION_SCOPE_DENIED`) |
+| PREPARATION | INCONCLUSIVE | 14/14 | 12 von 14 Aufgaben: erste Aktion abgelehnt (`MEASUREMENT_ACTION_SCOPE_DENIED`), 2 mal vom Modell selbst „blocked“ |
+| SIEVE, SHAPE, BOILING, SE | INCONCLUSIVE | 11/11, 5/5, 4/4, 1/1 | in jeder Aufgabe die erste Aktion abgelehnt |
+| ASSESS, ANALYSIS, RIGHTS | INCONCLUSIVE | je 1/1 | erste Aktion abgelehnt |
+| WPK | **PASS** | 1/1 | „done“ ohne Aktion |
+| REPORT | INCONCLUSIVE | 31/10 | 8 angenommene Klicks (Menü öffnen), 9 Ablehnungen (jeweils nach dem Öffnen), 13 Scrolls, 1 „blocked“; kein Bericht erzeugt |
+
+**Was der Lauf bestätigt hat.** Die Vorbereitung hat gewirkt: kein Harness-Abbruch, der Audit-Stempel wurde nur an der freigegebenen Stelle toleriert (`sampling_plans`, 1 Zeile, `updated_at`/`updated_by`), das Abschluss-Gate meldet die geschützten Daten als unverändert, es gibt keinen Seiteneffekt-Befund und die Berechnungen sind PASS. Nach den Abschluss-Oracles enthält die Fixture nur die zehn Plan-Proben (keine Messdaten, keine Berichte). Die Abschluss-Oracles Empfang, Messwerte, Zuteilungen und Berichte sind FAIL, weil nichts erfasst wurde; das ist Folge der Ablehnungen und kein BLE-Befund.
+
+**Ursachen (Harness, SQBF; durch Quelltext und Live-DOM belegt).**
+1. **REPORT, sicher:** Das Menü der Probe öffnet sich, aber der Eintrag „Prüfbericht“ ist in BLE ein `div.mud-menu-item`. Der Inspektions-Guard erkennt nur `button` und `.mud-list-item` und stuft den Eintrag als „blocked“ ein. Ein Bericht kann so nie erzeugt werden. Mein Trockenlauf hat den Eintrag direkt per Playwright geklickt und den Guard dabei nicht durchlaufen.
+2. **Messstufen, sehr wahrscheinlich:** Die echte Probenseite stellt „Nächster Schritt: Testauftrag erzeugen“ als Hauptaktion dar und meldet „Testauftrag erzeugen, um Module zu starten“. Der Guard erlaubt diese Schaltfläche nicht (sie schreibt Arbeitsschritte). Das Modell folgt der Seite und wird abgelehnt; zwei Aufgaben haben es als „blocked“ begründet. Die „Erfassen“-Links der Modulkarten sind echte Links und für das passende Modul erlaubt (nachgeprüft); eine erfolgreiche Nutzung ist in keiner Aufgabe protokolliert. Der Trockenlauf ist per Direkt-URL direkt in die Modulseite gegangen und hat diesen Einstieg nie gesehen.
+3. **Eine abgelehnte Aktion beendet die Aufgabe.** Die erste Ablehnung setzt die Aufgabe auf REJECTED, das Modell bekommt keine zweite Chance. Das macht jeden Fehlklick zum Totalverlust der Aufgabe.
+4. **RECEIPT, ASSESS, ANALYSIS, RIGHTS:** Auch hier endete die Aufgabe an der ersten Ablehnung. Welches Element geklickt wurde, ist nicht festgehalten (abgelehnte Aktionen wurden ohne Ziel protokolliert). Ob das ein Guard-Defekt oder ein erlaubnisfreies Element war, ist offen.
+
+**Ehrliche Einordnung.** Das ist erneut ein Harness-Befund, kein BLE-Befund, diesmal aber kein Abbruch, sondern ein zu enger Guard in Verbindung mit einem Trockenlauf, der den Guard umgangen hat. Der Lauf hat gezeigt, dass die technische Kette (PLAN, Seiteneffekt-Vertrag, Oracles, Budget, Konten) trägt und die UX-Ebene arbeitet. Die Reviewer-Befunde („Scope-Denied“, „Testauftrag erzeugen“) sind unbestätigte Beobachtungen.
+
+**Nächste Schritte (alle modellfrei, vor einem weiteren Lauf):**
+1. Guard-Defekt „Prüfbericht“ beheben (MudMenuItem) und alle Klickziele der Inspektions- und Messguards gegen das echte DOM prüfen.
+2. Abgelehnte Aktionen ohne Wirkung zurückmelden und die Aufgabe fortsetzen (bis zu einer kleinen Obergrenze je Aufgabe) und das Ziel (Rolle, Beschriftung) der abgelehnten Aktion protokollieren.
+3. PO-Entscheidung: Soll „Testauftrag erzeugen“ als einmalige Einrichtungsaktion je Probe erlaubt werden (BLEs eigener Prozessschritt, schreibt Arbeitsschritte), oder soll die Aufgabe das Modell auf „Erfassen“ hinweisen?
+4. Der Trockenlauf läuft künftig mit dem echten Guard in der Schleife (skriptgesteuerter Executor, der nur Aktionen ausführt, die der Guard zulässt) und beginnt wie das Modell auf der Probenübersicht. Danach neue Fixture und neue Freigabe.
+
+Rohdaten: privat in `D:/Temp/sqbf-regular-runs/413f7abe-…` (Ereignisse, Screenshots, `run.json`, `cases.json`, `accounting.json`).

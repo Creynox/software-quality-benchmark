@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "PREPARED_FOR_RUN_3_MODELLESS_BUDGET_APPROVAL_AND_PO_DECISION_ON_THREE_REFERENCE_VALUES_OPEN",
+    "status": "LIVE_RUN_3_PARTIAL_GO_GUARD_TOO_NARROW_FIXTURE_CONSUMED_FOLLOWUP_NEEDS_FIXES_FRESH_FIXTURE_AND_APPROVAL",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -140,8 +140,8 @@
       ]
     },
     "live_run_authorization": {
-      "status": "NONE",
-      "detail": "Earlier single-run approvals are consumed; a third live run needs a new explicit PO approval and the budget approval in a private manifest copy"
+      "status": "CONSUMED",
+      "detail": "Third approved single run executed 2026-10-16; a follow-up needs fixes, a fresh fixture and a new explicit PO approval"
     },
     "budget_candidate": {
       "suite": "suites/enzberg-nsn014-v0.4.1.json",
@@ -192,10 +192,49 @@
         "fixture_lease_consumed": true,
         "cause": "static fixture gate treated the audit stamp (sampling_plans.updated_at/updated_by) of the approved plan action as a data change; fixed in 049a3f8",
         "valid_measurement": false
+      },
+      {
+        "run_id": "413f7abe-71ad-4027-97a8-27760a5c5378",
+        "date": "2026-10-16",
+        "suite": "0.4.1",
+        "sqbf_commit": "ef06e389beac7e758f3dda649ec00f392f39b46a",
+        "fixture": "nsn014-ux-e781d1466b55",
+        "result": "PARTIAL GO",
+        "classification": "COMPLETED_FUNCTIONALLY_INCOMPLETE",
+        "stages": {
+          "PASS": [
+            "PLAN",
+            "WPK"
+          ],
+          "INCONCLUSIVE": [
+            "RECEIPT",
+            "PREPARATION",
+            "SIEVE",
+            "SHAPE",
+            "BOILING",
+            "SE",
+            "ASSESS",
+            "ANALYSIS",
+            "REPORT",
+            "RIGHTS"
+          ]
+        },
+        "model_requests": 124,
+        "tokens_total": 271478,
+        "wall_seconds": 1461,
+        "database_changed": "plan samples (10) and the sampling_plans audit stamp only; no findings of the side-effect contract",
+        "fixture_lease_consumed": true,
+        "causes": [
+          "inspection guard does not recognise the report menu item (MudMenuItem div) so no report can be generated",
+          "first rejected action ends the task (no second chance)",
+          "primary page action \"Testauftrag erzeugen\" is not permitted by the measurement guard; the dry run entered module pages by URL and bypassed the guard",
+          "target of rejected actions not logged"
+        ],
+        "valid_measurement": false
       }
     ],
     "fixture_clone": {
-      "status": "PREPARED_UNUSED_NO_LEASE_NO_BUDGET_APPROVAL",
+      "status": "USED_BY_RUN_413f7abe_LEASE_CONSUMED",
       "created_at": "2026-10-15",
       "fixture_id": "nsn014-ux-e781d1466b55",
       "source_fixture_id": "nsn014-ux-536fe4e42888",

@@ -14,6 +14,8 @@ Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-
 
 **Nachtrag Lauf 3 (Abschnitt 17):** `413f7abe…`, 16.10.2026: PARTIAL GO, alle zwölf Stufen durchgelaufen, PLAN und WPK PASS, zehn Stufen INCONCLUSIVE durch einen zu engen Guard (Menüeintrag „Prüfbericht“ nicht erkannt, Ablehnung beendet die Aufgabe, Hauptaktion „Testauftrag erzeugen“ nicht erlaubt). 124 Anfragen, 271.478 Tokens, 24 min. Keine Messung erfasst.
 
+**Nachtrag Behebung (Abschnitt 18):** Die Ursachen von Lauf 3 sind behoben. Neues Werkzeug `suite-dry-run` führt den gesamten echten Stufenpfad mit den echten Guards und einem skriptierten Executor aus; der letzte Lauf ist `DRY_RUN_COMPLETED` (alle zwölf Stufen ohne Harness-Stopp, Ablehnung oder Vertragsbefund; PREPARATION und SHAPE nur wegen der drei von BLE nicht angebotenen Werte INCONCLUSIVE, Option A). 423 Tests OK. Neue Fixture bereit, nächster Lauf braucht eine neue Freigabe.
+
 **Nachtrag nach Lauf 2 und der Vorbereitung (Abschnitte 15 und 16):** Lauf `45eb301f…` endete als
 INVALID_HARNESS (Audit-Stempel). Die Vorbereitung für einen dritten Lauf ist modellfrei abgeschlossen: neue Fixture,
 Seiteneffekt-Vertrag je Stufe, vollständiger Trockenlauf aller zwölf Stufen ohne Harness-Abbruch, neun dabei gefundene und behobene bzw. im Vertrag erfasste Befunde (16.2),
@@ -604,3 +606,52 @@ Zusätzlich beobachtet (kein Fehlalarm, aber relevant für die Reihenfolge): Fü
 4. Der Trockenlauf läuft künftig mit dem echten Guard in der Schleife (skriptgesteuerter Executor, der nur Aktionen ausführt, die der Guard zulässt) und beginnt wie das Modell auf der Probenübersicht. Danach neue Fixture und neue Freigabe.
 
 Rohdaten: privat in `D:/Temp/sqbf-regular-runs/413f7abe-…` (Ereignisse, Screenshots, `run.json`, `cases.json`, `accounting.json`).
+
+## 18. Behebung der Fehler aus Lauf 3 und Trockenlauf mit echtem Guard (16.10.2026)
+
+**Bewertung: Die Harness-Fehler aus Lauf 3 sind behoben und in einem vollständigen, modellfreien Durchlauf mit den echten Guards nachgewiesen (`DRY_RUN_COMPLETED`). Es gab keine Modellaufrufe und keinen weiteren Live-Lauf.** Ein vierter Lauf braucht eine neue Fixture (liegt bereit) und eine neue ausdrückliche Freigabe.
+
+### 18.1 Warum der Trockenlauf Lauf 3 nicht verhindert hat
+
+Mein erster Trockenlauf (Abschnitt 16) ging per Direkt-URL in die Modulseiten und klickte Menüeinträge mit Playwright. Er hat die Guards deshalb nie durchlaufen. Das Modell startet dagegen auf der Probenseite und kann nur über den Guard handeln. Lauf 3 hat das offengelegt. Die Konsequenz ist ein neues Werkzeug, das den gesamten echten Stufenpfad ausführt und nur die Modelle ersetzt.
+
+### 18.2 Das Werkzeug `suite-dry-run`
+
+`python -m sqbf.cli suite-dry-run …` führt alle zwölf Stufen über denselben Code wie ein Live-Lauf aus: Persona-Scope, Stufenläufer, beide Guards (Ereignisskript und Controllerprüfung), Transportrichtlinie, Seiteneffekt-Vertrag je Stufe, unabhängige Oracles und Abschluss-Gates. Ersetzt sind nur die Modelle: der Executor durch einen skriptgesteuerten Stellvertreter, der dieselben strikten JSON-Aktionen liefert (Klick mit Koordinaten, Text, Taste, Scrollen, Warten, done/blocked), ausgehend von der Probenübersicht wie das Modell; der Reviewer durch eine neutrale Bewertung. Das Werkzeug verweigert jede Fixture, die nicht als Wegwerfkopie (`--purpose scratch`) angelegt wurde oder deren Lease schon vergeben ist. Eine abgelehnte skriptierte Aktion gilt als Lücke der Guards (`guard_coverage_gaps`), nie als BLE-Befund. Es ist ab jetzt Vorbedingung jedes Live-Laufs.
+
+### 18.3 Gefundene und behobene Fehler
+
+| # | Fehler (belegt) | Wirkung im Live-Lauf | Behebung |
+|---|---|---|---|
+| 1 | Menüeintrag „Prüfbericht“ ist in BLE ein `div.mud-menu-item`; der Guard kannte nur `button` und `.mud-list-item`. | REPORT konnte nie einen Bericht erzeugen (Lauf 3). | Erkennung von `.mud-menu-item` und `[role=menuitem]`; „Probe löschen“ bleibt gesperrt. |
+| 2 | Die erste abgelehnte Aktion beendete die Aufgabe. | 11 von 12 Aufgaben in Lauf 3 ohne Beobachtung. | Eine abgelehnte Aktion hat keine Wirkung, wird dem Executor als `rejected_by_controller` zurückgemeldet und das Ziel (Rolle, Beschriftung, nie Werte) protokolliert; die Aufgabe endet erst nach drei Ablehnungen. |
+| 3 | Hauptaktion „Testauftrag erzeugen“ der Probenseite war nicht erlaubt. | Messstufen: Aufgabe an der ersten Aktion beendet. | Einmalig je Probe erlaubt. Die Aktion schreibt nur `workspace_work_items` (eine Zeile je Pflichtmodul) und den Probenstatus, nicht die Probenmodulzeilen (gemessen); die Entnahmekarten bleiben unverändert. Seiteneffekt-Vertrag ergänzt. |
+| 4 | Lesestufen kannten je Seite nur zwei Bedienelemente (z. B. 2 von 57 auf der Probenliste). | RECEIPT, ASSESS, ANALYSIS, RIGHTS an der ersten Aktion beendet. | Liste rein darstellender BLE-Bedienelemente (Schnellfilter, Ansichten, Sortierung, Zeiträume, Tabs, Auswahllisten, Kennzahlenkacheln, Probencodes, Anker auf derselben Seite) und die Modulseiten der Proben als lesende Ziele. Alles Schreibende bleibt gesperrt (getestet: Neue Probe, Plan bearbeiten, Abschließen, Archivieren, Löschen, Prüfbericht erstellen, Speichern u. a.). |
+| 5 | Schreibprüfung der Messstufe verglich den ganzen Empfangs-Zustand. | „Teilsiebung starten“ legt die LIMS-Probe an, SIEVE wäre `INVALID_HARNESS` (`UNRELATED_MEASUREMENT_WRITE`). | Verglichen werden nur Probenidentitäten und Planpositionen. |
+| 6 | Report-Oracle rechnete mit leeren Werten. | Eine halb erfasste Kornform-Fraktion löste `TypeError` aus, REPORT wurde BLOCKED und beendete die Suite. | Fehlende Werte liefern keine Erwartung. |
+| 7 | Mausrad über einem Eingabefeld wurde komplett unterdrückt. | Die Seite war über der Feldspalte nicht scrollbar (Siebtabelle: halbe Breite); ein Modell würde stillstehen. | Nur das fokussierte Feld wird geschützt. |
+| 8 | Vorbelegte Felder (Einwaage aus der Zuteilung, Rest der Siebzeile): „250“ + „250“ ergab 250250. | Der Controller hätte das als gespeicherte Wertabweichung von BLE (`FAIL`) gewertet, obwohl der Executor angehängt hat. | Ein Feld zählt erst als erfasst, wenn es danach exakt die freigegebene Zahl zeigt; Anweisung an den Executor: Inhalt zuerst markieren (ControlOrMeta+A). |
+
+### 18.4 Ergebnis des letzten Trockenlaufs (frische Kopie, 1.232 skriptierte Aktionen)
+
+`DRY_RUN_COMPLETED`: kein Harness-Stopp, keine abgelehnte skriptierte Aktion, kein Vertragsbefund. Erwartet und unverändert nach PO-Entscheidung Option A (16.10.2026: „lassen wirs erstmal so“):
+
+| Stufe | Ergebnis |
+|---|---|
+| PLAN, RECEIPT, SIEVE (10 Positionen, mit Teilsiebung), BOILING, SE, ASSESS, WPK, ANALYSIS, REPORT (10 Berichte, 10 PDFs), RIGHTS | **PASS** |
+| PREPARATION | INCONCLUSIVE: 8 von 10 Positionen PASS; P01 (Koch 8 mm vor der ersten Speicherung) und P06 (Kornform) `INCOMPLETE / APPROVED_FIELDS_NOT_PRESENT_ON_PAGE` |
+| SHAPE | INCONCLUSIVE: 4 von 5 Positionen PASS; P06 wie oben |
+
+Abschluss-Oracles: Empfang PASS, Berichte PASS, Berechnungen PASS, statisches Gate unverändert (Stempel nur `sampling_plans`, 1 Zeile). Messwerte und Zuteilungen FAIL ausschließlich wegen der drei von BLE nicht angebotenen Werte.
+
+### 18.5 Neue Fixture und Tests
+
+Fixture `nsn014-ux-b2e3a4b1d45a` (privat, `D:/Temp/sqbf-nsn014-fixture-20261016-prepared`) aus der gestoppten Quelle (Prüfsumme `9ae39dba…`), Purpose `fixture`, ohne Freigabe und Lease, Sessions verifiziert. **423 Tests OK** (vorher 399), davon neu: Guard im echten Chromium (Menüeintrag, darstellende Bedienelemente, gesperrte schreibende Elemente, Anker, Testauftrag mit Latch, Mausrad), weiche Ablehnung (Fortsetzung, Obergrenze, kritische Ablehnung), Schreibprüfung mit LIMS, Report-Oracle mit Lücken, Feldinhalt nach dem Tippen, skriptierter Executor, Verweigerung nicht-scratch Fixtures.
+
+### 18.6 Grenzen
+
+- Der skriptierte Executor ist ein sorgfältiger Nutzer. Ein Modell kann andere Bedienelemente wählen, schneller handeln (BLE rechnet nach dem Verlassen eines Feldes neu und verschiebt das Layout) oder etwas anderes erkunden. Solche Fälle erscheinen jetzt als weiche Ablehnungen mit Ziel statt als Totalverlust; der Lauf wird sie zeigen.
+- Die Lesestufen sind offene Erkundungsaufgaben; die Liste lesender Bedienelemente deckt die gescannten Seiten ab, nicht jede denkbare Auswahl.
+- P01 (Koch 8 mm) und P06 (Kornform, Modul inaktiv) bleiben nach Option A unvollständig; PREPARATION und SHAPE sind deshalb auch bei einem idealen Executor INCONCLUSIVE, die übrigen Positionen werden dennoch entschieden.
+- Die Klassifikationen sind offline und im Trockenlauf bestätigt, in einem Lauf mit Modell noch nicht.
+- Für den nächsten Lauf nötig: ausdrückliche Einzellauf-Freigabe, aktuelle Provider-Probe (die vom 16.10.2026 gilt bis 22:02 UTC), Readiness unmittelbar davor.

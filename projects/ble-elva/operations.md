@@ -167,6 +167,22 @@ oder welche Tabellen sie beschreiben darf. Die Prüfung im Runner (`stage_effect
 Der Vertrag ist im Lauf-Manifest über seinen Hash festgelegt. Für Trockenläufe gibt es die Werkzeuge `module_replay.py` und
 `side_effect_probe.py` (Zeilen- und Spaltendiff je Aktion, nur Spaltennamen und Zähler, keine Werte).
 
+## NSN014: Trockenlauf mit echtem Guard (vor jedem Live-Lauf)
+
+Modellfrei, auf einer frischen Wegwerfkopie (`suite-fixture-clone --purpose scratch`, dann `suite-sessions`). Das Werkzeug verweigert jede
+andere Fixture, weil es schreibt (Plan-Proben, Eingaben, Berichte):
+
+```powershell
+& $python -m sqbf.cli suite-dry-run --suite projects/ble-elva/suites/enzberg-nsn014-v0.4.1.json --dataset <privat>\dataset-ux-source-v1.json `
+  --fixture <scratch>\fixture-scratch-sessions.json --projection <privat>\reference-projection-ux-v1.json --allocations <privat>\allocation-reference-v1.json `
+  --output <scratch>\dry-run-1
+```
+
+Er führt alle zwölf Stufen über denselben Code wie ein Live-Lauf aus (Guards, Transportrichtlinie, Seiteneffekt-Vertrag, Oracles, Abschluss-Gates); nur die
+Modelle sind ersetzt (skriptierter Executor, neutrale Bewertung). `dry-run-report.json` nennt je Stufe das Ergebnis, abgelehnte skriptierte Aktionen mit Ziel
+(`guard_coverage_gaps`) und `harness_stops`. Erwartet ist `DRY_RUN_COMPLETED`; PREPARATION und SHAPE bleiben wegen der von BLE nicht angebotenen Werte
+INCONCLUSIVE. Ein Lauf braucht danach eine neue Fixture (`--purpose fixture`) und eine neue Freigabe.
+
 ## Evidenz und Aufbewahrung
 
 Private lokale Run-Ordner: PNGs mit SHA-256, Events, Usage, gemessene Modell-/Runnerzeit,

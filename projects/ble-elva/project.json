@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "LIVE_RUN_3_PARTIAL_GO_GUARD_TOO_NARROW_FIXTURE_CONSUMED_FOLLOWUP_NEEDS_FIXES_FRESH_FIXTURE_AND_APPROVAL",
+    "status": "RUN_3_FIXES_DONE_GUARDED_DRY_RUN_COMPLETED_FRESH_FIXTURE_READY_NEW_APPROVAL_REQUIRED",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -140,8 +140,8 @@
       ]
     },
     "live_run_authorization": {
-      "status": "CONSUMED",
-      "detail": "Third approved single run executed 2026-10-16; a follow-up needs fixes, a fresh fixture and a new explicit PO approval"
+      "status": "NONE",
+      "detail": "Run 3 (2026-10-16) consumed its approval; a fourth run needs a new explicit PO approval with the budget approval in a private manifest copy"
     },
     "budget_candidate": {
       "suite": "suites/enzberg-nsn014-v0.4.1.json",
@@ -234,11 +234,11 @@
       }
     ],
     "fixture_clone": {
-      "status": "USED_BY_RUN_413f7abe_LEASE_CONSUMED",
-      "created_at": "2026-10-15",
-      "fixture_id": "nsn014-ux-e781d1466b55",
+      "status": "PREPARED_UNUSED_NO_LEASE_NO_BUDGET_APPROVAL",
+      "created_at": "2026-10-16",
+      "fixture_id": "nsn014-ux-b2e3a4b1d45a",
       "source_fixture_id": "nsn014-ux-536fe4e42888",
-      "method": "byte copy of the stopped, never started PostgreSQL volume; checksum 9ae39dba…; 22 protected tables equal the prepared baseline",
+      "method": "byte copy of the stopped, never started PostgreSQL volume; checksum 9ae39dba…",
       "public_tables_compared": 426,
       "changes_against_source": [
         "workspace_products.is_active (P06)",
@@ -247,8 +247,7 @@
       ],
       "reference_values_changed": false,
       "sessions": "SESSIONS_VERIFIED, one login per persona",
-      "budget_approval_recorded": false,
-      "readiness": "all gates passed except BUDGET_APPROVAL_MISSING (other_gates PASSED), 0 model calls"
+      "budget_approval_recorded": false
     },
     "provider_probe": {
       "tool": "suite-provider-probe",
@@ -309,6 +308,33 @@
       ],
       "position_class_for_fields_not_offered": "INCOMPLETE / APPROVED_FIELDS_NOT_PRESENT_ON_PAGE (never FAIL)",
       "po_decision_open": "three reference values BLE does not offer with the customer configuration (completion report 16.5)"
+    },
+    "guarded_dry_run": {
+      "tool": "sqbf.cli suite-dry-run (tools/dry_run.py, tools/scripted_executor.py)",
+      "scope": "whole real suite path with the real guards; models replaced by a scripted executor and a neutral review; scratch clones only (refuses any other fixture)",
+      "date": "2026-10-16",
+      "model_calls": 0,
+      "status": "DRY_RUN_COMPLETED",
+      "stage_results": {
+        "PASS": [
+          "PLAN",
+          "RECEIPT",
+          "SIEVE",
+          "BOILING",
+          "SE",
+          "ASSESS",
+          "WPK",
+          "ANALYSIS",
+          "REPORT",
+          "RIGHTS"
+        ],
+        "INCONCLUSIVE": [
+          "PREPARATION (8/10 positions PASS)",
+          "SHAPE (4/5 positions PASS)"
+        ]
+      },
+      "inconclusive_reason": "APPROVED_FIELDS_NOT_PRESENT_ON_PAGE for P01 Koch 8 mm and P06 Kornform (PO option A, 2026-10-16: leave as is)",
+      "required_before_every_live_run": true
     }
   }
 }

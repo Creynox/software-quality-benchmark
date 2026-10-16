@@ -39,6 +39,8 @@ const classify=e=>{
  if(e?.closest('.mud-select,.mud-select-item,[role="option"],[role="listbox"]'))return {kind:'read_control'};
  const b=e?.closest('button');
  if(b&&!b.closest('form')&&READONLY.test(text(b.getAttribute('aria-label')||b.innerText)))return {kind:'read_control'};
+ // Sidebar groups ("Toggle Beprobung") only expand the menu; live run 6c23f768 rejected the click that RECEIPT needed to reach the plan.
+ if(b&&!b.closest('form')&&b.closest('.mud-nav-group')&&/^Toggle [^\/]{1,40}$/.test(text(b.getAttribute('aria-label'))))return {kind:'read_control'};
  if(config.plan_samples&&location.pathname===config.plan_path&&norm(b)==='Proben anlegen / nachanlegen')return {kind:'plan_samples',scope:location.pathname};
  // A row of the sample list opens its detail (aria-label "Probe <code> auswählen"; aria-selected is not always present, live run 083896e6).
  if(location.pathname==='/samples'&&e?.closest('tr[aria-label^="Probe "][aria-label$="auswählen"]'))return {kind:'read_control'};

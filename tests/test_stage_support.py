@@ -97,7 +97,7 @@ class ReviewerBestEffortTests(unittest.TestCase):
         for _ in range(2):module.ask_review(ask, 'r', 'p', [b'x'], budget, evidence)
         self.assertEqual(module.ask_review(ask, 'r', 'p', [b'x'], budget, evidence), (None, 'REVIEWER_DISABLED_AFTER_REPEATED_FAILURES'))
         self.assertEqual(calls, ['reviewer'] * module.REVIEWER_FAILURE_LIMIT)
-        self.assertEqual(evidence.events[0], ('reviewer_call_failed', {'error_code': 'PROVIDER_HTTP_400', 'consecutive_failures': 1, 'persona': 'lead'}))
+        self.assertEqual(evidence.events[0], ('reviewer_call_failed', {'error_code': 'PROVIDER_HTTP_400', 'consecutive_failures': 1, 'exception_type': 'Failure', 'persona': 'lead'}))
         self.assertEqual(len(evidence.events), 3);self.assertNotIn('provider text', str(evidence.events))
 
     def test_a_success_resets_the_consecutive_failure_count(self):

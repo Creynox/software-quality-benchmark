@@ -69,14 +69,16 @@ class MeasurementGuardTests(unittest.TestCase):
             page=context.new_page();page.goto(c['origin']+c['path']);self.assertEqual(kind('#order')['kind'],'blocked')
             context.close();browser.close()
 
-    def test_a_hash_only_anchor_of_the_current_page_scrolls_and_every_other_anchor_stays_scoped(self):
-        # Live run 083896e6: the click landed on "Zu den Modulen" (#module-bereich) after BLE re-rendered the header and was rejected.
+    def test_bles_zu_den_modulen_leaves_the_sample_page_because_of_the_base_href_and_stays_blocked(self):
+        # BLE renders <base href="/">: href="#module-bereich" resolves to /#module-bereich and the click navigates to the start page (reproduced on a
+        # scratch clone, 16.10.2026; live run 6c23f768 rejected it sixteen times). A first version of this guard allowed "hash-only anchors" and
+        # its test passed on a page without the base tag. Everything that leaves the contract's pages stays blocked.
         from playwright.sync_api import sync_playwright
         c=self.contract('wash');root=c['root'];path=c['path']
-        links=(('root-anchor',root+'#module-bereich','navigation'),('relative-anchor','#module-bereich','navigation'),('plain-root',root,'navigation'),
-               ('other-module',root+'/kornform#x','blocked'),('other-sample','/samples/22222222-2222-4222-8222-222222222222#module-bereich','blocked'),
-               ('foreign','http://evil.example'+root+'#x','blocked'),('query',root+'?edit=1#x','blocked'),('admin','/admin/users#x','blocked'))
-        html=''.join('<a id="%s" href="%s">link</a>'%(i,h) for i,h,_ in links)
+        links=(('module-anchor','#module-bereich','blocked'),('root-anchor',root+'#module-bereich','blocked'),('plain-root',root,'navigation'),
+               ('own-module',path,'navigation'),('other-module',root+'/kornform','blocked'),('other-sample','/samples/22222222-2222-4222-8222-222222222222','blocked'),
+               ('foreign','http://evil.example'+root,'blocked'),('query',root+'?edit=1','blocked'),('admin','/admin/users','blocked'))
+        html='<base href="/">'+''.join('<a id="%s" href="%s">link</a>'%(i,h) for i,h,_ in links)
         with sync_playwright() as p:
             browser=p.chromium.launch();context=browser.new_context();context.add_init_script(module.event_guard(c))
             context.route(c['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
@@ -84,11 +86,26 @@ class MeasurementGuardTests(unittest.TestCase):
             def kind(selector):
                 return page.evaluate("""({config,selector})=>{__C__const e=document.querySelector(selector);const r=e.getBoundingClientRect();
                   return classify(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}""".replace('__C__',module.CLASSIFY),{'config':c,'selector':selector})['kind']
+            self.assertEqual(page.evaluate("()=>document.querySelector('#module-anchor').href"),c['origin']+'/#module-bereich')
             for identifier,href,expected in links:self.assertEqual(kind('#'+identifier),expected,href)
-            # From the module page an anchor to another page's hash is not a same-page scroll.
-            page.goto(c['origin']+path)
-            self.assertEqual(kind('#root-anchor'),'blocked');self.assertEqual(kind('#plain-root'),'navigation')
             context.close();browser.close()
+
+    def test_a_field_that_is_still_focused_is_reported_so_that_an_uncommitted_value_is_never_a_persisted_deviation(self):
+        # Live run 6c23f768, P09: the value was typed, the next executor request failed, the field was never left, BLE persisted nothing and the
+        # controller reported FAIL / PERSISTED_VALUE_DEVIATION. BLE persists a value when its field is left.
+        from playwright.sync_api import sync_playwright
+        c=self.contract('wash');name=next(iter(c['fields']))
+        html='<div class="mud-input-control"><label>%s</label><input id="in"></div><input id="other">'%name
+        with sync_playwright() as p:
+            browser=p.chromium.launch();context=browser.new_context()
+            context.route(c['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(c['origin']+c['path'])
+            self.assertIsNone(module.focused_field(page,c))
+            page.locator('#in').focus();self.assertEqual(module.focused_field(page,c),name)
+            page.locator('#other').focus();self.assertIsNone(module.focused_field(page,c))
+            context.close();browser.close()
+        broken=MagicMock();broken.evaluate.side_effect=RuntimeError('page gone');self.assertIsNone(module.focused_field(broken,c))
+        self.assertIsNone(module.focused_field(MagicMock(),c))  # an unreadable answer counts as no focus
 
     def test_the_wheel_scrolls_the_page_over_a_field_but_never_changes_the_focused_field(self):
         # Live-run lesson (dry run 16.10.2026): blocking every wheel event over a field made the page unscrollable over the input column.

@@ -14,7 +14,7 @@ from sqbf.calibration import ResourceStop, ask_calibrated
 from sqbf.models import validate_action, safe_action_log, ActionValidationError, ALLOWED_ACTIONS
 from sqbf.read_only import ReadOnlyViolation
 from sqbf.runner import apply_action
-from .measurement_guard import make_contract, event_guard, check_action, transport_allowed, german, offered_fields
+from .measurement_guard import make_contract, event_guard, check_action, transport_allowed, german, offered_fields, focused_field
 from .measurement_oracle import collect_inputs, verify_inputs
 from .receipt_oracle import collect_receipts
 from .allocation_oracle import collect_allocations, prerequisite_gaps, verify_allocations
@@ -32,6 +32,7 @@ Physical laboratory operations are simulated. Existing norms, method profiles an
 Save each module or individual shape fraction once only, then inspect the resulting state. No save retry.
 No release, signature, finalization, delete, dispatch, master data or optional notes.
 If the sample page asks for a test order ("Testauftrag erzeugen"), creating it once with that visible button is permitted; then open the module with its "Erfassen" button. Do not use "Anforderungen anlegen".
+The modules of a sample are listed as cards further down the sample page: scroll to them. Click the input field itself, not its label or heading. After the last value leave the field (Tab) so that it is applied.
 Allowed keys: ControlOrMeta+A, Backspace, Delete, Tab, Escape. Select controls only through visible UI.
 If a field or prerequisite is unavailable or validation fails, explain blocked instead of bypassing it.
 '''+REJECTION_NOTE+'\n'
@@ -68,6 +69,7 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
     # The test order of a sample is created once, in whichever module visit needs it first.
     images,actions,saved,filled,offered=[],[],({'test_order'} if test_order_done else set()),set(),set();stall=StallDetector();rejected=[];wrongly_typed=[]
     outcome={'position_id':position['position_id'],'kind':kind,'status':'INCONCLUSIVE','technical_gate':'PASS','review':None}
+    page=None
     try:
         context.add_init_script(event_guard(contract))
         context.route('**/*',lambda route:route.continue_() if transport_allowed(route.request.url,route.request.method,contract,policy) else route.abort())
@@ -141,10 +143,11 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
         evidence.event('measurement_harness_failure',position=position['position_id'],error_code='MEASUREMENT_RUNNER_ERROR',exception_type=type(error).__name__)
         outcome.update(status='INVALID',technical_gate='INVALID',error_code='MEASUREMENT_RUNNER_ERROR',exception_type=type(error).__name__)
     finally:
+        outcome['field_focused_at_end']=focused_field(page,contract) if page is not None else None
         context.close()
     outcome.update(rejected_actions=rejected,fields_not_matching_after_typing=sorted(set(wrongly_typed)-filled),test_order_created='test_order' in saved and not test_order_done)
     outcome.update(screenshots=len(images),fields_required=len(contract['fields']),fields_entered=len(filled),
-                   fully_entered=set(contract['fields'])<=filled and required_saves(contract)<=saved,
+                   fully_entered=set(contract['fields'])<=filled and required_saves(contract)<=saved and not outcome['field_focused_at_end'],
                    fields_offered=len(offered),fields_not_offered=fields_not_offered(contract,offered),
                    offered_entered=offered<=filled and (required_saves(contract)<=saved or not offered))
     return outcome
@@ -178,6 +181,7 @@ def classify_position(outcomes,mismatched,derived_gap=False):
     absent=any(o.get('fields_not_offered') for o in outcomes) and all(o.get('offered_entered') for o in outcomes)
     unfinished=[o for o in outcomes if o['status']!='DONE']
     if unfinished:return 'INCOMPLETE','APPROVED_FIELDS_NOT_PRESENT_ON_PAGE' if absent and all(o['status'] in ('DONE','BLOCKED') for o in unfinished) else incomplete_reason(unfinished[0])
+    if mismatched and any(o.get('field_focused_at_end') for o in outcomes):return 'INCOMPLETE','LAST_FIELD_NOT_COMMITTED'
     if mismatched:return 'INCOMPLETE','APPROVED_FIELDS_NOT_PRESENT_ON_PAGE' if absent else 'EXECUTOR_DONE_WITHOUT_ALL_APPROVED_INPUTS'
     if derived_gap:return 'INCOMPLETE','DERIVED_VALUE_UPSTREAM_INCOMPLETE'
     return 'PASS',None

@@ -113,9 +113,10 @@ const field=(e,ignoreSaveLatch)=>{
 };
 const classify=e=>{
  if(location.pathname!==config.path&&location.pathname!==config.root)return {kind:'blocked'};
- // A hash-only anchor of the current page ("Zu den Modulen" -> #module-bereich) only scrolls; live run 083896e6 rejected it as the click
- // landed on it after BLE re-rendered the header.
- const a=e?.closest('a');if(a){let u=new URL(a.href,location.href);if(u.origin===config.origin&&[config.root,config.path].includes(u.pathname)&&!u.search&&(!u.hash||u.pathname===location.pathname))return {kind:'navigation'};}
+ // BLE's "Zu den Modulen" (href="#module-bereich") is not a same-page anchor: the page has <base href="/">, so the browser resolves it to
+ // /#module-bereich and the click leaves the sample for the start page (reproduced on a scratch clone, 16.10.2026; live run 6c23f768 rejected it
+ // sixteen times). It stays blocked: it would take the executor out of the task scope.
+ const a=e?.closest('a');if(a){let u=new URL(a.href,location.href);if(u.origin===config.origin&&[config.root,config.path].includes(u.pathname)&&!u.search&&!u.hash)return {kind:'navigation'};}
  // BLE's own first step of module work: the sample page offers "Testauftrag erzeugen" as its primary action (it writes only the work items
  // of the sample and its status; live run 413f7abe, dry run 16.10.2026). Allowed once per sample, on the sample page only.
  if(location.pathname===config.root&&norm(e?.closest('button')?.innerText)==='Testauftrag erzeugen')return {kind:'setup',scope:'test_order'};
@@ -172,6 +173,17 @@ def offered_fields(page,contract):
 const names=new Set();document.querySelectorAll('input').forEach(i=>{const n=field(i,true);if(n)names.add(n);});return [...names];
 }""".replace('__CLASSIFY__',CLASSIFY),{'config':contract})
     return {name for name in names if name in contract['fields']}
+
+
+def focused_field(page,contract):
+    """Name of the approved field that still has the focus, else None. BLE persists a typed value when the field is left, so a value typed into a
+    field that is still focused at the end of a task is not yet committed (live run 6c23f768, P09: typed, the next request failed, nothing persisted,
+    the controller reported a persisted-value FAIL). Evidence only; an unreadable page counts as no focus."""
+    try:
+        name=page.evaluate(r"""({config})=>{__CLASSIFY__return field(document.activeElement,true);}""".replace('__CLASSIFY__',CLASSIFY),{'config':contract})
+    except Exception:
+        return None
+    return name if isinstance(name,str) else None
 
 
 def check_action(page,action,contract,saved):

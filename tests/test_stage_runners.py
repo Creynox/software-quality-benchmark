@@ -99,6 +99,27 @@ class ViewControllerTests(unittest.TestCase):
         outcome,_,_,_=self.view([ModelResponse(None,{})],[])
         self.assertEqual((outcome['status'],outcome['executor_error_code']),('EXECUTOR_FAILED','EXECUTOR_RESPONSE_NOT_AN_OBJECT'))
 
+    def test_an_expired_authorization_stops_the_suite_at_once_instead_of_after_three_more_positions(self):
+        # Live run 6c23f768 ended at 3603 s: the ChatGPT-plan access token lives about one hour and is not refreshed (HTTP 401 on every request).
+        from sqbf.bounded import WorkerFailed
+        from sqbf.calibration import ResourceStop
+        for code in ('PROVIDER_HTTP_401','PROVIDER_HTTP_403'):
+            value=budget();evidence=MagicMock()
+            with patch.object(inspection,'ask_calibrated',side_effect=[WorkerFailed(code)]):
+                b,page=browser('/samples')
+                outcome=inspection.run_view(b,fixture(),'laboratory_lead','/samples',['/samples'],'task',{},object(),object(),value,evidence)
+            self.assertEqual((outcome['status'],outcome['stop_reason']),('INCONCLUSIVE','PROVIDER_AUTHORIZATION_EXPIRED'))
+            self.assertEqual(value.stop_reason,'PROVIDER_AUTHORIZATION_EXPIRED')
+            event=[c for c in evidence.event.call_args_list if c.args[0]=='executor_call_failed'][0]
+            self.assertEqual((event.kwargs['error_code'],event.kwargs['exception_type']),(code,'WorkerFailed'))
+        # Other provider faults still need three in a row.
+        value=budget()
+        with patch.object(inspection,'ask_calibrated',side_effect=[WorkerFailed('PROVIDER_HTTP_500')]):
+            b,page=browser('/samples')
+            outcome=inspection.run_view(b,fixture(),'laboratory_lead','/samples',['/samples'],'task',{},object(),object(),value,MagicMock())
+        self.assertEqual(outcome['status'],'EXECUTOR_FAILED');self.assertIsNone(value.stop_reason)
+
+
     def test_a_stage_with_a_failed_executor_request_is_inconclusive_and_does_not_stop_the_suite(self):
         with patch.object(inspection,'run_view',return_value={'status':'EXECUTOR_FAILED','technical_gate':'PASS','screenshots':3,'executor_error_code':'PROVIDER_ERROR',
                                                               'capability_actions':[],'downloads':[],'download_failures':[],'review':None}), \

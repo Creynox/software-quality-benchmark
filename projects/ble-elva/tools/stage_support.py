@@ -188,6 +188,7 @@ def ux_verdicts(outcomes):
 
 
 EXECUTOR_FAILURE_LIMIT = 3
+AUTHORIZATION_FAILURES = ('PROVIDER_HTTP_401', 'PROVIDER_HTTP_403')
 
 
 class ExecutorRequestFailed(RuntimeError):
@@ -219,6 +220,11 @@ def ask_executor(ask, executor, prompt, image, budget, evidence, **context):
     if failure is None:
         budget.executor_failures = 0
         return {k: v for k, v in data.items() if v is not None}
+    if failure in AUTHORIZATION_FAILURES:
+        # The ChatGPT-plan access token lives about one hour and is never refreshed (live run 6c23f768 ended at 3603 s with HTTP 401): every further
+        # request would fail the same way, so the suite stops now instead of after three more positions.
+        evidence.event('executor_call_failed', error_code=failure, consecutive_failures=getattr(budget, 'executor_failures', 0) + 1, **context)
+        budget.stop('PROVIDER_AUTHORIZATION_EXPIRED')
     budget.executor_failures = getattr(budget, 'executor_failures', 0) + 1
     evidence.event('executor_call_failed', error_code=failure, consecutive_failures=budget.executor_failures, **context)
     if budget.executor_failures >= EXECUTOR_FAILURE_LIMIT:
@@ -249,5 +255,5 @@ def ask_review(ask, reviewer, prompt, images, budget, evidence, **context):
     except Exception as error:
         code = getattr(error, 'code', None) or 'REVIEWER_CALL_FAILED'
         budget.reviewer_failures = getattr(budget, 'reviewer_failures', 0) + 1
-        evidence.event('reviewer_call_failed', error_code=code, consecutive_failures=budget.reviewer_failures, **context)
+        evidence.event('reviewer_call_failed', error_code=code, consecutive_failures=budget.reviewer_failures, exception_type=type(error).__name__, **context)
         return None, code

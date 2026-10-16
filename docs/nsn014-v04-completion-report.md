@@ -14,6 +14,8 @@ Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-
 
 **Nachtrag Lauf 3 (Abschnitt 17):** `413f7abe…`, 16.10.2026: PARTIAL GO, alle zwölf Stufen durchgelaufen, PLAN und WPK PASS, zehn Stufen INCONCLUSIVE durch einen zu engen Guard (Menüeintrag „Prüfbericht“ nicht erkannt, Ablehnung beendet die Aufgabe, Hauptaktion „Testauftrag erzeugen“ nicht erlaubt). 124 Anfragen, 271.478 Tokens, 24 min. Keine Messung erfasst.
 
+**Nachtrag Lauf 5 (Abschnitt 20):** Lauf 5 (6c23f768, 16.10.2026) ist `PARTIAL GO / RESOURCE_STOP`: erstmals objektiv belegte BLE-Ergebnisse (PLAN, RECEIPT, Abschlämmung P08, Siebanalyse P04/P06/P10 PASS), aber nur für fünf von zwölf Stufen. Abbruch nach 3.603 s, weil der Anmeldetoken nach etwa einer Stunde abläuft (HTTP 401); eine Entscheidung zum Token ist offen (Abschnitt 20.6). Das einzige FAIL (P09) war ein Auswertungsfehler (Feld nicht verlassen), mein Anker-Fix aus Abschnitt 19 war falsch (`<base href="/">`); beides behoben. 540 Anfragen, rund 1,37 Mio. Tokens.
+
 **Nachtrag Lauf 4 (Abschnitt 19):** Lauf 4 (083896e6, 16.10.2026) war `NO-GO / INVALID_HARNESS` ohne gültige Messung (PLAN PASS, RECEIPT INCONCLUSIVE, PREPARATION INVALID, 9 Stufen NOT_RUN, 51 Anfragen). Ursache: ein einziger fehlgeschlagener Executor-Request beendete über einen allgemeinen Handler die Suite; dazu zwei fehlende Guard-Freigaben. Behoben und mit Trockenläufen (auch mit eingespielten Providerfehlern) belegt; zusätzlich werden abgeleitete Werte nie mehr BLE angelastet, solange ihre Eingaben fehlen. 441 Tests OK. Der nächste Lauf braucht eine neue Freigabe.
 
 **Nachtrag Behebung (Abschnitt 18):** Die Ursachen von Lauf 3 sind behoben. Neues Werkzeug `suite-dry-run` führt den gesamten echten Stufenpfad mit den echten Guards und einem skriptierten Executor aus; der letzte Lauf ist `DRY_RUN_COMPLETED` (alle zwölf Stufen ohne Harness-Stopp, Ablehnung oder Vertragsbefund; PREPARATION und SHAPE nur wegen der drei von BLE nicht angebotenen Werte INCONCLUSIVE, Option A). 423 Tests OK. Neue Fixture bereit, nächster Lauf braucht eine neue Freigabe.
@@ -680,7 +682,7 @@ Statisches Gate unverändert (nur Audit-Stempel `sampling_plans`, 1 Zeile), kein
 | # | Ursache | Beleg | Behebung |
 |---|---|---|---|
 | 1 | **Ein fehlgeschlagener Executor-Request beendete die Suite.** Jede Ausnahme außerhalb der erwarteten Fälle wurde zu `INVALID_HARNESS` und löste den kritischen Stopp aus. | Letzter Executor-Request ohne Nutzungsangabe (`usage {}`): das entsteht nur, wenn der Aufruf selbst eine Ausnahme warf, hier nach 6 s. Der Ausnahmetyp wurde nicht protokolliert, die Schlussfolgerung stützt sich also auf die Abrechnung, nicht auf eine Fehlermeldung. | Neuer Pfad `ask_executor`: ein fehlgeschlagener Request oder eine Antwort ohne Aktionsobjekt beendet nur diese Aufgabe als `INCONCLUSIVE` (`EXECUTOR_REQUEST_FAILED`, kein Wiederholen, keine Reviewer-Anfrage danach). Drei Fehlschläge in Folge stoppen die Suite als unvollständig (`EXECUTOR_UNAVAILABLE_AFTER_REPEATED_FAILURES`). Jeder Harness-Fehler protokolliert künftig den **Klassennamen** der Ausnahme (nie die Meldung). |
-| 2 | Same-page-Anker „Zu den Modulen“ (`#module-bereich`) wurde in den Messstufen abgelehnt. Nach „Testauftrag erzeugen“ landete der zweite Klick darauf. | 3 Ablehnungen im Ereignisprotokoll. | Hash-Anker der aktuellen Seite erlaubt (scrollt nur); andere Anker, Fremdseiten und Query bleiben gesperrt (Test im echten Chromium). |
+| 2 | Same-page-Anker „Zu den Modulen“ (`#module-bereich`) wurde in den Messstufen abgelehnt. Nach „Testauftrag erzeugen“ landete der zweite Klick darauf. | 3 Ablehnungen im Ereignisprotokoll. | Hash-Anker der aktuellen Seite erlaubt (scrollt nur); andere Anker, Fremdseiten und Query bleiben gesperrt (Test im echten Chromium). **Korrigiert in Abschnitt 20.3 (Nr. 3): In BLE ist es wegen `<base href="/">` kein Anker der aktuellen Seite, die Freigabe wurde zurückgenommen.** |
 | 3 | Zeile der Probenliste ohne `aria-selected` wurde abgelehnt. | `tr "Probe ENZBERG-… auswählen"`; RECEIPT endete mit einem einzigen Versuch. | Regel auf `tr[aria-label^="Probe "][aria-label$="auswählen"]` auf `/samples` (lesend); andere Zeilen und Seiten bleiben gesperrt. |
 | 4 | Der Executor gab nach einer einzigen Ablehnung auf. Ein Klick landete wegen der Neuberechnung von BLE auf einem anderen Element als im Screenshot. | Klick bei (757, 336), wo der Screenshot „Entwurf anlegen“ zeigte; der Guard fand dort ein Eingabefeld (Ziel `input`). Vermutung: Layoutwechsel zwischen Screenshot und Klick. | Anweisung ergänzt: Nach einer Ablehnung zuerst den neuesten Screenshot lesen, die Seite kann sich bewegt haben. Das Verhalten des Modells bleibt Messgegenstand. |
 
@@ -713,3 +715,74 @@ Zur Prüfung der Behebung habe ich dem skriptierten Executor drei Fehler vorgege
 - Abgeleitete Werte: Bekannt ist die Abhängigkeit der Aufbereitungsmasse von der Zuteilung `Siebanalyse` und, konservativ angenommen, der Teilsiebserie von der Abschlämmung. Weitere Abhängigkeiten sind nicht ausgeschlossen; sie würden als FAIL erscheinen und wären im Bericht zu prüfen.
 - P01 (Koch 8 mm) und P06 (Kornform) bleiben nach Option A unvollständig.
 - Für einen fünften Lauf nötig: neue Fixture, neue ausdrückliche Einzellauf-Freigabe, Provider-Probe (die vom 16.10.2026 gilt bis 22:02 UTC), Readiness unmittelbar davor.
+
+## 20. Lauf 5 (6c23f768, 16.10.2026): erste belastbare Messungen, Abbruch durch ablaufenden Anmeldetoken
+
+**Bewertung: `PARTIAL GO`, technisch `RESOURCE_STOP`. Erstmals gibt es objektiv belegte BLE-Ergebnisse, aber nur für fünf von zwölf Stufen und nur für einen Teil der Positionen. Der Lauf endete nach 3.603 s, weil der Anmeldetoken des Providers nach etwa einer Stunde abläuft (HTTP 401). Es gibt keine belegte BLE-Abweichung: Das einzige `FAIL` (PREPARATION P09) war ein Fehler meiner Auswertung (Abschnitt 20.3).** Die Freigabe von Lauf 5 ist verbraucht.
+
+### 20.1 Verlauf
+
+SQBF-Commit `713a273`, Fixture `nsn014-ux-76b2f16e82ec` (verbraucht), 16:06 bis 17:06 UTC. Zwei vorangegangene Startversuche (15:42 und 15:48 UTC) endeten vor jeder Anfrage, weil die Browser-Anmeldung nicht rechtzeitig bestätigt wurde (Datensätze `9dacf9bd`, `d25f754a`, 0 Anfragen, Fixture und Freigabe unberührt).
+
+| Stufe | Objektives Ergebnis | Inhalt |
+|---|---|---|
+| PLAN | **PASS** | Planproben einmal angelegt, Oracle bestätigt. |
+| RECEIPT | **PASS** | Plan- und Empfangsansicht gelesen, Oracle bestätigt. Ein Klick auf „Toggle Beprobung“ wurde abgelehnt (20.3). |
+| PREPARATION | FAIL (falsch, 20.3) | Abschlämmung **P08 PASS**. P01 bis P05: Executor meldete `blocked` (meist nach der abgelehnten Navigation, 20.3). P06, P07, P10: `APPROVED_FIELDS_NOT_PRESENT_ON_PAGE`. P09: falsches FAIL, siehe 20.3. |
+| SIEVE | INCONCLUSIVE | **P04, P06, P10 PASS** (gespeichert, Werte wie freigegeben persistiert). P02 und P05: `done` ohne Speichern. P03, P08, P09: `blocked`, kein Speichern-Element gefunden. P01: Boden/Pfanne-Zeile ohne Eingabefeld, Teilsiebung mit 0 g Einwaage. P07: Klick auf die Beschriftung „Einwaage“ abgelehnt, der Executor gab auf. |
+| SHAPE | INCONCLUSIVE | Abbruch: drei Anfragen in Folge `PROVIDER_HTTP_401`. |
+| BOILING bis RIGHTS (7) | NOT_RUN | `UPSTREAM_CRITICAL_STOP`. |
+
+Verbrauch: **540 Anfragen** (513 Executor, 27 Reviewer), **3.603 s**, bekannte Tokens 1.225.271 (Executor) und 147.434 (Reviewer), zusammen rund 1,37 Mio. in einer Stunde, etwa 2,5 Tausend je Anfrage (6 Anfragen ohne Nutzungsangabe, darunter die Ausfälle). Statisches Gate unverändert (nur Audit-Stempel `sampling_plans`), keine Vertragsbefunde. Fehlerhandhabung aus Abschnitt 19 bewährt: ein Executor-Ausfall (`RESPONSE_NOT_JSON`, P09) und zwei Reviewer-Ausfälle beendeten nur die jeweilige Position bzw. Bewertung.
+
+### 20.2 Belastbare BLE-Ergebnisse
+
+- Planproben anlegen (PLAN) und Probenübersicht (RECEIPT): objektiv bestanden.
+- Abschlämmung P08: Eingaben vollständig erfasst, gespeichert und wie freigegeben persistiert.
+- Siebanalyse P04, P06, P10: gespeichert, Werte wie freigegeben persistiert.
+- Kein anderes Ergebnis ist objektiv entschieden.
+
+### 20.3 Fehler der Steuerung
+
+| # | Fehler | Beleg | Behebung |
+|---|---|---|---|
+| 1 | **Anmeldetoken läuft nach etwa einer Stunde ab.** Der ChatGPT-Plan-Zugriff wird bewusst ohne Refresh betrieben (kein Refresh-Speicher); ein Lauf von mehr als einer Stunde kann so nicht enden. | Abbruch bei 3.603 s, dreimal `PROVIDER_HTTP_401` in SHAPE. Schon der Mindestbedarf der Suite (640 Anfragen) braucht länger. | Ein 401/403 stoppt die Suite sofort (`PROVIDER_AUTHORIZATION_EXPIRED`) statt nach drei weiteren Positionen. **Die eigentliche Lösung ist eine Entscheidung des PO** (Abschnitt 20.6). |
+| 2 | **Falsches `FAIL` bei P09 (Zuteilung).** Der Executor tippte den Wert, die nächste Antwort war kein JSON (`RESPONSE_NOT_JSON`), das Feld wurde nie verlassen. BLE speichert beim Verlassen eines Feldes, also wurde nichts gespeichert. Der Controller wertete „alles eingegeben, nichts persistiert“ als `PERSISTED_VALUE_DEVIATION`. | Zuteilungs-Oracle: keine einzige Zuteilung persistiert. Ergebnis `EXECUTOR_FAILED` bei `fully_entered=true`. | Am Aufgabenende wird das noch fokussierte freigegebene Feld festgehalten; ein Wert in einem noch fokussierten Feld gilt als nicht übernommen. Eine Abweichung ist dann `INCOMPLETE / LAST_FIELD_NOT_COMMITTED`, nie `FAIL`. Die Anweisung nennt „Feld mit Tab verlassen“. |
+| 3 | **Meine Korrektur aus Abschnitt 19 zum Anker „Zu den Modulen“ war falsch.** Sie wurde nur an einer nachgebauten Seite getestet. In BLE steht `<base href="/">`: `href="#module-bereich"` wird zu `/#module-bereich`, der Klick verlässt die Probe und landet auf der Startseite (auf einer Wegwerfkopie reproduziert). Der Guard hat ihn sechzehnmal zu Recht abgelehnt, die Modelle gaben danach meist auf („kein anderer Weg zu den Modulen“). | 16 Ablehnungen (15 in PREPARATION, 1 in SHAPE); DOM-Prüfung auf Wegwerfkopie. | Freigabe zurückgenommen, Test mit `<base href="/">` ersetzt. Anweisung: Die Module stehen als Karten weiter unten auf der Probenseite, Feld selbst anklicken (nicht Beschriftung), letzten Wert mit Tab übernehmen. |
+| 4 | Klick auf „Toggle Beprobung“ (Seitenleiste) in RECEIPT abgelehnt. | 1 Ablehnung. | Seitenleistengruppen (`.mud-nav-group`, „Toggle <Name>“) sind lesend; Test im echten Chromium. |
+| 5 | Reviewer-Ausfälle ohne Klassenname. | 2 Ausfälle (`REVIEWER_CALL_FAILED`). | Ereignis protokolliert die Ausnahmeklasse. |
+
+### 20.4 Beobachtungen zu BLE (unbestätigt, kein Issue angelegt)
+
+- **„Zu den Modulen“ führt von der Probenseite auf die Startseite** (statt zu scrollen), wegen `<base href="/">` und eines reinen Fragment-Links. Auf einer Wegwerfkopie reproduziert. Kandidat für einen BLE-Fehler.
+- **„Speichern“ liegt oben im Modulkopf und scrollt mit weg.** Bei vier der zehn Siebanalysen speicherte der Executor nicht (P02, P05 `done` ohne Speichern; P03, P08 `blocked`). Der Reviewer widersprach in einem Fall (Schaltfläche sei oben sichtbar): Mischung aus UX-Kandidat und Agentenschwierigkeit.
+- **Die Ergebnisfelder der Abschlämmung** („Trockenmasse nach Waschen“, „Abschlämmverlust“, „Feinanteil lokal“) blieben leer, bis die Siebanalyse ihre Hauptprobenmasse kennt; die Seite meldet in einem Fall „Hauptprobenmasse nicht verfügbar, zuerst Siebanalyse mit Wägung“. Das koppelt die Reihenfolge von PREPARATION und SIEBUNG.
+- Laut Executor-Aussage ist die Siebanalyse von P09 „nicht bewertbar, kein wirksamer Grenzwertsatz zugeordnet“ (Produktkonfiguration; unbestätigt).
+- Reviewer-Zahlen (unbestätigt): UX-Verbesserung major 2 / minor 25, Agentenschwierigkeit major 5 / minor 15, SQBF-Kandidat major 9 / minor 3 (zwölf), Unklar major 5 / minor 3 / info 37. Die zwölf „SQBF-Kandidaten“ betreffen alle abgelehnte Klicks (Anker, Kochversuch-Link, Beschriftung, Seitenleiste); der Reviewer sieht die Ablehnung und kann nicht entscheiden, ob sie berechtigt war.
+
+### 20.5 Nach der Behebung
+
+Offline behoben, 0 Modellaufrufe. Neu: Abweichungen in noch fokussierten Feldern sind `INCOMPLETE / LAST_FIELD_NOT_COMMITTED`; Anker-Freigabe zurückgenommen und mit der echten Seitenstruktur (`<base href="/">`) getestet; Seitenleistengruppen lesend; HTTP 401/403 stoppt sofort; Reviewer-Ausfälle nennen die Ausnahmeklasse; Anweisung an den Executor ergänzt.
+
+| Trockenlauf (frische Wegwerfkopie) | Ergebnis |
+|---|---|
+| Sauber (1.232 skriptierte Aktionen) | `DRY_RUN_COMPLETED`, unverändert zum Stand vor Lauf 5: PLAN, RECEIPT, SIEVE (10 Positionen), BOILING, SE, ASSESS, WPK, ANALYSIS, REPORT (10 PDFs), RIGHTS **PASS**; PREPARATION (8 von 10) und SHAPE (4 von 5) INCONCLUSIVE nur wegen der drei von BLE nicht angebotenen Werte (Option A). Keine abgelehnte skriptierte Aktion, kein Vertragsbefund. |
+| Mit drei eingespielten Providerfehlern (Aufrufe 9, 40, 150) | `DRY_RUN_COMPLETED`, alle zwölf Stufen liefen; nur P01, P02, P06 in PREPARATION `EXECUTOR_REQUEST_FAILED`, SIEVE P01 `DERIVED_VALUE_UPSTREAM_INCOMPLETE`, alles andere wie im sauberen Lauf. |
+
+Grenzen der Trockenläufe: Der skriptierte Executor verlässt jedes Feld mit Tab und kennt den Weg zu den Modulkarten; die Wirkung der neuen Anweisung und des Feldfokus am Aufgabenende ist deshalb nur durch Tests, nicht durch einen Trockenlauf belegt. **446 Tests OK** (vorher 441).
+
+### 20.6 Offene Entscheidung: Anmeldetoken und Laufdauer
+
+Eine vollständige Suite braucht mindestens 640 Anfragen; Lauf 5 schaffte in einer Stunde 540 Anfragen für 4 von 12 Stufen. Hochgerechnet (PREPARATION und SIEVE lagen gut 25 % über der Schätzung) sind etwa 850 bis 1.000 Anfragen und zwei bis drei Stunden zu erwarten, mit rund 2,5 Mio. Tokens. Ein Token von einer Stunde reicht dafür nicht.
+
+| Option | Wirkung | Bewertung |
+|---|---|---|
+| A. **Refresh im Arbeitsspeicher** mit dem beim Login zurückgegebenen Token; nie auf Platte, stirbt mit dem Prozess | Lauf ohne weitere Eingriffe möglich | Empfohlen. Ändert die Anmeldegrenze, braucht Ihre ausdrückliche Zustimmung. |
+| B. Neue Browser-Anmeldung während des Laufs | Der Lauf pausiert, Sie bestätigen alle ~55 Minuten | Sicherheitsmodell unverändert, aber Sie müssen die ganze Zeit am Rechner sein. |
+| C. Suite in zwei Läufe teilen | Zwei Freigaben | Nicht ohne Umbau möglich (jede Fixture und Lease ist einmalig, Stufen bauen aufeinander auf). |
+
+### 20.7 Grenzen
+
+- Nur fünf Stufen laufen mit Modell; BOILING, SE, ASSESS, WPK, ANALYSIS, REPORT, RIGHTS und der größte Teil von SHAPE bleiben ungeprüft.
+- Viele Positionen scheiterten am Verhalten des Modells (Aufgeben nach einer Ablehnung, Speichern nicht gefunden); das ist Messgegenstand, aber kein BLE-Befund.
+- Die Reihenfolge PREPARATION vor SIEVE (Abschlämmung vor Hauptprobenmasse) kann Ergebnisse verfälschen; das ist ein Kandidat für eine Anpassung der Suite, nicht von BLE.

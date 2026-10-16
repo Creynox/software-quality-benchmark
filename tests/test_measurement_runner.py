@@ -308,3 +308,28 @@ class MeasurementRunnerTests(unittest.TestCase):
             self.assertEqual(module.derived_value_gaps(f,projection,{'positions':['changed']},[]),everything)
         with patch.object(module,'verify_inputs',return_value={'status':'BLOCKED_MEASUREMENT_EVIDENCE'}):
             self.assertEqual(module.derived_value_gaps(f,projection,reference,[]),everything)
+
+    # ---- uncommitted last field (live run 6c23f768) ---------------------------------------------------------------------------------------
+    def test_a_value_typed_into_a_field_that_is_still_focused_at_the_end_is_not_a_persisted_deviation(self):
+        click=ModelResponse({'action':'click','x':10,'y':10,'reason':'focus'},{})
+        typed=ModelResponse({'action':'type','text':'95','reason':'enter'},{})
+        done=ModelResponse({'action':'done','reason':'finished'},{})
+        state={'target':{'kind':'field'},'focused':'Sandhöhe:A'}
+        with patch.object(module,'focused_field',return_value='Sandhöhe:A'):
+            result,_,_=self.run_with_states([click,typed,done],[state,state,{}],shown='95')
+        self.assertEqual((result['field_focused_at_end'],result['fields_entered'],result['fully_entered']),('Sandhöhe:A',1,False))
+        self.assertEqual(module.classify_position([result],True),('INCOMPLETE','LAST_FIELD_NOT_COMMITTED'))
+        with patch.object(module,'focused_field',return_value=None):
+            result,_,_=self.run_with_states([click,typed,done],[state,state,{}],shown='95')
+        self.assertIsNone(result['field_focused_at_end']);self.assertEqual(result['fields_entered'],1)
+        # With every field entered and left, the same persisted mismatch is attributable to BLE.
+        self.assertEqual(module.classify_position([dict(result,status='DONE',fully_entered=True)],True),('FAIL','PERSISTED_VALUE_DEVIATION'))
+        # A failed executor request right after typing is the same case.
+        from sqbf.bounded import WorkerFailed
+        with patch.object(module,'focused_field',return_value='Sandhöhe:A'):
+            result,_,_,_=(lambda r:(r[0],r[1],r[2],r[3]))(self.run_failing([WorkerFailed('RESPONSE_NOT_JSON')]))
+        self.assertEqual(result['status'],'EXECUTOR_FAILED');self.assertFalse(result['fully_entered'])
+
+    def test_the_instructions_tell_the_executor_where_the_modules_are_and_to_leave_the_last_field(self):
+        self.assertIn('further down the sample page',module.INSTRUCTIONS);self.assertIn('leave the field (Tab)',module.INSTRUCTIONS)
+        self.assertIn('not its label',module.INSTRUCTIONS)

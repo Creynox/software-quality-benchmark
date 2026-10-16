@@ -125,3 +125,14 @@ class InspectionGuardTests(unittest.TestCase):
             self.assertEqual(page.evaluate('window.calls'),['Prüfbericht'])
             page.reload();page.get_by_text('Prüfbericht',exact=True).click();self.assertEqual(page.evaluate('window.calls'),[])
             context.close();browser.close()
+
+    def test_sidebar_group_toggles_only_expand_the_menu(self):
+        # Live run 6c23f768: RECEIPT wanted to open the plan through the sidebar group "Beprobung" and the click was rejected.
+        group='<div class="mud-nav-group"><button id="x" aria-label="%s">Beprobung</button></div>'
+        self.assertEqual(self.classify(group%'Toggle Beprobung','#x'),'read_control')
+        self.assertEqual(self.classify(group%'Toggle Qualität','#x'),'read_control')
+        # Only inside the sidebar group, and only a plain "Toggle <name>".
+        self.assertEqual(self.classify('<button id="x" aria-label="Toggle Beprobung">Beprobung</button>','#x'),'blocked')
+        self.assertEqual(self.classify(group%'Beprobung löschen','#x'),'blocked')
+        self.assertEqual(self.classify(group%'Toggle Beprobung/Plan archivieren','#x'),'blocked')
+        self.assertEqual(self.classify('<form><div class="mud-nav-group"><button id="x" aria-label="Toggle Beprobung">B</button></div></form>','#x'),'blocked')

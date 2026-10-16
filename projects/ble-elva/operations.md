@@ -187,6 +187,13 @@ Mit `--inject-executor-faults "9:raise,40:not_object,150:raise"` spielt der skri
 (`raise`) oder eine Antwort ohne Aktionsobjekt (`not_object`) ein. Erwartet: nur die betroffenen Positionen `INCOMPLETE / EXECUTOR_REQUEST_FAILED`,
 kein Harness-Stopp, alle zwölf Stufen laufen. Vor jedem Live-Lauf einmal sauber und einmal mit Fehlerinjektion ausführen.
 
+## NSN014: Start eines Live-Laufs und Anmeldetoken
+
+`run-suite --execute` öffnet den Systembrowser für die ChatGPT-Anmeldung („authorize SQBF“) und wartet etwa 300 s auf die Bestätigung; ohne sie endet der Start mit
+`SUITE_STOPPED_NO_RETRY`, 0 Anfragen und ohne Lease (Fixture und Freigabe bleiben unberührt, zwei Versuche am 16.10.2026). Den Befehl deshalb erst starten, wenn der PO am
+Rechner sitzt, oder ihn vom PO im Terminal starten lassen. Der Zugriffstoken gilt etwa eine Stunde und wird nicht erneuert; danach stoppt die Suite sofort
+(`PROVIDER_AUTHORIZATION_EXPIRED`). Offene Entscheidung: Abschnitt 20.6 des Abschlussberichts.
+
 ## Evidenz und Aufbewahrung
 
 Private lokale Run-Ordner: PNGs mit SHA-256, Events, Usage, gemessene Modell-/Runnerzeit,

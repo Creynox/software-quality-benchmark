@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "RUN_4_FIXES_DONE_GUARDED_DRY_RUNS_COMPLETED_NEW_FIXTURE_AND_APPROVAL_REQUIRED",
+    "status": "RUN_5_PARTIAL_GO_TOKEN_LIFETIME_DECISION_OPEN_NEW_FIXTURE_AND_APPROVAL_REQUIRED",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -141,7 +141,7 @@
     },
     "live_run_authorization": {
       "status": "NONE",
-      "detail": "Run 4 (2026-10-16) consumed its approval; a fifth run needs a new explicit PO approval with the budget approval in a private manifest copy"
+      "detail": "Run 5 (2026-10-16) consumed its approval; a sixth run needs a new explicit PO approval and a decision on the provider token lifetime (section 20.6)"
     },
     "budget_candidate": {
       "suite": "suites/enzberg-nsn014-v0.4.1.json",
@@ -278,10 +278,73 @@
           "executor gave up after a single rejection (page had moved between screenshot and click)"
         ],
         "valid_measurement": false
+      },
+      {
+        "run_id": "6c23f768-9e83-4bc1-a667-75b9f0bbfde2",
+        "date": "2026-10-16",
+        "suite": "0.4.1",
+        "sqbf_commit": "713a2736570f3ac6954bdb6b0695659bb45ff801",
+        "fixture": "nsn014-ux-76b2f16e82ec",
+        "result": "PARTIAL GO",
+        "classification": "RESOURCE_STOP (provider authorization expired after about one hour, HTTP 401)",
+        "stages": {
+          "PASS": [
+            "PLAN",
+            "RECEIPT"
+          ],
+          "FAIL": [
+            "PREPARATION (P09 false: field typed but not left, harness defect; real result: wash P08 PASS)"
+          ],
+          "INCONCLUSIVE": [
+            "SIEVE (P04, P06, P10 PASS)",
+            "SHAPE (stopped by authorization expiry)"
+          ],
+          "NOT_RUN": [
+            "BOILING",
+            "SE",
+            "ASSESS",
+            "WPK",
+            "ANALYSIS",
+            "REPORT",
+            "RIGHTS"
+          ]
+        },
+        "model_requests": 540,
+        "requests_by_actor": {
+          "executor": 513,
+          "reviewer": 27
+        },
+        "tokens_known": {
+          "executor": 1225271,
+          "reviewer": 147434,
+          "requests_without_usage": 6
+        },
+        "wall_seconds": 3603,
+        "database_changed": "plan samples (10), test orders, module entries and the sampling_plans audit stamp only; no findings of the side-effect contract",
+        "fixture_lease_consumed": true,
+        "preceding_start_attempts": [
+          {
+            "run_id": "9dacf9bd-2b2e-4c0b-85ad-c4dfbb23fcf0",
+            "requests": 0,
+            "reason": "browser authorization not confirmed within the window"
+          },
+          {
+            "run_id": "d25f754a-a6fd-44e7-9f54-73a413279a63",
+            "requests": 0,
+            "reason": "browser authorization not confirmed within the window"
+          }
+        ],
+        "causes": [
+          "ChatGPT-plan access token (no refresh by design) expired after about one hour: HTTP 401 on three consecutive requests",
+          "persisted-value FAIL for a value typed into a field that was never left (next executor response was not JSON); fixed as LAST_FIELD_NOT_COMMITTED",
+          "earlier anchor \"fix\" was wrong: <base href=\"/\"> makes \"Zu den Modulen\" leave the sample page; guard correctly blocks it (16 rejections), BLE candidate",
+          "sidebar group toggle rejected in RECEIPT; reviewer failures without exception class"
+        ],
+        "valid_measurement": "partial: PLAN, RECEIPT, wash P08, sieve P04/P06/P10"
       }
     ],
     "fixture_clone": {
-      "status": "CONSUMED_BY_RUN_4 (a fresh fixture is prepared after the fixes; see the PR and Issue #21)",
+      "status": "CONSUMED_BY_RUN_5 (a new fixture is needed for the next run)",
       "created_at": "2026-10-16",
       "fixture_id": "nsn014-ux-b2e3a4b1d45a",
       "source_fixture_id": "nsn014-ux-536fe4e42888",
@@ -396,6 +459,13 @@
     "derived_value_policy": {
       "rule": "A deviation of a value BLE derives from earlier inputs (partial-sieve preparation mass, partial series) counts only when its inputs were persisted as approved (wash without deviation, allocation of target process Siebanalyse present); otherwise INCOMPLETE / DERIVED_VALUE_UPSTREAM_INCOMPLETE, never FAIL",
       "missing_evidence": "treated as a gap"
+    },
+    "provider_authorization": {
+      "access_token_lifetime": "about one hour (run 5 stopped at 3603 s with HTTP 401)",
+      "refresh": "none by design (sqbf/plan_login.py: no refresh storage); a complete suite needs about 850-1000 requests and two to three hours",
+      "decision_pending": "PO: in-memory refresh (recommended) / re-authorization during the run / not possible to split the suite",
+      "stop_rule": "HTTP 401/403 on an executor request stops the suite at once as INCONCLUSIVE (PROVIDER_AUTHORIZATION_EXPIRED)",
+      "start": "run-suite --execute opens the system browser; the PO must confirm within about 300 s, otherwise the start ends with 0 requests and no lease"
     }
   }
 }

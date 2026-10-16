@@ -87,6 +87,34 @@ class ViewControllerTests(unittest.TestCase):
             outcome=inspection.run_view(b,fixture(),'laboratory_lead','/samples',['/samples'],'task',{},object(),object(),budget(),MagicMock())
         ask.assert_not_called();self.assertEqual(outcome['error_code'],'SESSION_INVALIDATED')
 
+    def test_a_failed_executor_request_ends_only_this_task_as_incomplete_and_names_the_failure(self):
+        # Live run 083896e6: one failed provider request (usage {}) made the stage INVALID_HARNESS and stopped the suite.
+        from sqbf.bounded import WorkerFailed
+        outcome,ask,_,evidence=self.view([act('scroll',x=10,y=10,amount=100),WorkerFailed('PROVIDER_ERROR')],[{'kind':'read_control'}])
+        self.assertEqual((outcome['status'],outcome['technical_gate'],outcome['executor_error_code']),('EXECUTOR_FAILED','PASS','PROVIDER_ERROR'))
+        self.assertEqual(ask.call_count,2)  # no retry of the failed request, no review request on a failing provider
+        event=[c for c in evidence.event.call_args_list if c.args[0]=='executor_call_failed'][0]
+        self.assertEqual((event.kwargs['error_code'],event.kwargs['exception_type'],event.kwargs['persona']),('PROVIDER_ERROR','WorkerFailed','laboratory_lead'))
+        self.assertEqual(inspection.incomplete_reason(outcome),'EXECUTOR_REQUEST_FAILED')
+        outcome,_,_,_=self.view([ModelResponse(None,{})],[])
+        self.assertEqual((outcome['status'],outcome['executor_error_code']),('EXECUTOR_FAILED','EXECUTOR_RESPONSE_NOT_AN_OBJECT'))
+
+    def test_a_stage_with_a_failed_executor_request_is_inconclusive_and_does_not_stop_the_suite(self):
+        with patch.object(inspection,'run_view',return_value={'status':'EXECUTOR_FAILED','technical_gate':'PASS','screenshots':3,'executor_error_code':'PROVIDER_ERROR',
+                                                              'capability_actions':[],'downloads':[],'download_failures':[],'review':None}), \
+             patch.object(inspection,'check_persona',return_value={'status':'PERSONA_SCOPE_VERIFIED'}),patch.object(inspection,'snapshot',return_value={'tables':{}}), \
+             patch.object(inspection,'collect_receipts',return_value={'samples':[]}):
+            result=inspection.run_inspection(MagicMock(),fixture(),{},{'case_id':'NSN014-ASSESS','persona':'laboratory_lead','task':'t'},{},object(),object(),budget(),MagicMock())
+        self.assertEqual((result['result'],result['technical_gate'],result['reason']),('INCONCLUSIVE','PASS','EXECUTOR_REQUEST_FAILED'))
+
+    def test_the_harness_failure_of_an_inspection_names_the_exception_class_only(self):
+        class Strange(RuntimeError):pass
+        b,page=browser('/samples');page.screenshot.side_effect=Strange('secret page text 12,5');evidence=MagicMock()
+        outcome=inspection.run_view(b,fixture(),'laboratory_lead','/samples',['/samples'],'task',{},object(),object(),budget(),evidence)
+        self.assertEqual((outcome['status'],outcome['error_code'],outcome['exception_type']),('INVALID','INSPECTION_RUNNER_ERROR','Strange'))
+        event=[c for c in evidence.event.call_args_list if c.args[0]=='inspection_harness_failure'][0]
+        self.assertEqual(event.kwargs['exception_type'],'Strange');self.assertNotIn('secret',repr(event))
+
     def test_invalidated_session_is_a_critical_technical_stop(self):
         b,page=browser('/samples');page.url='http://127.0.0.1:5082/login'
         with patch.object(inspection,'ask_calibrated') as ask:

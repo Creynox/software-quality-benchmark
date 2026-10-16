@@ -14,6 +14,8 @@ Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-
 
 **Nachtrag Lauf 3 (Abschnitt 17):** `413f7abe…`, 16.10.2026: PARTIAL GO, alle zwölf Stufen durchgelaufen, PLAN und WPK PASS, zehn Stufen INCONCLUSIVE durch einen zu engen Guard (Menüeintrag „Prüfbericht“ nicht erkannt, Ablehnung beendet die Aufgabe, Hauptaktion „Testauftrag erzeugen“ nicht erlaubt). 124 Anfragen, 271.478 Tokens, 24 min. Keine Messung erfasst.
 
+**Nachtrag Lauf 4 (Abschnitt 19):** Lauf 4 (083896e6, 16.10.2026) war `NO-GO / INVALID_HARNESS` ohne gültige Messung (PLAN PASS, RECEIPT INCONCLUSIVE, PREPARATION INVALID, 9 Stufen NOT_RUN, 51 Anfragen). Ursache: ein einziger fehlgeschlagener Executor-Request beendete über einen allgemeinen Handler die Suite; dazu zwei fehlende Guard-Freigaben. Behoben und mit Trockenläufen (auch mit eingespielten Providerfehlern) belegt; zusätzlich werden abgeleitete Werte nie mehr BLE angelastet, solange ihre Eingaben fehlen. 441 Tests OK. Der nächste Lauf braucht eine neue Freigabe.
+
 **Nachtrag Behebung (Abschnitt 18):** Die Ursachen von Lauf 3 sind behoben. Neues Werkzeug `suite-dry-run` führt den gesamten echten Stufenpfad mit den echten Guards und einem skriptierten Executor aus; der letzte Lauf ist `DRY_RUN_COMPLETED` (alle zwölf Stufen ohne Harness-Stopp, Ablehnung oder Vertragsbefund; PREPARATION und SHAPE nur wegen der drei von BLE nicht angebotenen Werte INCONCLUSIVE, Option A). 423 Tests OK. Neue Fixture bereit, nächster Lauf braucht eine neue Freigabe.
 
 **Nachtrag nach Lauf 2 und der Vorbereitung (Abschnitte 15 und 16):** Lauf `45eb301f…` endete als
@@ -655,3 +657,59 @@ Fixture `nsn014-ux-b2e3a4b1d45a` (privat, `D:/Temp/sqbf-nsn014-fixture-20261016-
 - P01 (Koch 8 mm) und P06 (Kornform, Modul inaktiv) bleiben nach Option A unvollständig; PREPARATION und SHAPE sind deshalb auch bei einem idealen Executor INCONCLUSIVE, die übrigen Positionen werden dennoch entschieden.
 - Die Klassifikationen sind offline und im Trockenlauf bestätigt, in einem Lauf mit Modell noch nicht.
 - Für den nächsten Lauf nötig: ausdrückliche Einzellauf-Freigabe, aktuelle Provider-Probe (die vom 16.10.2026 gilt bis 22:02 UTC), Readiness unmittelbar davor.
+
+## 19. Lauf 4 (083896e6, 16.10.2026): Ergebnis, Ursachen und Behebung
+
+**Bewertung: Lauf 4 ist `NO-GO / INVALID_HARNESS`. Es liegt keine gültige Messung vor, und es gibt keinen BLE-Befund.** PLAN bestand, RECEIPT blieb unentschieden, PREPARATION wurde ungültig, neun Stufen liefen nicht. Ursache war nicht BLE, sondern die Steuerung: ein einziger fehlgeschlagener Executor-Request hat über einen allgemeinen Fehlerhandler die Stufe und damit die Suite beendet. Daneben fehlten zwei Guard-Freigaben. Alles ist offline behoben und mit Trockenläufen belegt; es gab dabei keinen Modellaufruf. Die Freigabe von Lauf 4 ist verbraucht.
+
+### 19.1 Verlauf
+
+SQBF-Commit `81e48e9`, Fixture `nsn014-ux-b2e3a4b1d45a` (damit verbraucht), 13:20 UTC, **51 Anfragen** (46 Executor, 5 Reviewer; bekannte Tokens 95.440 Executor, 23.542 Reviewer; eine Anfrage ohne Nutzungsangabe), 419 s von 10.800 s.
+
+| Stufe | Ergebnis | Was geschah |
+|---|---|---|
+| PLAN | **PASS** | Planproben einmal angelegt (10 Proben), Oracle bestätigt. |
+| RECEIPT | INCONCLUSIVE | Der Executor klickte auf eine Zeile der Probenliste (`Probe … auswählen`); der Guard lehnte sie ab, der Executor meldete danach `blocked`. |
+| PREPARATION | **INVALID_HARNESS** | P01 Zuteilungen und Abschlämmung: `blocked`. P02 Abschlämmung: `blocked` (kein Speichern-Element gefunden). P03: eine Executor-Anfrage schlug fehl, der allgemeine Handler machte daraus `MEASUREMENT_RUNNER_ERROR`; die Stufe wurde INVALID und die Suite beendet. |
+| SIEVE bis RIGHTS (9) | NOT_RUN | `UPSTREAM_CRITICAL_STOP`. |
+
+Statisches Gate unverändert (nur Audit-Stempel `sampling_plans`, 1 Zeile), keine Vertragsbefunde.
+
+### 19.2 Ursachen
+
+| # | Ursache | Beleg | Behebung |
+|---|---|---|---|
+| 1 | **Ein fehlgeschlagener Executor-Request beendete die Suite.** Jede Ausnahme außerhalb der erwarteten Fälle wurde zu `INVALID_HARNESS` und löste den kritischen Stopp aus. | Letzter Executor-Request ohne Nutzungsangabe (`usage {}`): das entsteht nur, wenn der Aufruf selbst eine Ausnahme warf, hier nach 6 s. Der Ausnahmetyp wurde nicht protokolliert, die Schlussfolgerung stützt sich also auf die Abrechnung, nicht auf eine Fehlermeldung. | Neuer Pfad `ask_executor`: ein fehlgeschlagener Request oder eine Antwort ohne Aktionsobjekt beendet nur diese Aufgabe als `INCONCLUSIVE` (`EXECUTOR_REQUEST_FAILED`, kein Wiederholen, keine Reviewer-Anfrage danach). Drei Fehlschläge in Folge stoppen die Suite als unvollständig (`EXECUTOR_UNAVAILABLE_AFTER_REPEATED_FAILURES`). Jeder Harness-Fehler protokolliert künftig den **Klassennamen** der Ausnahme (nie die Meldung). |
+| 2 | Same-page-Anker „Zu den Modulen“ (`#module-bereich`) wurde in den Messstufen abgelehnt. Nach „Testauftrag erzeugen“ landete der zweite Klick darauf. | 3 Ablehnungen im Ereignisprotokoll. | Hash-Anker der aktuellen Seite erlaubt (scrollt nur); andere Anker, Fremdseiten und Query bleiben gesperrt (Test im echten Chromium). |
+| 3 | Zeile der Probenliste ohne `aria-selected` wurde abgelehnt. | `tr "Probe ENZBERG-… auswählen"`; RECEIPT endete mit einem einzigen Versuch. | Regel auf `tr[aria-label^="Probe "][aria-label$="auswählen"]` auf `/samples` (lesend); andere Zeilen und Seiten bleiben gesperrt. |
+| 4 | Der Executor gab nach einer einzigen Ablehnung auf. Ein Klick landete wegen der Neuberechnung von BLE auf einem anderen Element als im Screenshot. | Klick bei (757, 336), wo der Screenshot „Entwurf anlegen“ zeigte; der Guard fand dort ein Eingabefeld (Ziel `input`). Vermutung: Layoutwechsel zwischen Screenshot und Klick. | Anweisung ergänzt: Nach einer Ablehnung zuerst den neuesten Screenshot lesen, die Seite kann sich bewegt haben. Das Verhalten des Modells bleibt Messgegenstand. |
+
+**Beobachtung ohne Befundstatus (Reviewer, unbestätigt):** Auf den Modulseiten liegt „Speichern“ oben und scrollt mit der Seite weg. Der Executor scrollte in P02 zehnmal nach unten, fand es nicht und meldete `blocked`. Das ist ein UX-Kandidat (`UX_IMPROVEMENT`), kein belegter BLE-Defekt.
+
+### 19.3 Zusätzlicher Fund im Trockenlauf mit Fehlerinjektion: abgeleitete Werte
+
+Zur Prüfung der Behebung habe ich dem skriptierten Executor drei Fehler vorgegeben (`suite-dry-run --inject-executor-faults "9:raise,40:not_object,150:raise"`: zwei Providerfehler, eine Antwort ohne Aktionsobjekt). Die Stufen liefen weiter (richtig). Dabei zeigte sich ein zweiter, schwerer wiegender Fehler der Auswertung:
+
+- Fiel in PREPARATION die Zuteilung von P01 aus, wertete SIEVE P01 als `FAIL / PERSISTED_VALUE_DEVIATION`.
+- Ursache: BLE leitet die **Aufbereitungsmasse der Teilsiebung** (`lims_sample_derived_test_step.taken_mass`) aus der **Zuteilung des Pfannenmaterials** (Zielprozess `Siebanalyse`, bei P01 560 g) ab. Ohne diese Zuteilung speichert BLE 0. Referenz 560, gespeichert 0, Executor hatte alle seine Felder eingegeben: der Controller hielt das für eine BLE-Abweichung.
+- Das wäre in einem Lauf mit Modell genau dann passiert, wenn das Modell die Zuteilung nicht erfasst (in Lauf 4 war P01 Zuteilung `blocked`). Ein falscher BLE-Befund.
+- Behebung: Eine Abweichung abgeleiteter Werte (Aufbereitung, Teilsiebserie) zählt nur, wenn ihre Eingaben wie freigegeben gespeichert sind (Abschlämmung ohne Abweichung, Zuteilung `Siebanalyse` vorhanden). Sonst ist die Position `INCOMPLETE / DERIVED_VALUE_UPSTREAM_INCOMPLETE`, nie `FAIL`. Fehlt die Evidenz, gilt die Lücke als vorhanden. Abweichungen eigener Eingaben bleiben davon unberührt.
+
+### 19.4 Trockenläufe nach der Behebung (frische Wegwerfkopien, 0 Modellaufrufe)
+
+| Lauf | Ergebnis |
+|---|---|
+| Mit Fehlerinjektion (Aufrufe 9, 40 und 150: Providerfehler bei P01/P06 Zuteilung, Antwort ohne Aktionsobjekt bei P02 Abschlämmung) | `DRY_RUN_COMPLETED`: kein Harness-Stopp, alle zwölf Stufen liefen. PREPARATION: P01, P02, P06 `INCOMPLETE / EXECUTOR_REQUEST_FAILED`, die übrigen sieben PASS. SIEVE: P01 `INCOMPLETE / DERIVED_VALUE_UPSTREAM_INCOMPLETE`, die übrigen neun PASS (vor der Behebung des Abschnitts 19.3: P01 FAIL). REPORT: alle zehn PASS. |
+| Sauber (1.232 skriptierte Aktionen) | `DRY_RUN_COMPLETED`: kein Harness-Stopp, keine abgelehnte skriptierte Aktion, kein Vertragsbefund. PLAN, RECEIPT, SIEVE (10 Positionen), BOILING, SE, ASSESS, WPK, ANALYSIS, REPORT (10 Berichte, 10 PDFs), RIGHTS **PASS**. PREPARATION (8 von 10) und SHAPE (4 von 5) INCONCLUSIVE ausschließlich wegen der drei von BLE nicht angebotenen Werte (Option A). Ein früherer sauberer Lauf zeigte REPORT P01 `PDF_NOT_DOWNLOADED`: der skriptierte Executor traf die Berichtsseite vor dem Aufbau ihres Menüs und gab auf; er wartet jetzt bis zu zehn Sekunden. Es war ein Fehler des Stellvertreters, nicht der Guards. |
+
+### 19.5 Tests
+
+**441 Tests OK** (vorher 423). Neu: Executor-Ausfall je Messposition und je Inspektionsstufe (Providerfehler, Zeitüberschreitung, Antwort ohne Objekt, Zähler und Stopp nach drei, Zurücksetzen nach Erfolg), Klassenname im Harness-Fehler ohne Meldungstext, Fortsetzung der übrigen Positionen, Anker und Probenzeile im echten Chromium, abgeleitete Werte (Lücke, kein Lückenfall, eigene Abweichung bleibt FAIL, fehlende Evidenz), Zuteilungs-Oracle `prerequisite_gaps`, Fehlerinjektion und PDF-Wartezeit im skriptierten Executor.
+
+### 19.6 Grenzen
+
+- Der Trockenlauf kann Verhalten eines Modells nicht vorhersagen (andere Bedienelemente, Tempo, Aufgeben nach einer Ablehnung). Er belegt, dass Fehler der Steuerung nicht mehr die Suite beenden.
+- Die genaue Ausnahme in Lauf 4 ist unbekannt (nicht protokolliert). Ob der Provider, die Antwort oder der Worker versagte, bleibt offen; die Behebung deckt alle drei Fälle ab und protokolliert beim nächsten Mal die Klasse.
+- Abgeleitete Werte: Bekannt ist die Abhängigkeit der Aufbereitungsmasse von der Zuteilung `Siebanalyse` und, konservativ angenommen, der Teilsiebserie von der Abschlämmung. Weitere Abhängigkeiten sind nicht ausgeschlossen; sie würden als FAIL erscheinen und wären im Bericht zu prüfen.
+- P01 (Koch 8 mm) und P06 (Kornform) bleiben nach Option A unvollständig.
+- Für einen fünften Lauf nötig: neue Fixture, neue ausdrückliche Einzellauf-Freigabe, Provider-Probe (die vom 16.10.2026 gilt bis 22:02 UTC), Readiness unmittelbar davor.

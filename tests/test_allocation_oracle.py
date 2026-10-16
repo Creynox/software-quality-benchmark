@@ -39,3 +39,18 @@ class AllocationOracleTests(unittest.TestCase):
         for forbidden in ('identity_users','password','notes','performed_by','created_by','DROP ','DELETE '):
             self.assertNotIn(forbidden,sql)
         self.assertIn('GRANT SELECT ON public.sqbf_allocation_inputs_v1',sql)
+
+    def test_prerequisite_gaps_name_positions_whose_allocation_of_one_process_is_not_persisted_as_approved(self):
+        # BLE derives the preparation mass of the partial sieve from the allocation of the pan material and stores 0 without it.
+        f,p,reference,rows=contracts()
+        for position in reference['positions']:position['allocations'].append(dict(position['allocations'][0],target_process='Siebanalyse',actual_amount_g='560'))
+        for row,position in zip(list(rows),p['positions']):
+            rows.append(dict(row,target_process='Siebanalyse',actual_amount_g='560'))
+        self.assertEqual(module.prerequisite_gaps(rows,p,reference,'Siebanalyse'),set())
+        missing=[r for r in rows if not (r['sample_code']==p['positions'][0]['sample_code'] and r['target_process']=='Siebanalyse')]
+        self.assertEqual(module.prerequisite_gaps(missing,p,reference,'Siebanalyse'),{p['positions'][0]['position_id']})
+        wrong=[dict(r,actual_amount_g='559') if (r['sample_code']==p['positions'][1]['sample_code'] and r['target_process']=='Siebanalyse') else r for r in rows]
+        self.assertEqual(module.prerequisite_gaps(wrong,p,reference,'Siebanalyse'),{p['positions'][1]['position_id']})
+        # Other processes are not this prerequisite, and a position without a reference allocation of the process has no gap.
+        self.assertEqual(module.prerequisite_gaps([r for r in rows if r['target_process']!='Kornform'],p,reference,'Siebanalyse'),set())
+        self.assertEqual(module.prerequisite_gaps([],p,reference,'Boiling'),set())

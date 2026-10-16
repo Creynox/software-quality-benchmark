@@ -21,7 +21,7 @@ from .measurement_oracle import collect_inputs
 from .persona_scope import check_persona
 from .receipt_oracle import collect_receipts,verify_receipts
 from .report_oracle import collect_reports, verify_reports, expected_numbers
-from .stage_support import (StallDetector, ask_review, classify_rejection, incomplete_reason, review_prompt, ux_verdicts,
+from .stage_support import (StallDetector, ExecutorRequestFailed, ask_executor, ask_review, classify_rejection, incomplete_reason, review_prompt, ux_verdicts,
                             MAX_REJECTIONS_PER_TASK, REJECTION_NOTE, describe_target, rejection_marker)
 
 MODULE_ROUTES=('sieve-analysis','kornform','kochversuch','sand-equivalent','partial-sieve','uf-fine')  # read-only views; the guard blocks every input and save there
@@ -56,9 +56,8 @@ def run_view(browser,fixture,persona,entry,paths,task,policy,executor,reviewer,b
             images.append(png);evidence.snapshot(png,'inspection');stall.observe(png)
             if stall.stalled():
                 evidence.event('stopped_no_visible_progress',persona=persona);outcome['status']='STALLED';break
-            answer=ask_calibrated(executor,INSTRUCTIONS+'\nTask:\n'+task+'\nPrevious visible actions:\n'+
-                json.dumps(actions,ensure_ascii=False),png,budget,'executor')
-            action={k:v for k,v in answer.data.items() if v is not None}
+            action=ask_executor(ask_calibrated,executor,INSTRUCTIONS+'\nTask:\n'+task+'\nPrevious visible actions:\n'+
+                json.dumps(actions,ensure_ascii=False),png,budget,evidence,persona=persona)
             try:
                 validate_action(action,1280,800)
                 state=check_action(page,action,config,generated)
@@ -131,12 +130,14 @@ def run_view(browser,fixture,persona,entry,paths,task,policy,executor,reviewer,b
                 else:outcome['review_error']=batch_error
     except ResourceStop:
         outcome.update(status='INCONCLUSIVE',stop_reason=budget.stop_reason)
+    except ExecutorRequestFailed as error:
+        outcome.update(status='EXECUTOR_FAILED',executor_error_code=error.code)
     except (ReadOnlyViolation,ActionValidationError) as error:
         code,_=classify_rejection(error)
         evidence.event('action_rejected',error_code=code);outcome.update(status='BLOCKED',technical_gate='BLOCKED',error_code=code)
-    except Exception:
-        evidence.event('inspection_harness_failure',error_code='INSPECTION_RUNNER_ERROR')
-        outcome.update(status='INVALID',technical_gate='INVALID',error_code='INSPECTION_RUNNER_ERROR')
+    except Exception as error:
+        evidence.event('inspection_harness_failure',error_code='INSPECTION_RUNNER_ERROR',exception_type=type(error).__name__)
+        outcome.update(status='INVALID',technical_gate='INVALID',error_code='INSPECTION_RUNNER_ERROR',exception_type=type(error).__name__)
     finally:context.close()
     outcome.update(screenshots=len(images),visible_actions=len([a for a in actions if 'rejected_by_controller' not in a]),rejected_actions=rejected)
     return outcome

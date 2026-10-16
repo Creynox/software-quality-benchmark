@@ -100,6 +100,18 @@ class InspectionGuardTests(unittest.TestCase):
                               ('/admin/users','blocked'),('/beprobung#x','blocked'),(path+'?edit=1','blocked'),('http://evil.example/'+path,'blocked')):
             self.assertEqual(self.classify('<a id="x" href="%s">link</a>'%href,'#x',config=config,path=path),expected,href)
 
+    def test_a_row_of_the_sample_list_opens_its_detail_whether_or_not_aria_selected_is_present(self):
+        # Live run 083896e6: the model clicked the row "Probe <code> auswählen" and the rule demanded aria-selected, so the click was rejected
+        # and RECEIPT ended after one attempt.
+        row='<table><tbody><tr id="x" %s><td>ENZBERG-20260508-NSN-014-02</td><td>KSM</td></tr></tbody></table>'
+        for attributes in ('aria-label="Probe ENZBERG-20260508-NSN-014-02 auswählen"','aria-selected="false" aria-label="Probe ENZBERG-20260508-NSN-014-02 auswählen"'):
+            self.assertEqual(self.classify(row%attributes,'#x'),'read_control',attributes)
+        # Everything else that is a row, or says "Probe ...", stays blocked.
+        for attributes in ('','aria-label="Probe ENZBERG-20260508-NSN-014-02 löschen"','aria-label="Plan NSN 014 auswählen"','aria-label="Zeile auswählen"'):
+            self.assertEqual(self.classify(row%attributes,'#x'),'blocked',attributes)
+        self.assertEqual(self.classify(row%'aria-label="Probe ENZBERG-20260508-NSN-014-02 auswählen"','#x',path='/beprobung',
+                                       config=module.contract(owned_fixture(),['/samples','/beprobung'])),'blocked')
+
     def test_native_guard_blocks_release_sign_delete_and_latches_report_generation(self):
         from playwright.sync_api import sync_playwright
         path='/samples/11111111-1111-4111-8111-111111111111'

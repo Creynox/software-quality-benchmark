@@ -69,6 +69,27 @@ class MeasurementGuardTests(unittest.TestCase):
             page=context.new_page();page.goto(c['origin']+c['path']);self.assertEqual(kind('#order')['kind'],'blocked')
             context.close();browser.close()
 
+    def test_a_hash_only_anchor_of_the_current_page_scrolls_and_every_other_anchor_stays_scoped(self):
+        # Live run 083896e6: the click landed on "Zu den Modulen" (#module-bereich) after BLE re-rendered the header and was rejected.
+        from playwright.sync_api import sync_playwright
+        c=self.contract('wash');root=c['root'];path=c['path']
+        links=(('root-anchor',root+'#module-bereich','navigation'),('relative-anchor','#module-bereich','navigation'),('plain-root',root,'navigation'),
+               ('other-module',root+'/kornform#x','blocked'),('other-sample','/samples/22222222-2222-4222-8222-222222222222#module-bereich','blocked'),
+               ('foreign','http://evil.example'+root+'#x','blocked'),('query',root+'?edit=1#x','blocked'),('admin','/admin/users#x','blocked'))
+        html=''.join('<a id="%s" href="%s">link</a>'%(i,h) for i,h,_ in links)
+        with sync_playwright() as p:
+            browser=p.chromium.launch();context=browser.new_context();context.add_init_script(module.event_guard(c))
+            context.route(c['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(c['origin']+root)
+            def kind(selector):
+                return page.evaluate("""({config,selector})=>{__C__const e=document.querySelector(selector);const r=e.getBoundingClientRect();
+                  return classify(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}""".replace('__C__',module.CLASSIFY),{'config':c,'selector':selector})['kind']
+            for identifier,href,expected in links:self.assertEqual(kind('#'+identifier),expected,href)
+            # From the module page an anchor to another page's hash is not a same-page scroll.
+            page.goto(c['origin']+path)
+            self.assertEqual(kind('#root-anchor'),'blocked');self.assertEqual(kind('#plain-root'),'navigation')
+            context.close();browser.close()
+
     def test_the_wheel_scrolls_the_page_over_a_field_but_never_changes_the_focused_field(self):
         # Live-run lesson (dry run 16.10.2026): blocking every wheel event over a field made the page unscrollable over the input column.
         from playwright.sync_api import sync_playwright

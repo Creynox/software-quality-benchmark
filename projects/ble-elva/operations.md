@@ -183,6 +183,10 @@ Modelle sind ersetzt (skriptierter Executor, neutrale Bewertung). `dry-run-repor
 (`guard_coverage_gaps`) und `harness_stops`. Erwartet ist `DRY_RUN_COMPLETED`; PREPARATION und SHAPE bleiben wegen der von BLE nicht angebotenen Werte
 INCONCLUSIVE. Ein Lauf braucht danach eine neue Fixture (`--purpose fixture`) und eine neue Freigabe.
 
+Mit `--inject-executor-faults "9:raise,40:not_object,150:raise"` spielt der skriptierte Executor beim n-ten Executor-Request einen Providerfehler
+(`raise`) oder eine Antwort ohne Aktionsobjekt (`not_object`) ein. Erwartet: nur die betroffenen Positionen `INCOMPLETE / EXECUTOR_REQUEST_FAILED`,
+kein Harness-Stopp, alle zwölf Stufen laufen. Vor jedem Live-Lauf einmal sauber und einmal mit Fehlerinjektion ausführen.
+
 ## Evidenz und Aufbewahrung
 
 Private lokale Run-Ordner: PNGs mit SHA-256, Events, Usage, gemessene Modell-/Runnerzeit,

@@ -37,6 +37,27 @@ FROM public.sqbf_allocation_inputs_v1; ROLLBACK;"""
     return rows[1]
 
 
+def _value(row):
+    return json.dumps(_canonical({k:row[k] for k in ('target_process','target_sieve_mm','actual_amount_g','material_source_kind')}),sort_keys=True)
+
+
+def prerequisite_gaps(records,projection,allocation_reference,target_process):
+    """Positions whose reference allocations of one target process (with a recorded actual amount) are not all persisted exactly as approved.
+
+    Evidence for the classification of derived values, not an Oracle verdict: BLE derives the preparation mass of the partial sieve from the
+    allocation of the pan material (target process Siebanalyse), and stores 0 when that allocation was never captured (guarded dry run with
+    replayed provider faults, 16.10.2026). A deviation of such a value says nothing about BLE while its input is missing.
+    """
+    codes={p['sample_code']:p['position_id'] for p in projection['positions']}
+    wanted={p['position_id']:sorted(_value(r) for r in p['allocations'] if r['actual_amount_g'] is not None and r['target_process']==target_process)
+            for p in allocation_reference['positions']}
+    actual={key:[] for key in wanted}
+    for row in records:
+        key=codes.get(row['sample_code'])
+        if key in actual and row['target_process']==target_process:actual[key].append(_value(row))
+    return {key for key in wanted if sorted(actual[key])!=wanted[key]}
+
+
 def verify_allocations(records,projection,allocation_reference,fixture):
     blocked={'status':'BLOCKED_ALLOCATION_EVIDENCE','model_calls':0,'database_writes':0}
     try:
@@ -49,8 +70,7 @@ def verify_allocations(records,projection,allocation_reference,fixture):
         allocation_positions={p['position_id']:p for p in allocation_reference['positions']}
         if len(positions)!=10 or set(positions)!=set(allocation_positions):raise ValueError()
         codes={p['sample_code']:key for key,p in positions.items()}
-        def value(row):
-            return json.dumps(_canonical({k:row[k] for k in ('target_process','target_sieve_mm','actual_amount_g','material_source_kind')}),sort_keys=True)
+        value=_value
         wanted={key:sorted(value(r) for r in p['allocations'] if r['actual_amount_g'] is not None) for key,p in allocation_positions.items()}
         actual={key:[] for key in positions}
         for row in records:

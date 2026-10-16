@@ -53,6 +53,18 @@ class ScriptedExecutorTests(unittest.TestCase):
         review=ex(None,'review prompt',[b'png'],None,'reviewer').data
         self.assertEqual((review['verdict'],set(review['scores'].values())),('INCONCLUSIVE',{None}))
 
+    def test_injected_provider_faults_hit_only_the_named_executor_requests(self):
+        # Replays what live run 083896e6 met (a failed request) and a response that is not an action object; reviewer requests never count.
+        from sqbf.bounded import WorkerFailed
+        page=Page(ROOT,[info(controls=[control('Testauftrag erzeugen')])])
+        ex=scripted.ScriptedExecutor(lambda:page,lambda:'NSN014-PREPARATION',{2:'raise',3:'not_object'})
+        self.assertEqual(ex(None,prompt(task()),b'png',None,'executor').data['action'],'click')
+        ex(None,'review prompt',[b'png'],None,'reviewer')
+        with self.assertRaises(WorkerFailed) as caught:ex(None,prompt(task()),b'png',None,'executor')
+        self.assertEqual(caught.exception.code,'SIMULATED_PROVIDER_FAULT')
+        self.assertIsNone(ex(None,prompt(task()),b'png',None,'executor').data)
+        self.assertEqual(ex(None,prompt(task()),b'png',None,'executor').data['action'],'click')
+
     def test_on_the_sample_page_it_follows_bles_guidance_then_opens_the_module_by_its_route_whatever_the_card_says(self):
         controls=[control('Testauftrag erzeugen',x=1000,y=215),control('Ergebnis prüfen',x=770,y=400,href=ROOT+'/uf-fine'),control('Erfassen',x=300,y=500,href=ROOT+'/sieve-analysis')]
         ex=executor(Page(ROOT,[info(controls=controls)]))
@@ -129,6 +141,16 @@ class ScriptedExecutorTests(unittest.TestCase):
         download=executor(Page('/reports/22222222-2222-4222-8222-222222222222',[info('/reports/22222222-2222-4222-8222-222222222222',controls=[control('PDF herunterladen',y=150)])]),'NSN014-REPORT')
         self.assertEqual(download(None,'Task:\nreport\nPrevious visible actions:\n[]',b'',None,'executor').data['y'],150)
         self.assertEqual(download(None,'Task:\nreport\nPrevious visible actions:\n[{"a":1}]',b'',None,'executor').data['action'],'done')
+
+    def test_the_report_page_gets_time_to_offer_the_pdf_before_the_script_gives_up(self):
+        # Clean dry run 16.10.2026: the first report page was met before BLE had rendered its menu, REPORT P01 stayed incomplete.
+        path='/reports/22222222-2222-4222-8222-222222222222'
+        prompt_='Task:\nreport\nPrevious visible actions:\n[{"a":1}]'  # a non-empty history keeps the script's state between calls
+        ex=executor(Page(path,[info(path,controls=[]),info(path,controls=[]),info(path,controls=[control('PDF herunterladen',y=150)])]),'NSN014-REPORT')
+        self.assertEqual([ex(None,prompt_,b'',None,'executor').data['action'] for _ in range(3)],['wait','wait','click'])
+        gone=executor(Page(path,[info(path,controls=[])]),'NSN014-REPORT')
+        actions=[gone(None,prompt_,b'',None,'executor').data['action'] for _ in range(7)]
+        self.assertEqual(actions,['wait']*5+['blocked']*2)
 
 
 class DryRunToolTests(unittest.TestCase):

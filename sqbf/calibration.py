@@ -59,6 +59,10 @@ class SuiteBudget:
         self.on_change(self.report())
         raise ResourceStop(reason)
 
+    def stop(self, reason):
+        """Controller-decided stop of the whole suite (e.g. the model provider keeps failing): incomplete measurement, never an application verdict."""
+        self._stop(reason)
+
     def remaining(self):
         if self.stop_reason:
             raise ResourceStop(self.stop_reason)

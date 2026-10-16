@@ -8,6 +8,7 @@ breach: only the affected task ends, unless the session itself became invalid.
 import copy
 import hashlib
 
+from sqbf.bounded import BudgetExceeded
 from sqbf.calibration import ResourceStop
 from sqbf.models import ActionValidationError
 from sqbf.smoke_runner import ACTION_SCHEMA
@@ -99,7 +100,8 @@ def classify_rejection(error):
 # is told that the action had no effect, and ends only after this many of them.
 MAX_REJECTIONS_PER_TASK = 3
 REJECTION_NOTE = ('An entry with "rejected_by_controller" in the previous actions had no effect on the page; do not repeat it, '
-                  'choose another permitted action or report blocked.')
+                  'choose another permitted action or report blocked. The page can also move between your screenshot and your click '
+                  '(it recalculates and re-renders): after a rejection read the newest screenshot again before you choose the next action.')
 TARGET_JS = r"""({x,y})=>{const nm=s=>(s||'').replace(/\s+/g,' ').trim().slice(0,60);
  const e=Number.isFinite(x)&&Number.isFinite(y)?document.elementFromPoint(x,y):null;if(!e)return null;
  const c=e.closest('button,a,input,select,textarea,[role=tab],[role=menuitem],[role=option],.mud-menu-item,.mud-list-item,.mud-select,.mud-chip,tr,.mud-expand-panel-header')||e;
@@ -159,6 +161,7 @@ INCOMPLETE_REASONS = {
     'REJECTED': 'AGENT_ACTION_REJECTED',
     'STALLED': 'NO_VISIBLE_PROGRESS',
     'INCONCLUSIVE': 'NO_TERMINAL_SIGNAL',
+    'EXECUTOR_FAILED': 'EXECUTOR_REQUEST_FAILED',
 }
 
 
@@ -182,6 +185,45 @@ def ux_verdicts(outcomes):
     if 'FAIL' in verdicts:
         return 'FAIL'
     return 'PASS' if all(v == 'PASS' for v in verdicts) else 'INCONCLUSIVE'
+
+
+EXECUTOR_FAILURE_LIMIT = 3
+
+
+class ExecutorRequestFailed(RuntimeError):
+    """One executor request failed or did not return an action object. `code` is a fixed identifier, never provider text."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def ask_executor(ask, executor, prompt, image, budget, evidence, **context):
+    """One executor request: returns the action dict, or raises ExecutorRequestFailed (the task ends INCONCLUSIVE, no retry).
+
+    The fourth live run (083896e6, 16.10.2026) lost its PREPARATION stage and the whole suite to a single failed provider
+    request, because a generic handler turned it into INVALID_HARNESS. A provider or response fault is a measurement gap,
+    not a harness defect: it ends only the task in progress. After EXECUTOR_FAILURE_LIMIT consecutive failures (a systematic
+    outage or quota stop) the suite stops as INCONCLUSIVE instead of spending the remaining requests on a dead provider.
+    """
+    failure = None
+    try:
+        data = ask(executor, prompt, image, budget, 'executor').data
+        if not isinstance(data, dict):
+            failure = 'EXECUTOR_RESPONSE_NOT_AN_OBJECT'
+    except ResourceStop:
+        raise
+    except Exception as error:
+        failure = getattr(error, 'code', None) or ('EXECUTOR_REQUEST_TIMEOUT' if isinstance(error, BudgetExceeded) else 'EXECUTOR_CALL_FAILED')
+        context['exception_type'] = type(error).__name__
+    if failure is None:
+        budget.executor_failures = 0
+        return {k: v for k, v in data.items() if v is not None}
+    budget.executor_failures = getattr(budget, 'executor_failures', 0) + 1
+    evidence.event('executor_call_failed', error_code=failure, consecutive_failures=budget.executor_failures, **context)
+    if budget.executor_failures >= EXECUTOR_FAILURE_LIMIT:
+        budget.stop('EXECUTOR_UNAVAILABLE_AFTER_REPEATED_FAILURES')
+    raise ExecutorRequestFailed(failure)
 
 
 REVIEWER_FAILURE_LIMIT = 3

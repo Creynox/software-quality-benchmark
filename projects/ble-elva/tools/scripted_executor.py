@@ -42,9 +42,12 @@ def german_fraction(label):
 class ScriptedExecutor:
     """Callable that replaces ask_calibrated for the executor role. `page_fn()` returns the page the runner currently drives."""
 
-    def __init__(self, page_fn, case_fn):
+    def __init__(self, page_fn, case_fn, faults=None):
         self.page_fn, self.case_fn = page_fn, case_fn
         self.state, self.log = {}, []
+        # Provider faults to replay: {n: 'raise' | 'not_object'} for the n-th executor request. They exercise the controller's handling of a
+        # failed request (live run 083896e6), which a careful scripted user never causes on its own.
+        self.faults, self.calls = dict(faults or {}), 0
 
     # --- ask_calibrated signature -------------------------------------------------------------------------------------------------
     def __call__(self, model, prompt, images, budget, role):
@@ -52,6 +55,13 @@ class ScriptedExecutor:
         if role != 'executor':
             return ModelResponse({'verdict': 'INCONCLUSIVE', 'reason': 'scripted dry run', 'scores': dict.fromkeys(
                 ('findability', 'clarity', 'task_progress', 'error_recovery'), None), 'findings': []}, {})
+        self.calls += 1
+        fault = self.faults.get(self.calls)
+        if fault == 'raise':
+            from sqbf.bounded import WorkerFailed
+            raise WorkerFailed('SIMULATED_PROVIDER_FAULT')
+        if fault == 'not_object':
+            return ModelResponse(None, {})
         history = self.history(prompt)
         if not history:
             self.state = {}
@@ -294,6 +304,10 @@ class ScriptedExecutor:
                 return {'action': 'done', 'reason': 'report generated and downloaded once'}
             button = self.find(info, r'^PDF herunterladen$')
             if not button:
+                # BLE builds the report page asynchronously (the first position of a clean dry run met the page before its menu was rendered).
+                state['pdf_waits'] = state.get('pdf_waits', 0) + 1
+                if state['pdf_waits'] <= 5:
+                    return {'action': 'wait', 'seconds': 2, 'reason': 'wait for the report page to offer the PDF download'}
                 return {'action': 'blocked', 'reason': 'PDF download not offered'}
             state['downloaded'] = True
             return self.click(button['x'], button['y'], 'download the PDF once')

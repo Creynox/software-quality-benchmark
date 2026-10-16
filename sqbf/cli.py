@@ -208,6 +208,7 @@ def main(argv=None) -> int:
     for name in ('suite','dataset','fixture','projection','allocations','output'):
         dry.add_argument('--'+name,required=True)
     dry.add_argument('--headed',action='store_true')
+    dry.add_argument('--inject-executor-faults',help='Replay provider faults, e.g. "7:raise,19:not_object" (n-th executor request); tests the handling of a failed request')
     probe=sub.add_parser('suite-provider-probe',help='Two synthetic provider requests for the suite schemas; plan only without --execute',allow_abbrev=False)
     probe.add_argument('--suite',required=True)
     probe.add_argument('--output',default='D:/Temp/sqbf-provider-probes')
@@ -292,7 +293,9 @@ def main(argv=None) -> int:
         runner=import_module('projects.ble-elva.tools.regular_runner');tool=import_module('projects.ble-elva.tools.dry_run')
         try:
             inputs=runner.load_inputs(args.suite,args.dataset,args.fixture,args.projection,args.allocations)
-            report=tool.run_dry(*inputs,args.output,headed=args.headed)
+            faults={int(n):kind for n,kind in (item.split(':') for item in args.inject_executor_faults.split(','))} if args.inject_executor_faults else None
+            if faults and not set(faults.values())<={'raise','not_object'}:raise ValueError('Unknown fault kind')
+            report=tool.run_dry(*inputs,args.output,headed=args.headed,faults=faults)
         except tool.DryRunRefused as error:
             print('BLOCKED_DRY_RUN: '+str(error)+'; only a scratch clone that no run has claimed may be used.')
             return 2

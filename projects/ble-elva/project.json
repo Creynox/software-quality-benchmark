@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "RUN_3_FIXES_DONE_GUARDED_DRY_RUN_COMPLETED_FRESH_FIXTURE_READY_NEW_APPROVAL_REQUIRED",
+    "status": "RUN_4_FIXES_DONE_GUARDED_DRY_RUNS_COMPLETED_NEW_FIXTURE_AND_APPROVAL_REQUIRED",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -141,7 +141,7 @@
     },
     "live_run_authorization": {
       "status": "NONE",
-      "detail": "Run 3 (2026-10-16) consumed its approval; a fourth run needs a new explicit PO approval with the budget approval in a private manifest copy"
+      "detail": "Run 4 (2026-10-16) consumed its approval; a fifth run needs a new explicit PO approval with the budget approval in a private manifest copy"
     },
     "budget_candidate": {
       "suite": "suites/enzberg-nsn014-v0.4.1.json",
@@ -231,10 +231,57 @@
           "target of rejected actions not logged"
         ],
         "valid_measurement": false
+      },
+      {
+        "run_id": "083896e6-f550-4ba7-a6b3-4d312ee159ce",
+        "date": "2026-10-16",
+        "suite": "0.4.1",
+        "sqbf_commit": "81e48e90cac6618be553c1b72114884683856fb6",
+        "fixture": "nsn014-ux-b2e3a4b1d45a",
+        "result": "NO-GO",
+        "classification": "INVALID_HARNESS",
+        "stages": {
+          "PASS": [
+            "PLAN"
+          ],
+          "INCONCLUSIVE": [
+            "RECEIPT"
+          ],
+          "INVALID_HARNESS": [
+            "PREPARATION"
+          ],
+          "NOT_RUN": [
+            "SIEVE",
+            "SHAPE",
+            "BOILING",
+            "SE",
+            "ASSESS",
+            "WPK",
+            "ANALYSIS",
+            "REPORT",
+            "RIGHTS"
+          ]
+        },
+        "model_requests": 51,
+        "tokens_known": {
+          "executor": 95440,
+          "reviewer": 23542,
+          "executor_requests_without_usage": 1
+        },
+        "wall_seconds": 419,
+        "database_changed": "plan samples (10), test orders of the visited samples and the sampling_plans audit stamp only; no findings of the side-effect contract",
+        "fixture_lease_consumed": true,
+        "causes": [
+          "one failed executor request (no usage in the accounting) ended in a generic handler: stage INVALID_HARNESS and suite stop (exception type was not logged)",
+          "measurement guard rejected the same-page anchor \"Zu den Modulen\" (#module-bereich)",
+          "inspection guard rejected the sample-list row \"Probe <code> auswaehlen\" (rule required aria-selected); RECEIPT ended after one attempt",
+          "executor gave up after a single rejection (page had moved between screenshot and click)"
+        ],
+        "valid_measurement": false
       }
     ],
     "fixture_clone": {
-      "status": "PREPARED_UNUSED_NO_LEASE_NO_BUDGET_APPROVAL",
+      "status": "CONSUMED_BY_RUN_4 (a fresh fixture is prepared after the fixes; see the PR and Issue #21)",
       "created_at": "2026-10-16",
       "fixture_id": "nsn014-ux-b2e3a4b1d45a",
       "source_fixture_id": "nsn014-ux-536fe4e42888",
@@ -334,7 +381,21 @@
         ]
       },
       "inconclusive_reason": "APPROVED_FIELDS_NOT_PRESENT_ON_PAGE for P01 Koch 8 mm and P06 Kornform (PO option A, 2026-10-16: leave as is)",
-      "required_before_every_live_run": true
+      "required_before_every_live_run": true,
+      "fault_replay": {
+        "option": "suite-dry-run --inject-executor-faults \"N:raise|not_object,...\"",
+        "result": "DRY_RUN_COMPLETED with three injected executor faults: only the affected positions INCOMPLETE (EXECUTOR_REQUEST_FAILED), all twelve stages ran"
+      }
+    },
+    "executor_failure_policy": {
+      "single_failed_request": "ends only the task in progress as INCONCLUSIVE (EXECUTOR_REQUEST_FAILED); no retry; no reviewer request afterwards",
+      "consecutive_failures_limit": 3,
+      "limit_result": "suite stop INCONCLUSIVE (EXECUTOR_UNAVAILABLE_AFTER_REPEATED_FAILURES)",
+      "harness_failure_logging": "exception class name only, never the message"
+    },
+    "derived_value_policy": {
+      "rule": "A deviation of a value BLE derives from earlier inputs (partial-sieve preparation mass, partial series) counts only when its inputs were persisted as approved (wash without deviation, allocation of target process Siebanalyse present); otherwise INCOMPLETE / DERIVED_VALUE_UPSTREAM_INCOMPLETE, never FAIL",
+      "missing_evidence": "treated as a gap"
     }
   }
 }

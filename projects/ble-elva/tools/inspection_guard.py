@@ -40,7 +40,8 @@ const classify=e=>{
  const b=e?.closest('button');
  if(b&&!b.closest('form')&&READONLY.test(text(b.getAttribute('aria-label')||b.innerText)))return {kind:'read_control'};
  if(config.plan_samples&&location.pathname===config.plan_path&&norm(b)==='Proben anlegen / nachanlegen')return {kind:'plan_samples',scope:location.pathname};
- if(location.pathname==='/samples'&&e?.closest('tr[aria-selected][aria-label^="Probe "]'))return {kind:'read_control'};
+ // A row of the sample list opens its detail (aria-label "Probe <code> auswählen"; aria-selected is not always present, live run 083896e6).
+ if(location.pathname==='/samples'&&e?.closest('tr[aria-label^="Probe "][aria-label$="auswählen"]'))return {kind:'read_control'};
  if(b?.getAttribute('title')==='Probe oeffnen'&&location.pathname.startsWith('/beprobung/'))return {kind:'read_control'};
  if(location.pathname==='/samples'&&['Detail anzeigen','Probe vollständig öffnen'].includes(norm(b)))return {kind:'read_control'};
  if(b?.getAttribute('aria-label')==='Weitere Aktionen')return {kind:'read_control'};

@@ -113,7 +113,9 @@ const field=(e,ignoreSaveLatch)=>{
 };
 const classify=e=>{
  if(location.pathname!==config.path&&location.pathname!==config.root)return {kind:'blocked'};
- const a=e?.closest('a');if(a){let u=new URL(a.href,location.href);if(u.origin===config.origin&&[config.root,config.path].includes(u.pathname)&&!u.search&&!u.hash)return {kind:'navigation'};}
+ // A hash-only anchor of the current page ("Zu den Modulen" -> #module-bereich) only scrolls; live run 083896e6 rejected it as the click
+ // landed on it after BLE re-rendered the header.
+ const a=e?.closest('a');if(a){let u=new URL(a.href,location.href);if(u.origin===config.origin&&[config.root,config.path].includes(u.pathname)&&!u.search&&(!u.hash||u.pathname===location.pathname))return {kind:'navigation'};}
  // BLE's own first step of module work: the sample page offers "Testauftrag erzeugen" as its primary action (it writes only the work items
  // of the sample and its status; live run 413f7abe, dry run 16.10.2026). Allowed once per sample, on the sample page only.
  if(location.pathname===config.root&&norm(e?.closest('button')?.innerText)==='Testauftrag erzeugen')return {kind:'setup',scope:'test_order'};

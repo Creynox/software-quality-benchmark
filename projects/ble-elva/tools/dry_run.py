@@ -79,7 +79,7 @@ def summarize(records, manifest, actions):
         if record.get('position_results'):
             item['position_results'] = [(p['position_id'], p['result'], p.get('class')) for p in record['position_results']]
             item['outcomes'] = [{k: p.get(k) for k in ('position_id', 'kind', 'status', 'fields_required', 'fields_entered', 'fields_offered',
-                                                        'fields_not_offered', 'offered_entered', 'fully_entered', 'test_order_created')} for p in positions]
+                                                        'fields_not_offered', 'offered_entered', 'fully_entered', 'test_order_created', 'executor_error_code')} for p in positions]
         cases.append(item)
         gaps += [dict(r, case_id=record['case_id']) for r in rejected]
     final = {k: (v['status'] if isinstance(v, dict) else v) for k, v in manifest.get('final_oracles', {}).items()
@@ -94,7 +94,7 @@ def summarize(records, manifest, actions):
                     'fields BLE does not offer are expected (APPROVED_FIELDS_NOT_PRESENT_ON_PAGE).'}
 
 
-def run_dry(suite, dataset, fixture, projection, allocation, folder, *, headed=False):
+def run_dry(suite, dataset, fixture, projection, allocation, folder, *, headed=False, faults=None):
     from playwright.sync_api import sync_playwright
     require_scratch(fixture)
     validate_suite(suite)
@@ -106,7 +106,7 @@ def run_dry(suite, dataset, fixture, projection, allocation, folder, *, headed=F
     budget = SuiteBudget(suite['resource_policy'])
     policy = Scenario.load('projects/ble-elva/scenarios/core-smoke-01.json', fixture['target_url']).read_only_policy
     holder = {'page': None, 'case': None}
-    executor = ScriptedExecutor(lambda: holder['page'], lambda: holder['case'])
+    executor = ScriptedExecutor(lambda: holder['page'], lambda: holder['case'], faults)
     tracker = {'tables': fixture['suite_copy']['prepared_tables'], 'previous': None}
     downloads = folder / 'browser-downloads'
     downloads.mkdir()
@@ -130,5 +130,6 @@ def run_dry(suite, dataset, fixture, projection, allocation, folder, *, headed=F
     manifest = {'verdict': 'NO-GO', 'protected_scoped_baseline': scoped_baseline, 'side_effect_contract_sha256': stage_effects.contract_hash(contract)}
     rr.finalise_oracles(manifest, {'records': records}, fixture, dataset, projection, allocation, rr.snapshot(fixture, enforce_counts=False))
     report = summarize(records, manifest, executor.log)
+    report['executor_faults_injected'] = {str(k): v for k, v in sorted((faults or {}).items())}
     (folder / 'dry-run-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding='utf-8')
     return report

@@ -15,7 +15,7 @@ import time
 from uuid import uuid4
 
 from sqbf.artifact_privacy import check_private_directory, create_private_file
-from sqbf.bounded import invoke_worker, model_spec, restore_model, BudgetExceeded
+from sqbf.bounded import invoke_worker, model_spec, restore_model, suite_model_spec, BudgetExceeded
 from sqbf.calibration import SuiteBudget, ResourceStop
 from sqbf.models import Scenario
 from sqbf.reporting import Evidence, now_iso, index_run
@@ -505,10 +505,10 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
     (evidence.path/'run.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
     result={}
     try:
-        from sqbf.plan_login import _load_host, authorize, catalog
+        from sqbf.plan_login import _load_host, authorize_or_reuse, catalog
         from sqbf.providers import ChatGPTPlanModel
         directory=Path(os.environ['LOCALAPPDATA'])/'SQBF'/'plan-login'
-        credential=authorize(_load_host(directory));available=catalog(credential)
+        credential=authorize_or_reuse(_load_host(directory));available=catalog(credential)
         if executor_id not in available or reviewer_id not in available:raise ValueError('MODEL_UNAVAILABLE')
         executor=ChatGPTPlanModel(executor_id,credential,executor_schema())
         reviewer=ChatGPTPlanModel(reviewer_id,credential,REVIEW_SCHEMA)
@@ -522,7 +522,7 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         result=invoke_worker('regular-suite',{'suite':suite,'dataset':dataset,'fixture':fixture,
             'projection':projection,'allocation':allocation,'folder':str(evidence.path),'headed':headed,
             'side_effect_contract':ready['side_effect_contract'],'side_effect_contract_sha256':ready['side_effects']['contract_sha256'],
-            'executor':model_spec(executor),'reviewer':model_spec(reviewer)},suite['resource_policy']['hard_seconds'])
+            'executor':suite_model_spec(executor),'reviewer':suite_model_spec(reviewer)},suite['resource_policy']['hard_seconds'])
         summary=result['summary']
         critical=any(r.get('technical_gate')=='BLOCKED' for r in result['records'])
         manifest.update(technical_status='INVALID' if summary['measurement_status']=='INVALID' else 'BLOCKED' if critical else 'COMPLETED',

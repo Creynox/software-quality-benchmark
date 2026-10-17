@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "RUN_5_PARTIAL_GO_TOKEN_LIFETIME_DECISION_OPEN_NEW_FIXTURE_AND_APPROVAL_REQUIRED",
+    "status": "RUN_5_PARTIAL_GO_KEPT_LOGIN_BUILT_NEW_FIXTURE_AND_APPROVAL_REQUIRED",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -463,9 +463,21 @@
     "provider_authorization": {
       "access_token_lifetime": "about one hour (run 5 stopped at 3603 s with HTTP 401)",
       "refresh": "none by design (sqbf/plan_login.py: no refresh storage); a complete suite needs about 850-1000 requests and two to three hours",
-      "decision_pending": "PO: in-memory refresh (recommended) / re-authorization during the run / not possible to split the suite",
+      "decision_pending": "RESOLVED 2026-10-17: PO chose a kept, encrypted, automatically renewed login (opt-in, DPAPI, current user, max 7 days); the first --keep-signed-in must still verify that the provider issues a refresh token and accepts the refresh grant",
       "stop_rule": "HTTP 401/403 on an executor request stops the suite at once as INCONCLUSIVE (PROVIDER_AUTHORIZATION_EXPIRED)",
-      "start": "run-suite --execute opens the system browser; the PO must confirm within about 300 s, otherwise the start ends with 0 requests and no lease"
+      "start": "with a kept login run-suite --execute needs no browser confirmation; without one the PO must confirm within about 300 s",
+      "kept_login": {
+        "module": "sqbf/plan_credentials.py",
+        "commands": [
+          "--keep-signed-in",
+          "--status",
+          "--check",
+          "--forget"
+        ],
+        "default_max_age_days": 7,
+        "verified_with_provider": false,
+        "note": "unit-tested with a fake token endpoint; real provider behaviour is checked by the first --keep-signed-in"
+      }
     }
   }
 }

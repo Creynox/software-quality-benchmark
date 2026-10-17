@@ -107,10 +107,10 @@ def provider_probe(suite, output, executor_id, reviewer_id, *, execute=False):
         check_private_directory(output, protect=True)
     else:
         check_private_directory(output)
-    from sqbf.plan_login import _load_host, authorize, catalog
+    from sqbf.plan_login import _load_host, authorize_or_reuse, catalog
     from sqbf.providers import ChatGPTPlanModel
     import os
-    credential = authorize(_load_host(Path(os.environ['LOCALAPPDATA']) / 'SQBF' / 'plan-login'))
+    credential = authorize_or_reuse(_load_host(Path(os.environ['LOCALAPPDATA']) / 'SQBF' / 'plan-login'))
     available = catalog(credential)
     if executor_id not in available or reviewer_id not in available:
         return dict(plan, status='BLOCKED_MODEL_UNAVAILABLE', model_calls=0, catalog_has_models=False)

@@ -10,7 +10,25 @@ The actual account gate is the user's separate SQBF browser authorization, a val
 
 The documented sign-in flow is a separate app authorization, not reuse of Codex CLI's existing ChatGPT login. `sqbf.plan_login` prepares a stable opaque host ID, uses the system browser and PKCE, binds a one-time loopback callback to state, and verifies the ID token against OpenAI's JWKS (RS256, issuer, client audience, expiry, issuance time, nonce, subject). It rejects a different account when reusing an issued registration. The plan scope is checked in the token response. Callback request logging is disabled.
 
-The diagnostic intentionally keeps **all tokens in process memory**, with no refresh/storage implementation. Only host ID, issued client ID and validated account subject are saved locally under `%LOCALAPPDATA%/SQBF/plan-login/registration.json`; they are registration metadata, not bearer credentials. A future production session manager still needs protected persistent credentials and refresh handling. No Codex files or browser cookies are read. There is no API-key path.
+By default the diagnostic keeps **all tokens in process memory**. Only host ID, issued client ID and validated account subject are saved locally under `%LOCALAPPDATA%/SQBF/plan-login/registration.json`; they are registration metadata, not bearer credentials. No Codex files or browser cookies are read. There is no API-key path. **Since 2026-10-17 the PO can opt in to a kept login** (next section), because the access token lives about one hour and a complete NSN014 suite needs two to three hours.
+
+## Kept login (opt-in, decision of the PO on 2026-10-17)
+
+Live run 6c23f768 ended at 3,603 s with HTTP 401 because the plan access token expires after about an hour, and the PO does not want to confirm in the browser for every run, hour and agent. `sqbf/plan_credentials.py` therefore offers a login that is **kept on this computer only when the PO asks for it**:
+
+```powershell
+python -m sqbf.plan_login --keep-signed-in [--max-age-days 7]   # one browser confirmation; checks the renewal at once
+python -m sqbf.plan_login --status                              # age and validity, no secrets
+python -m sqbf.plan_login --check                               # renews once and lists the catalog (no inference)
+python -m sqbf.plan_login --forget                              # deletes the kept login
+```
+
+- **Where and how:** `%LOCALAPPDATA%/SQBF/plan-login/plan-tokens.dpapi`, encrypted with Windows DPAPI for the current user (plus an application entropy), created current-user-only (ACL), replaced atomically. The record holds the refresh token, the latest access token, the issued client ID, the account subject, the login time and the maximum age.
+- **Renewal:** the OAuth refresh grant is spent shortly before the access token expires (5 minute margin) by whichever process needs a token. A lock file serialises renewals across processes, so several runs and agents of the same Windows user share one login and a rotating refresh token is never spent twice. A transient failure is repeated once; a refusal (HTTP 400/401/403, lost plan scope) is a hard stop.
+- **Limits:** the login ends after its maximum age (default 7 days, at most 30) and then needs a new browser confirmation. `--forget` removes it at once; it can also be revoked in the ChatGPT account settings. A different Windows user, another computer or a copied file cannot decrypt it.
+- **What never leaves the store:** the refresh token is not part of any model request, request-worker payload, run artifact or log; the suite worker receives only the store path and renews itself (`bounded.suite_model_spec`). Errors carry fixed codes (`PROVIDER_REFRESH_REJECTED`, `PROVIDER_REFRESH_UNAVAILABLE`, `PLAN_LOGIN_TOO_OLD`, `PLAN_LOGIN_MISSING`) and never token text.
+- **Use:** `run-suite --execute` and the provider probe use the kept login when there is one (no browser prompt) and otherwise ask for the browser confirmation as before, without keeping it.
+- **Honest limits:** a malicious process running as the same Windows user could decrypt the file like SQBF can. Whether the provider issues a refresh token and accepts the refresh grant for this client is checked only by the first `--keep-signed-in` (it renews once before it reports success and forgets the login if the provider refuses).
 
 ## Local diagnostic
 

@@ -187,12 +187,15 @@ Mit `--inject-executor-faults "9:raise,40:not_object,150:raise"` spielt der skri
 (`raise`) oder eine Antwort ohne Aktionsobjekt (`not_object`) ein. Erwartet: nur die betroffenen Positionen `INCOMPLETE / EXECUTOR_REQUEST_FAILED`,
 kein Harness-Stopp, alle zwölf Stufen laufen. Vor jedem Live-Lauf einmal sauber und einmal mit Fehlerinjektion ausführen.
 
-## NSN014: Start eines Live-Laufs und Anmeldetoken
+## NSN014: Start eines Live-Laufs und Anmeldung
 
-`run-suite --execute` öffnet den Systembrowser für die ChatGPT-Anmeldung („authorize SQBF“) und wartet etwa 300 s auf die Bestätigung; ohne sie endet der Start mit
-`SUITE_STOPPED_NO_RETRY`, 0 Anfragen und ohne Lease (Fixture und Freigabe bleiben unberührt, zwei Versuche am 16.10.2026). Den Befehl deshalb erst starten, wenn der PO am
-Rechner sitzt, oder ihn vom PO im Terminal starten lassen. Der Zugriffstoken gilt etwa eine Stunde und wird nicht erneuert; danach stoppt die Suite sofort
-(`PROVIDER_AUTHORIZATION_EXPIRED`). Offene Entscheidung: Abschnitt 20.6 des Abschlussberichts.
+Einmalig je Woche (oder nach `--forget`), am Rechner des PO: `python -m sqbf.plan_login --keep-signed-in` öffnet den Browser für die ChatGPT-Anmeldung
+(Bestätigung innerhalb von etwa 300 s), prüft sofort die automatische Erneuerung und legt die Anmeldung verschlüsselt ab (Windows DPAPI, nur dieser Benutzer,
+höchstens 7 Tage). Danach nutzen `run-suite --execute`, die Provider-Probe und weitere Läufe oder Agenten auf diesem Rechner dieselbe Anmeldung ohne
+Browser-Prompt; der Zugriffstoken (etwa eine Stunde) wird automatisch erneuert. `--status` zeigt Alter und Gültigkeit ohne Geheimnisse, `--check` erneuert
+einmal und listet den Katalog, `--forget` löscht die Anmeldung. Ohne gespeicherte Anmeldung fragt `run-suite --execute` wie bisher im Browser; läuft die
+Bestätigung nicht rechtzeitig ab, endet der Start mit `SUITE_STOPPED_NO_RETRY`, 0 Anfragen und ohne Lease (zwei Versuche am 16.10.2026). Wird die
+Erneuerung abgelehnt, stoppt die Suite sofort (`PROVIDER_AUTHORIZATION_EXPIRED`). Details und Grenzen: `docs/chatgpt-plan-provider.md`.
 
 ## Evidenz und Aufbewahrung
 

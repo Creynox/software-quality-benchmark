@@ -17,6 +17,7 @@ import subprocess
 import sys
 import time
 
+from .plan_credentials import PlanTokenStore, RefreshingPlanCredential
 from .providers import ChatGPTPlanCredential, ChatGPTPlanModel, ModelResponse, safe_error_code
 
 
@@ -206,8 +207,22 @@ def model_spec(model):
             "max_response_chars": model.max_response_chars}
 
 
+def suite_model_spec(model):
+    """Spec for a long-lived suite worker. With a kept login it names the store instead of carrying an access token, so that the worker renews
+    the token itself (a suite runs longer than one token lives); the refresh token never travels in a payload."""
+    spec = model_spec(model)
+    if isinstance(model.credential, RefreshingPlanCredential):
+        spec = {k: v for k, v in spec.items() if k != "access_token"}
+        spec["credential_store"] = str(model.credential.store.directory)
+    return spec
+
+
 def restore_model(spec):
-    return ChatGPTPlanModel(spec["model"], ChatGPTPlanCredential(spec["access_token"], frozenset(spec["scopes"])),
+    if "credential_store" in spec:
+        credential = RefreshingPlanCredential(PlanTokenStore(spec["credential_store"]))
+    else:
+        credential = ChatGPTPlanCredential(spec["access_token"], frozenset(spec["scopes"]))
+    return ChatGPTPlanModel(spec["model"], credential,
                             spec["schema"], timeout=30, max_response_chars=spec["max_response_chars"])
 
 

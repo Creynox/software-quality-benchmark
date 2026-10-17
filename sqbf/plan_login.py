@@ -1,8 +1,9 @@
-"""One-shot local ChatGPT plan diagnostic. Credentials remain in memory only.
+"""Local ChatGPT plan login. By default credentials remain in memory only (one-shot diagnostic).
 
-No Codex credentials, environment API keys, refresh storage, or BLE access.
-The user authorizes SQBF separately in the system browser. This is a diagnostic,
-not a durable account/session manager or a benchmark provider integration.
+No Codex credentials, environment API keys, or BLE access. The user authorizes SQBF separately in the
+system browser. Only on the PO's explicit command (`--keep-signed-in`, decision of 2026-10-17) the login is
+kept: encrypted with the Windows user's DPAPI and renewed automatically (see plan_credentials.py), so that
+a multi-hour run and later runs or agents need no new browser confirmation; `--forget` removes it.
 """
 
 from __future__ import annotations
@@ -24,6 +25,8 @@ import webbrowser
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+from .plan_credentials import (DEFAULT_MAX_AGE_DAYS, MAX_AGE_DAYS_LIMIT, PlanAuthorizationError, PlanTokenStore, RefreshingPlanCredential,
+                               build_record, default_directory)
 from .providers import CHATGPT_PLAN_SCOPE, ChatGPTPlanCredential, ChatGPTPlanModel
 
 ISSUER = "https://auth.openai.com"
@@ -146,7 +149,8 @@ def _load_host(directory: Path) -> dict:
     return record
 
 
-def authorize(record: dict):
+def authorize(record: dict, *, keep_days: int | None = None):
+    """Browser login. With `keep_days` the login is also stored encrypted for that many days and a self-renewing credential is returned."""
     # Loopback only. No callback URLs, codes, tokens, or identities in HTTP logs.
     outcome = {}
     attempt = None
@@ -191,7 +195,27 @@ def authorize(record: dict):
     ))
     credential, subject = validate_tokens(tokens, form["client_id"], attempt.nonce, record.get("subject"))
     record.update(client_id=form["client_id"], subject=subject)
-    return credential
+    if keep_days is None:
+        return credential
+    store = PlanTokenStore(default_directory())
+    store.save(build_record(form, tokens, subject, tokens["scope"], max_age_days=keep_days, now=time.time()))
+    return RefreshingPlanCredential(store)
+
+
+def authorize_or_reuse(record: dict):
+    """The kept login of this Windows user when there is a usable one (no browser), else the browser login of this process (not kept)."""
+    store = PlanTokenStore(default_directory())
+    if store.exists():
+        try:
+            stored = store.load()
+            if stored and record.get("subject") in (None, stored["subject"]) and record.get("client_id") in (None, stored["client_id"]):
+                credential = RefreshingPlanCredential(store)
+                credential.access_token  # renews now if due, so that a refused login falls back before any run starts
+                print("Using the kept ChatGPT login of this Windows user; no browser confirmation needed.", flush=True)
+                return credential
+        except PlanAuthorizationError as error:
+            print(f"The kept ChatGPT login cannot be used ({error.code}); confirm in the browser instead.", flush=True)
+    return authorize(record)
 
 
 def catalog(credential):
@@ -230,20 +254,48 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--vision-test", action="store_true", help="Exactly one synthetic inference after browser consent")
     parser.add_argument("--model", help="Must be present in the authorized account catalog")
+    parser.add_argument("--keep-signed-in", action="store_true",
+                        help="Browser login once, then keep it encrypted (Windows DPAPI, current user) and renew it automatically")
+    parser.add_argument("--max-age-days", type=int, default=DEFAULT_MAX_AGE_DAYS, help="Maximum age of a kept login (1-%d)" % MAX_AGE_DAYS_LIMIT)
+    parser.add_argument("--check", action="store_true", help="Renew the kept login once and list the catalog (no inference)")
+    parser.add_argument("--status", action="store_true", help="Show the age and validity of the kept login (no secrets)")
+    parser.add_argument("--forget", action="store_true", help="Delete the kept login")
     args = parser.parse_args(argv)
+    if not 1 <= args.max_age_days <= MAX_AGE_DAYS_LIMIT:
+        parser.error("--max-age-days must be between 1 and %d" % MAX_AGE_DAYS_LIMIT)
     if args.vision_test and not args.model:
         parser.error("--vision-test requires an explicitly selected --model")
-    directory = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / ".local/share"))) / "SQBF" / "plan-login"
+    directory = default_directory()
     try:
+        store = PlanTokenStore(directory)
+        if args.forget:
+            print(json.dumps({"forgotten": store.forget()}))
+            return 0
+        if args.status:
+            print(json.dumps(RefreshingPlanCredential(store).describe() | {"signed_in": True}) if store.exists() else json.dumps({"signed_in": False}))
+            return 0
+        if args.check:
+            kept = RefreshingPlanCredential(store)
+            kept.renew_now()
+            print(json.dumps({"refresh_verified": True, "models": catalog(kept)} | kept.describe()))
+            return 0
         record = _load_host(directory)
-        credential = authorize(record)
-        # Only non-token host/client identity metadata is persisted. All OAuth
-        # tokens (including returned refresh token) die with this process.
+        credential = authorize(record, keep_days=args.max_age_days if args.keep_signed_in else None)
+        if args.keep_signed_in:
+            try:
+                credential.renew_now()
+            except PlanAuthorizationError as error:
+                store.forget()
+                print(f"BLOCKED_AUTH: the provider did not accept the renewal ({error.code}); the login was not kept.")
+                return 2
+        # Without --keep-signed-in only non-token host/client identity metadata is persisted and all OAuth tokens
+        # (including the returned refresh token) die with this process.
         temporary = directory / "registration.tmp"
         temporary.write_text(json.dumps(record), encoding="utf-8")
         temporary.replace(directory / "registration.json")
         models = catalog(credential)
-        print(json.dumps({"auth": "CHATGPT_PLAN_OAUTH", "models": models, "tokens_saved": False}))
+        kept_info = {"tokens_saved": True, "protected_by": "Windows DPAPI, current user only", "refresh_verified": True} | credential.describe() if args.keep_signed_in else {"tokens_saved": False}
+        print(json.dumps({"auth": "CHATGPT_PLAN_OAUTH", "models": models} | kept_info))
         if args.vision_test:
             if args.model not in models:
                 raise RuntimeError("Selected model is not available to this authorized account")

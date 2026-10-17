@@ -10,6 +10,7 @@ import hashlib
 
 from sqbf.bounded import BudgetExceeded
 from sqbf.calibration import ResourceStop
+from sqbf.plan_credentials import REFUSED_CODES
 from sqbf.models import ActionValidationError
 from sqbf.smoke_runner import ACTION_SCHEMA
 
@@ -188,7 +189,7 @@ def ux_verdicts(outcomes):
 
 
 EXECUTOR_FAILURE_LIMIT = 3
-AUTHORIZATION_FAILURES = ('PROVIDER_HTTP_401', 'PROVIDER_HTTP_403')
+AUTHORIZATION_FAILURES = ('PROVIDER_HTTP_401', 'PROVIDER_HTTP_403') + REFUSED_CODES
 
 
 class ExecutorRequestFailed(RuntimeError):

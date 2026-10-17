@@ -1,0 +1,15 @@
+{
+  "scenario_id": "__PROJECT_SLUG__.first-task",
+  "scenario_version": "1",
+  "persona": "CONFIGURE_ROLE",
+  "fixture_id": "__PROJECT_SLUG__-first-task-v1",
+  "software_version": "CONFIGURE_DEPLOYMENT_VERSION",
+  "url": "CONFIGURE_LOCAL_UI_URL",
+  "allowed_hosts": [],
+  "max_minutes": 25,
+  "max_actions": 150,
+  "task": "CONFIGURE_TASK_DESCRIPTION",
+  "expected": [
+    "CONFIGURE_VISIBLE_EXPECTED_OUTCOME"
+  ]
+}

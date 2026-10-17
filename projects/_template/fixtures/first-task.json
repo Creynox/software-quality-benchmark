@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "fixture_id": "__PROJECT_SLUG__-first-task-v1",
+  "fixture_version": "1",
+  "status": "UNCONFIGURED",
+  "isolation_required": true,
+  "setup": "CONFIGURE_SAFE_REPEATABLE_SETUP_OUTSIDE_EXECUTOR",
+  "reset": "CONFIGURE_SAFE_IDEMPOTENT_RESET_FOR_ISOLATED_TEST_DATA",
+  "preconditions": [
+    "CONFIGURE_REQUIRED_ROLE",
+    "CONFIGURE_REQUIRED_SEED_DATA"
+  ],
+  "independent_oracle": "CONFIGURE_AUTHORIZED_PERSISTENCE_CHECK",
+  "destructive_operations_permitted": false
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "fixture_id": "enzberg-sts-0-45-base-v1",
+  "fixture_version": "1",
+  "status": "NOT_PROVISIONED",
+  "application": "BLE/ELVA",
+  "test_mode": "isolated_benchmark_only",
+  "isolation_required": true,
+  "destructive_operations_permitted": false,
+  "application_version": "RECORD_EXACT_BLE_COMMIT_AT_RUN_TIME",
+  "preconditions": [
+    "A fresh, dedicated BLE benchmark database with safely repeatable initialization, never production or shared development data",
+    "A Laborleitung test user limited to the benchmark scope",
+    "Benchmark factory Enzberg available",
+    "Both referenced standards TL SoB-StB 20 and ETV-StB-BW available for linking",
+    "The target product STS 0–45 is absent before each measured creation run"
+  ],
+  "setup": "To be implemented and verified from Creynox/BLE in its own safe branch/worktree; do not let the blackbox executor seed or reset the database.",
+  "reset": "Repeatable isolated fixture reset must be explicitly reviewed before execution; never reset ble-postgres on port 5433 without proving isolation and authorization.",
+  "independent_oracle": "Authorized evaluator-side read-only verification of created product identity, mandatory fields and both standard links, inaccessible to UI executor.",
+  "evidence": [
+    "fixture_revision",
+    "ble_software_commit",
+    "database_identity_fingerprint_no_secrets",
+    "preflight_assertions",
+    "reset_trace"
+  ],
+  "blocking_issue": "https://github.com/Creynox/software-quality-benchmark/issues/11"
+}

@@ -4,7 +4,7 @@ A versioned, AI-first framework for evaluating software quality in a reproducibl
 
 ## Current phase
 
-The project is currently in **Foundation Research**. The immediate goal is to define the benchmark methodology before implementing a runner or dashboard.
+The project has **ongoing Foundation Research** and an **unmerged local MVP prototype**. The first bounded real CORE-SMOKE-01 run has passed with independent database evidence. LAB-01 uses a separate disposable working copy; authoritative quality scoring remains a separate methodology milestone.
 
 Initial MVP target:
 
@@ -48,3 +48,27 @@ See `research/README.md` for the research contract and sequencing.
 ## Status
 
 No benchmark score is considered authoritative until Foundation 1.0 has defined the measurement, scoring, gate and reproducibility contracts.
+
+## Framework structure and reusable project profiles
+
+- `sqbf/`: product-neutral runner, providers, action-policy, reporting and scaffold.
+- `projects/_template/`: **blank versioned project template**; no application URLs, valid user accounts, seed datasets or run artifacts.
+- `projects/ble-elva/`: project-specific profile, STS 0–45 scenario and external fixture contract.
+- `runs/` (ignored by Git): local generated screenshots, JSON evidence and reports.
+
+To create a new independent project in a clean directory, from the repository root:
+
+    python -m sqbf.cli new-project --slug example-app --name "Example application"
+
+This creates `projects/example-app/` only if it does not exist. Running the same command in separate fresh directories with equal inputs yields identical configuration files. It intentionally cannot pass preflight until you replace its configuration placeholders and set up an isolated fixture. See `docs/project-profiles.md`.
+
+All tests are **local-only** (Codex/PowerShell + Python unittest + Playwright); GitHub Actions is not used.
+
+## BLE/ELVA executable MVP (implementation in review)
+
+A small Playwright and screenshot-vision runner now exists under sqbf/ and
+projects/ble-elva/ on the proposed implementation branch. See
+projects/ble-elva/README.md for Windows setup, local isolated fixture
+requirements, sample CLI commands and important security limitations.
+
+CORE-SMOKE-01 run `04bd06b3-f868-4390-b7d6-3df67e9cb85f` passed technical, independent no-write Oracle and reviewer checks. LAB-01 v0.3 adds bounded product creation in a separate working copy with a SELECT-only persistence Oracle. See [local operations](projects/ble-elva/operations.md). These process proofs do not replace Foundation methodology or establish an authoritative software-quality score. The regular NSN014 v0.4 suite is technically ready (model-free readiness passed) but has not been run; see the [completion report](docs/nsn014-v04-completion-report.md). PR #10 remains Draft; no automatic merge.

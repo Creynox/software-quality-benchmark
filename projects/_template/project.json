@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "template_version": "1.0",
+  "project_id": "__PROJECT_SLUG__",
+  "display_name": "__PROJECT_NAME__",
+  "application": "CONFIGURE_APPLICATION",
+  "profile_status": "UNCONFIGURED",
+  "scenarios": [
+    "scenarios/first-task.json"
+  ],
+  "fixtures": [
+    "fixtures/first-task.json"
+  ],
+  "execution_mode": "local_blackbox_ui",
+  "source": "sqbf-generic-empty-template"
+}

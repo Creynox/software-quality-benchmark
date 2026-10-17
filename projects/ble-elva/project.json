@@ -1,0 +1,483 @@
+{
+  "schema_version": 1,
+  "project_id": "ble-elva",
+  "display_name": "ELVA / BLE – WPK Blackbox Benchmark",
+  "application": "BLE/ELVA",
+  "profile_status": "PARTIAL_GO_SCROLL_REPAIR_TESTED_PERSISTENCE_PILOT_PENDING",
+  "execution_mode": "local_blackbox_ui",
+  "scenarios": [
+    "scenarios/sts-0-45-product-core-v0.2.json",
+    "scenarios/sts-0-45-product.json",
+    "scenarios/core-smoke-01.json",
+    "scenarios/sts-0-45-product-core-v0.3.json"
+  ],
+  "fixtures": [
+    "fixtures/enzberg-product-core-v0.2.json",
+    "fixtures/enzberg-sts-0-45-base-v1.json"
+  ],
+  "first_pilot": {
+    "site": "Enzberg",
+    "persona": "Laborleitung",
+    "product": "STS 0–45",
+    "norms": [],
+    "norm_policy": "No new standards or unverified historical editions required for first process pilot; only existing substantiated references if actually mandatory"
+  },
+  "source": "sqbf-project-profile",
+  "related_issues": [
+    "https://github.com/Creynox/software-quality-benchmark/issues/11",
+    "https://github.com/Creynox/software-quality-benchmark/issues/16",
+    "https://github.com/Creynox/software-quality-benchmark/issues/21",
+    "https://github.com/Creynox/software-quality-benchmark/issues/9"
+  ],
+  "active_product_scenario": "scenarios/sts-0-45-product-core-v0.3.json",
+  "latest_lab01_attempt": {
+    "run_id": "fc489109-17ac-4d47-8823-61d292c457e1",
+    "result": "NO-GO",
+    "classification": "INVALID_HARNESS",
+    "persisted_product": false,
+    "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
+  },
+  "regular_suite_setup": {
+    "status": "RUN_5_PARTIAL_GO_KEPT_LOGIN_BUILT_NEW_FIXTURE_AND_APPROVAL_REQUIRED",
+    "active_candidate": "suites/enzberg-nsn014-v0.4.json",
+    "reference_plan": "NSN 014",
+    "sampling_date": "2026-05-08",
+    "live_suite_executed": true,
+    "completion_report": "docs/nsn014-v04-completion-report.md",
+    "sand_equivalent_source_unit": "cm",
+    "sand_equivalent_fixture_unit": "mm",
+    "unit_decision_by": "PO reconfirmed original cm entries after method clarification, 2026-10-14",
+    "sand_equivalent_conversion_authorized": true,
+    "sand_equivalent_method_reference": "DIN EN 933-8:2015-07, 8.5: record heights to nearest mm",
+    "benchmark_purpose": "ux_ui_process_stress",
+    "normative_conformity_scoring": false,
+    "source_replay_approved_by": "PO, 2026-10-14",
+    "standard_policy": "Existing entered assignments unchanged; normative testing deferred",
+    "fixture_preparation": {
+      "status": "FIXTURE_GATES_VERIFIED",
+      "target_url": "http://127.0.0.1:5082/",
+      "postgres_port": 55434,
+      "start_state": "10 products, 1 plan, 10 items, 2 projects; zero probes/LIMS/reports",
+      "personas": {
+        "laboratory_lead": "Laborleiter",
+        "laboratory_staff": "Mitarbeiter",
+        "wpk_lead": "Laborleiter (separate account, no fpc.view; WPK stage starts on the plan)",
+        "plant_lead": "Viewer"
+      },
+      "runtime_build": "c51ea2229b3513aa59e659774fe8ce44cdd81859",
+      "acceptance_command": "sqbf.cli suite-fixture-check",
+      "executor_integration": "implemented: twelve stage adapters, objective verdicts, separate UX layer",
+      "normative_conformity_scoring": false,
+      "latest_session_gate": {
+        "status": "SESSIONS_VERIFIED",
+        "checked_at": "2026-10-15",
+        "scope": "all four personas",
+        "renewal_performed": false,
+        "evidence": "model-free run-suite readiness"
+      },
+      "receipt_entrypoint": "plan_replenish_once by laboratory_lead"
+    },
+    "execution_policy": {
+      "mode": "calibration",
+      "suite_seconds_ceiling": 7200,
+      "suite_model_calls_ceiling": 1000,
+      "task_observation_seconds": 600,
+      "task_observation_actions": 60,
+      "active_endpoint": "evaluation/PDF; release/signature/delivery excluded",
+      "runtime_integration": "implemented; shared accounting used by all stage adapters",
+      "minimum_model_requests_estimate": 646,
+      "budget_decision_required": "PO approval for suite v0.4.1 (1500 requests / 10800 s) or explicit instruction to run v0.4 at 1000 requests / 7200 s; lower bound is 646 requests"
+    },
+    "superseded_candidates": [
+      "suites/enzberg-nsn014-v0.3.json",
+      "suites/enzberg-nsn018-v0.1.json"
+    ],
+    "setup_history": "docs/regular-suite-setup.md",
+    "readiness": {
+      "status": "ALL_GATES_PASSED_EXCEPT_BUDGET_APPROVAL_FOR_PREPARED_FIXTURE",
+      "checked_at": "2026-10-15",
+      "sqbf_commit": "8f3a52e",
+      "model_calls": 0,
+      "database_writes": 0,
+      "local_tests": 399,
+      "provider_probe": "PROBE_PASSED (2026-10-15 13:18 UTC, valid 12 h)",
+      "gates": [
+        "clean SQBF source",
+        "plan workflow and permissions",
+        "reference hashes",
+        "suite bound to fixture",
+        "stage contracts and vocabulary round trip",
+        "side-effect contract loaded and hashed",
+        "scoped baseline and all-table hash",
+        "request lower bound (640)",
+        "method fixture",
+        "fixture and sessions",
+        "static start state",
+        "active runtime identity",
+        "unused start state",
+        "plan products 10/10",
+        "native plan form",
+        "entry routes"
+      ],
+      "not_a_benchmark_result": true
+    },
+    "scoring": {
+      "objective": "nsn014-objective-v1",
+      "ux_rubric": "nsn014-ux-rubric-v1 (provisional)",
+      "statuses": [
+        "PASS",
+        "FAIL",
+        "BLOCKED",
+        "INVALID_HARNESS",
+        "INCONCLUSIVE",
+        "NOT_RUN",
+        "NOT_IMPLEMENTED"
+      ],
+      "global_score": null,
+      "calculation_oracle_not_covered": [
+        "shape index (sieve-line weighted)",
+        "partial or wash-coupled sieving"
+      ]
+    },
+    "live_run_authorization": {
+      "status": "NONE",
+      "detail": "Run 5 (2026-10-16) consumed its approval; a sixth run needs a new explicit PO approval and a decision on the provider token lifetime (section 20.6)"
+    },
+    "budget_candidate": {
+      "suite": "suites/enzberg-nsn014-v0.4.1.json",
+      "profile": "NSN014-CALIBRATION-v2",
+      "hard_model_calls": 1500,
+      "hard_seconds": 10800,
+      "status": "APPROVED_AND_USED_ONCE",
+      "gate": "suite_copy.budget_approval in the private manifest; readiness BLOCKED BUDGET_APPROVAL_MISSING without it",
+      "v0_4_unchanged": true
+    },
+    "live_runs": [
+      {
+        "run_id": "3d9c2706-7e58-4979-8515-6fbc6cac9a1e",
+        "date": "2026-10-15",
+        "suite": "0.4.1",
+        "sqbf_commit": "b5f1107c24a5e24ef503ff2c4fa081250beed5b2",
+        "result": "NO-GO",
+        "classification": "INVALID_HARNESS",
+        "stages": {
+          "PLAN": "INVALID_HARNESS",
+          "others": "NOT_RUN (11)"
+        },
+        "model_requests": 3,
+        "wall_seconds": 19.7,
+        "database_changed": false,
+        "fixture_lease_consumed": true,
+        "causes": [
+          "plan product P06 inactive in approved source data (BLE refuses the whole plan-wide creation)",
+          "reviewer request failed; controller treated it as stage-invalidating (fixed in 65cd318)"
+        ],
+        "bounded_valid_measurement": false
+      },
+      {
+        "run_id": "45eb301f-ea0a-4b93-810e-57deaadbc586",
+        "date": "2026-10-15",
+        "suite": "0.4.1",
+        "sqbf_commit": "06d7a883d48ef0582cb240cf030b3d549ed1e144",
+        "fixture": "nsn014-ux-4e460e296674",
+        "result": "NO-GO",
+        "classification": "INVALID_HARNESS",
+        "stages": {
+          "PLAN": "INVALID_HARNESS (Oracle after_plan PASS, 10/10 samples)",
+          "others": "NOT_RUN (11)"
+        },
+        "model_requests": 3,
+        "wall_seconds": 34.3,
+        "database_changed": "plan samples (10) and sampling_plans audit columns only",
+        "fixture_lease_consumed": true,
+        "cause": "static fixture gate treated the audit stamp (sampling_plans.updated_at/updated_by) of the approved plan action as a data change; fixed in 049a3f8",
+        "valid_measurement": false
+      },
+      {
+        "run_id": "413f7abe-71ad-4027-97a8-27760a5c5378",
+        "date": "2026-10-16",
+        "suite": "0.4.1",
+        "sqbf_commit": "ef06e389beac7e758f3dda649ec00f392f39b46a",
+        "fixture": "nsn014-ux-e781d1466b55",
+        "result": "PARTIAL GO",
+        "classification": "COMPLETED_FUNCTIONALLY_INCOMPLETE",
+        "stages": {
+          "PASS": [
+            "PLAN",
+            "WPK"
+          ],
+          "INCONCLUSIVE": [
+            "RECEIPT",
+            "PREPARATION",
+            "SIEVE",
+            "SHAPE",
+            "BOILING",
+            "SE",
+            "ASSESS",
+            "ANALYSIS",
+            "REPORT",
+            "RIGHTS"
+          ]
+        },
+        "model_requests": 124,
+        "tokens_total": 271478,
+        "wall_seconds": 1461,
+        "database_changed": "plan samples (10) and the sampling_plans audit stamp only; no findings of the side-effect contract",
+        "fixture_lease_consumed": true,
+        "causes": [
+          "inspection guard does not recognise the report menu item (MudMenuItem div) so no report can be generated",
+          "first rejected action ends the task (no second chance)",
+          "primary page action \"Testauftrag erzeugen\" is not permitted by the measurement guard; the dry run entered module pages by URL and bypassed the guard",
+          "target of rejected actions not logged"
+        ],
+        "valid_measurement": false
+      },
+      {
+        "run_id": "083896e6-f550-4ba7-a6b3-4d312ee159ce",
+        "date": "2026-10-16",
+        "suite": "0.4.1",
+        "sqbf_commit": "81e48e90cac6618be553c1b72114884683856fb6",
+        "fixture": "nsn014-ux-b2e3a4b1d45a",
+        "result": "NO-GO",
+        "classification": "INVALID_HARNESS",
+        "stages": {
+          "PASS": [
+            "PLAN"
+          ],
+          "INCONCLUSIVE": [
+            "RECEIPT"
+          ],
+          "INVALID_HARNESS": [
+            "PREPARATION"
+          ],
+          "NOT_RUN": [
+            "SIEVE",
+            "SHAPE",
+            "BOILING",
+            "SE",
+            "ASSESS",
+            "WPK",
+            "ANALYSIS",
+            "REPORT",
+            "RIGHTS"
+          ]
+        },
+        "model_requests": 51,
+        "tokens_known": {
+          "executor": 95440,
+          "reviewer": 23542,
+          "executor_requests_without_usage": 1
+        },
+        "wall_seconds": 419,
+        "database_changed": "plan samples (10), test orders of the visited samples and the sampling_plans audit stamp only; no findings of the side-effect contract",
+        "fixture_lease_consumed": true,
+        "causes": [
+          "one failed executor request (no usage in the accounting) ended in a generic handler: stage INVALID_HARNESS and suite stop (exception type was not logged)",
+          "measurement guard rejected the same-page anchor \"Zu den Modulen\" (#module-bereich)",
+          "inspection guard rejected the sample-list row \"Probe <code> auswaehlen\" (rule required aria-selected); RECEIPT ended after one attempt",
+          "executor gave up after a single rejection (page had moved between screenshot and click)"
+        ],
+        "valid_measurement": false
+      },
+      {
+        "run_id": "6c23f768-9e83-4bc1-a667-75b9f0bbfde2",
+        "date": "2026-10-16",
+        "suite": "0.4.1",
+        "sqbf_commit": "713a2736570f3ac6954bdb6b0695659bb45ff801",
+        "fixture": "nsn014-ux-76b2f16e82ec",
+        "result": "PARTIAL GO",
+        "classification": "RESOURCE_STOP (provider authorization expired after about one hour, HTTP 401)",
+        "stages": {
+          "PASS": [
+            "PLAN",
+            "RECEIPT"
+          ],
+          "FAIL": [
+            "PREPARATION (P09 false: field typed but not left, harness defect; real result: wash P08 PASS)"
+          ],
+          "INCONCLUSIVE": [
+            "SIEVE (P04, P06, P10 PASS)",
+            "SHAPE (stopped by authorization expiry)"
+          ],
+          "NOT_RUN": [
+            "BOILING",
+            "SE",
+            "ASSESS",
+            "WPK",
+            "ANALYSIS",
+            "REPORT",
+            "RIGHTS"
+          ]
+        },
+        "model_requests": 540,
+        "requests_by_actor": {
+          "executor": 513,
+          "reviewer": 27
+        },
+        "tokens_known": {
+          "executor": 1225271,
+          "reviewer": 147434,
+          "requests_without_usage": 6
+        },
+        "wall_seconds": 3603,
+        "database_changed": "plan samples (10), test orders, module entries and the sampling_plans audit stamp only; no findings of the side-effect contract",
+        "fixture_lease_consumed": true,
+        "preceding_start_attempts": [
+          {
+            "run_id": "9dacf9bd-2b2e-4c0b-85ad-c4dfbb23fcf0",
+            "requests": 0,
+            "reason": "browser authorization not confirmed within the window"
+          },
+          {
+            "run_id": "d25f754a-a6fd-44e7-9f54-73a413279a63",
+            "requests": 0,
+            "reason": "browser authorization not confirmed within the window"
+          }
+        ],
+        "causes": [
+          "ChatGPT-plan access token (no refresh by design) expired after about one hour: HTTP 401 on three consecutive requests",
+          "persisted-value FAIL for a value typed into a field that was never left (next executor response was not JSON); fixed as LAST_FIELD_NOT_COMMITTED",
+          "earlier anchor \"fix\" was wrong: <base href=\"/\"> makes \"Zu den Modulen\" leave the sample page; guard correctly blocks it (16 rejections), BLE candidate",
+          "sidebar group toggle rejected in RECEIPT; reviewer failures without exception class"
+        ],
+        "valid_measurement": "partial: PLAN, RECEIPT, wash P08, sieve P04/P06/P10"
+      }
+    ],
+    "fixture_clone": {
+      "status": "CONSUMED_BY_RUN_5 (a new fixture is needed for the next run)",
+      "created_at": "2026-10-16",
+      "fixture_id": "nsn014-ux-b2e3a4b1d45a",
+      "source_fixture_id": "nsn014-ux-536fe4e42888",
+      "method": "byte copy of the stopped, never started PostgreSQL volume; checksum 9ae39dba…",
+      "public_tables_compared": 426,
+      "changes_against_source": [
+        "workspace_products.is_active (P06)",
+        "lims_product_test_modules (51 rows replayed)",
+        "workspace_sampling_rules (37 product rules replayed)"
+      ],
+      "reference_values_changed": false,
+      "sessions": "SESSIONS_VERIFIED, one login per persona",
+      "budget_approval_recorded": false
+    },
+    "provider_probe": {
+      "tool": "suite-provider-probe",
+      "status": "PROBE_PASS",
+      "executed": "2026-10-15",
+      "model_requests_made": 2,
+      "executor": "gpt-6-luna OK",
+      "reviewer": "gpt-6.1-sol OK",
+      "valid_hours": 12,
+      "data": "generated synthetic image only",
+      "earlier_attempts": "two OAuth windows expired before any request"
+    },
+    "reviewer_policy": {
+      "consecutive_failure_limit": 3,
+      "ux_layer": "best effort; objective results never depend on it"
+    },
+    "side_effect_contract": {
+      "file": "suites/enzberg-nsn014-side-effects-v1.json",
+      "evaluator": "tools/stage_effects.py (guarded_stage in tools/regular_runner.py)",
+      "audit_only_allowances": [
+        {
+          "stage": "NSN014-PLAN",
+          "table": "sampling_plans",
+          "target": "plan_id",
+          "columns": [
+            "updated_at",
+            "updated_by"
+          ],
+          "max_rows": 1
+        }
+      ],
+      "other_protected_changes": "hard stop (INVALID_HARNESS); each stage must start from the end state of the previous one",
+      "unlisted_tables": "finding (UNEXPECTED_TABLE_WRITE / WRITE_IN_READ_ONLY_STAGE), never an abort",
+      "basis": "modelless full-table row/column diff dry run, 2026-10-15"
+    },
+    "dry_run_2026_10_15": {
+      "scope": "all twelve stages, runner order, scripted ideal executor, fresh disposable copy, real stage guard and contract",
+      "model_calls": 0,
+      "stage_results": "twelve of twelve stages passed the harness gate; no contract finding, no external change between stages",
+      "oracles": {
+        "receipt": "PASS",
+        "wash_sieve_partial_boiling_sand": "PASS",
+        "reports_and_pdfs": "PASS",
+        "calculations": "PASS",
+        "allocations": "FAIL P01 (Koch 8 mm not offered before the first saved result), P06 (shape module inactive in product configuration)",
+        "shape": "FAIL P06 (same cause)"
+      },
+      "findings_fixed": [
+        "missing product module and sampling-rule configuration (replayed)",
+        "audit tolerance scoped to one table, row and column set",
+        "decimal point is a thousands separator in de-DE (German notation enforced)",
+        "main sieve pan row mapping",
+        "derived partial-sieve values not approved inputs",
+        "report status DRAFT",
+        "PDF sample code wrapped after hyphen",
+        "lazy LIMS and probe-module rows listed in the contract",
+        "diagnostics and encoding"
+      ],
+      "position_class_for_fields_not_offered": "INCOMPLETE / APPROVED_FIELDS_NOT_PRESENT_ON_PAGE (never FAIL)",
+      "po_decision_open": "three reference values BLE does not offer with the customer configuration (completion report 16.5)"
+    },
+    "guarded_dry_run": {
+      "tool": "sqbf.cli suite-dry-run (tools/dry_run.py, tools/scripted_executor.py)",
+      "scope": "whole real suite path with the real guards; models replaced by a scripted executor and a neutral review; scratch clones only (refuses any other fixture)",
+      "date": "2026-10-16",
+      "model_calls": 0,
+      "status": "DRY_RUN_COMPLETED",
+      "stage_results": {
+        "PASS": [
+          "PLAN",
+          "RECEIPT",
+          "SIEVE",
+          "BOILING",
+          "SE",
+          "ASSESS",
+          "WPK",
+          "ANALYSIS",
+          "REPORT",
+          "RIGHTS"
+        ],
+        "INCONCLUSIVE": [
+          "PREPARATION (8/10 positions PASS)",
+          "SHAPE (4/5 positions PASS)"
+        ]
+      },
+      "inconclusive_reason": "APPROVED_FIELDS_NOT_PRESENT_ON_PAGE for P01 Koch 8 mm and P06 Kornform (PO option A, 2026-10-16: leave as is)",
+      "required_before_every_live_run": true,
+      "fault_replay": {
+        "option": "suite-dry-run --inject-executor-faults \"N:raise|not_object,...\"",
+        "result": "DRY_RUN_COMPLETED with three injected executor faults: only the affected positions INCOMPLETE (EXECUTOR_REQUEST_FAILED), all twelve stages ran"
+      }
+    },
+    "executor_failure_policy": {
+      "single_failed_request": "ends only the task in progress as INCONCLUSIVE (EXECUTOR_REQUEST_FAILED); no retry; no reviewer request afterwards",
+      "consecutive_failures_limit": 3,
+      "limit_result": "suite stop INCONCLUSIVE (EXECUTOR_UNAVAILABLE_AFTER_REPEATED_FAILURES)",
+      "harness_failure_logging": "exception class name only, never the message"
+    },
+    "derived_value_policy": {
+      "rule": "A deviation of a value BLE derives from earlier inputs (partial-sieve preparation mass, partial series) counts only when its inputs were persisted as approved (wash without deviation, allocation of target process Siebanalyse present); otherwise INCOMPLETE / DERIVED_VALUE_UPSTREAM_INCOMPLETE, never FAIL",
+      "missing_evidence": "treated as a gap"
+    },
+    "provider_authorization": {
+      "access_token_lifetime": "about one hour (run 5 stopped at 3603 s with HTTP 401)",
+      "refresh": "none by design (sqbf/plan_login.py: no refresh storage); a complete suite needs about 850-1000 requests and two to three hours",
+      "decision_pending": "RESOLVED 2026-10-17: PO chose a kept, encrypted, automatically renewed login (opt-in, DPAPI, current user, max 7 days); the first --keep-signed-in must still verify that the provider issues a refresh token and accepts the refresh grant",
+      "stop_rule": "HTTP 401/403 on an executor request stops the suite at once as INCONCLUSIVE (PROVIDER_AUTHORIZATION_EXPIRED)",
+      "start": "with a kept login run-suite --execute needs no browser confirmation; without one the PO must confirm within about 300 s",
+      "kept_login": {
+        "module": "sqbf/plan_credentials.py",
+        "commands": [
+          "--keep-signed-in",
+          "--status",
+          "--check",
+          "--forget"
+        ],
+        "default_max_age_days": 7,
+        "verified_with_provider": false,
+        "note": "unit-tested with a fake token endpoint; real provider behaviour is checked by the first --keep-signed-in"
+      }
+    }
+  }
+}

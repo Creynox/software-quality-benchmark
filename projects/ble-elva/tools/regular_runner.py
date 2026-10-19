@@ -572,6 +572,7 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         # Credentials/tokens never enter persisted manifests or reports.
         (evidence.path/'run.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
         (evidence.path/'completion-report.md').write_text(completion_text(manifest,records),encoding='utf-8')
+        (evidence.path/'kurzfassung.md').write_text('# NSN014 Kurzfassung\n\n'+'\n'.join(kurzfassung(manifest,records)[1:])+'\n',encoding='utf-8')
         index_run(output,evidence.path)
     return {'status':'SUITE_RUN_RECORDED','run_id':manifest['run_id'],'verdict':manifest['verdict'],
             'technical_status':manifest['technical_status'],'path':str(evidence.path)}
@@ -692,6 +693,78 @@ def effort_rows(records):
     return rows
 
 
+STAGE_PLAIN={'NSN014-PLAN':'Planproben anlegen','NSN014-RECEIPT':'Probeneingang prüfen','NSN014-PREPARATION':'Abschlämmung und Entnahmen erfassen',
+             'NSN014-SIEVE':'Siebanalyse erfassen','NSN014-SHAPE':'Kornform erfassen','NSN014-BOILING':'Kochversuch erfassen','NSN014-SE':'Sandäquivalent erfassen',
+             'NSN014-ASSESS':'Bewertungsansicht prüfen','NSN014-WPK':'Plan gegen Fertiggestelltes prüfen','NSN014-ANALYSIS':'Analytik prüfen',
+             'NSN014-REPORT':'Prüfberichte erzeugen','NSN014-RIGHTS':'Rechte der Werksleitung prüfen'}
+VERDICT_PLAIN={'GO':'bestanden','PARTIAL GO':'teilweise bestanden: nicht alles konnte entschieden werden','NO-GO':'nicht gültig oder nicht bestanden'}
+ORIGIN_PLAIN=(('MODELL/SUITE','Modell und Test-Suite gemeinsam (eine Aktion wurde vorher abgelehnt)'),('MODELL','Modell (hat aufgegeben, nicht gespeichert oder ein Feld nicht übernommen)'),
+              ('SUITE','Test-Suite (Aktion vom Guard abgelehnt)'),('PROVIDER','Provider (Anfrage ausgefallen)'),('VORSTUFE','fehlende Voraussetzung oder Modul nicht erreicht'),
+              ('BLE-ABWEICHUNG','BLE (objektiv belegt)'))
+
+
+STOP_PLAIN={'PROVIDER_AUTHORIZATION_EXPIRED':'die Anmeldung beim Provider lief ab','EXECUTOR_UNAVAILABLE_AFTER_REPEATED_FAILURES':'der Provider fiel wiederholt aus (zuletzt: Anmeldung abgelaufen)',
+            'SUITE_TIME_CEILING':'die Zeitgrenze wurde erreicht','SUITE_CALL_CEILING':'die Grenze für Modellanfragen wurde erreicht'}
+
+
+def _duration(seconds):
+    minutes=int(round(float(seconds)/60))
+    return (f'{minutes//60} Std. {minutes%60} Min.' if minutes>=60 else f'{minutes} Min.')
+
+
+def kurzfassung(manifest,records):
+    """The report in plain words and bullet points for the PO: what ran, what passed, what is open and why. No codes, no tables.
+
+    The detailed report below it is written for the review agent; this part answers "did it work?" on one screen."""
+    def text(value):
+        value=str(value).replace('\\','\\\\').replace('\n',' ').replace('\r',' ').replace('`',"'")
+        for char in ('[',']','!','*','_','#','|'):value=value.replace(char,'\\'+char)
+        return value.replace('<','&lt;').replace('>','&gt;')
+    matrix=manifest.get('case_matrix') or case_matrix(records)
+    counts={}
+    for row in matrix:counts[row['objective_status']]=counts.get(row['objective_status'],0)+1
+    passed=[r for r in matrix if r['objective_status']=='PASS']
+    open_=[r for r in matrix if r['objective_status'] in ('INCONCLUSIVE','BLOCKED')]
+    failed=[r for r in matrix if r['objective_status']=='FAIL']
+    invalid=[r for r in matrix if r['objective_status']=='INVALID_HARNESS']
+    not_run=[r for r in matrix if r['objective_status']=='NOT_RUN']
+    name=lambda row:STAGE_PLAIN.get(row['case_id'],row['case_id'])
+    accounting=manifest.get('accounting',{})
+    verdict=VERDICT_PLAIN.get(manifest.get('verdict'),str(manifest.get('verdict')))
+    lines=['## Kurzfassung in einfachen Worten','',f"**Gesamtergebnis: {text(verdict)}.**",'']
+    if invalid:lines.append(f"- **Der Lauf ist ungültig.** Ein Fehler der Test-Suite hat ihn gestört ({text(', '.join(name(r) for r in invalid))}); das sagt nichts über BLE.")
+    elif not_run:lines.append(f"- **Der Lauf wurde vorzeitig beendet** ({text(STOP_PLAIN.get(manifest.get('stop_reason'),manifest.get('stop_reason') or manifest.get('technical_status')))}); {len(not_run)} Stufen liefen nicht.")
+    else:lines.append(f"- Der Lauf ist **vollständig durchgelaufen**: alle {len(matrix)} Stufen wurden ausgeführt.")
+    lines.append(f"- Ergebnis der Stufen: **{len(passed)} bestanden**, {len(open_)} nicht entschieden, {len(failed)} durchgefallen"+(f", {len(not_run)} nicht gelaufen" if not_run else '')+'.')
+    lines.append('- **Fehler in BLE:** '+('keine objektiv belegt.' if not failed else f"{len(failed)} Stufe(n) mit belegter Abweichung ({text(', '.join(name(r) for r in failed))}); fachlich zu bestätigen."))
+    if passed:lines.append('- **Bestanden:** '+text('; '.join(name(r) for r in passed))+'.')
+    if open_:lines.append('- **Nicht entschieden:** '+text('; '.join(name(r) for r in open_))+'.')
+    positions=[(row['case_id'],p) for row in matrix for p in row['position_results']]
+    if positions:
+        decided=sum(1 for _,p in positions if p['result']=='PASS')
+        lines.append(f"- **Positionen** (einzelne Proben je Modul oder Bericht): {decided} von {len(positions)} entschieden und bestanden.")
+    rows=effort_rows(records)
+    if rows:
+        origins={}
+        for row in rows:
+            if row['origin']!='—':
+                key=next((label for prefix,label in ORIGIN_PLAIN if row['origin'].startswith(prefix)),'unklar')
+                origins[key]=origins.get(key,0)+1
+        if origins:
+            lines.append('- **Warum Positionen offen blieben** (je Modulaufgabe): '+text('; '.join(f'{n}× {k}' for k,n in sorted(origins.items(),key=lambda x:-x[1])))+'.')
+        saves={}
+        for row in rows:saves[row['save']]=saves.get(row['save'],0)+1
+        entered=saves.get('SAVED',0)+saves.get('NOT_SAVED_AFTER_ENTRY',0)
+        if entered:
+            lines.append(f"- **Speichern:** In {entered} Modulen wurden alle Werte eingegeben; in {saves.get('NOT_SAVED_AFTER_ENTRY',0)} davon wurde **nicht gespeichert** (Schaltfläche nicht gefunden).")
+        lines.append(f"- **Bedienaufwand:** {text(sum(r['effort']['actions'] for r in rows))} Aktionen, {text(sum(r['effort']['scrolls'] for r in rows))} Scrolls, {text(sum(r['effort']['rejected'] for r in rows))} abgelehnte Klicks (Details im Abschnitt 3a).")
+    tokens=sum(v['tokens']['total_tokens']['known_sum'] for v in accounting.get('actors',{}).values()) if accounting.get('actors') else None
+    lines.append(f"- **Aufwand des Laufs:** {text(manifest.get('model_calls',0))} Modellanfragen, {text(_duration(accounting.get('elapsed_seconds',0)))}"+(f", rund {format(tokens/1e6,'.1f').replace('.',',')} Mio. Tokens" if tokens else '')+'.')
+    lines+=['- Hinweis: Beobachtungen des Reviewers zu BLE sind **unbestätigt** und kein Testergebnis; sie stehen in Abschnitt 4 und im Dokument der unbestätigten Beobachtungen.','',
+            '*Der ausführliche Bericht darunter ist für den Review-Agenten und für Nachprüfungen gedacht.*','']
+    return lines
+
+
 def completion_text(manifest,records):
     def text(value):
         value=str(value).replace('\\','\\\\').replace('\n',' ').replace('\r',' ').replace('`',"'")
@@ -711,6 +784,7 @@ def completion_text(manifest,records):
         f"- Provider-Vorabprüfung: {text(manifest.get('provider_probe',{}).get('status','NOT_PROBED'))}",
         f"- Executor-Anweisung und Aufgabenwortlaut (SHA256): {text(manifest.get('executor_instructions_sha256','nicht erfasst'))}; Läufe mit anderem Wortlaut sind nicht direkt vergleichbar",
         f"- Klickregeln der Guards (SHA256): {text(manifest.get('guard_rules_sha256','nicht erfasst'))}; Läufe mit anderen Regeln sind ebenfalls nicht direkt vergleichbar",'']
+    lines+=kurzfassung(manifest,records)
     if manifest.get('final_oracles'):
         lines+=['Abschließende unabhängige Oracles: '+text({key:value.get('status') if isinstance(value,dict) else value
                                                        for key,value in manifest['final_oracles'].items()}),'']

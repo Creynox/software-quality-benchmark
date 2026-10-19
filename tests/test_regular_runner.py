@@ -279,6 +279,39 @@ class RegularRunnerTests(unittest.TestCase):
         with patch.object(module,'INSPECTION_GUARD_RULES',module.INSPECTION_GUARD_RULES+' // x'):
             self.assertNotEqual(module.guard_rules_hash(),first)
 
+    def test_the_summary_is_plain_language_with_bullet_points_and_sits_on_top_of_the_report(self):
+        # The PO asked for a readable summary: did it work, what passed, what is open and why. No codes, no tables.
+        effort=lambda scrolls,rejected:{'actions':20,'scrolls':scrolls,'clicks':5,'typed':4,'keys':2,'waits':1,'rejected':rejected,'scrolls_after_last_entry':1}
+        records=[{'case_id':'NSN014-PLAN','persona':'p','result':'PASS','objective_status':'PASS','technical_gate':'PASS','oracle_gate':'PASS','ux_verdict':'PASS'},
+                 {'case_id':'NSN014-SIEVE','persona':'p','result':'INCONCLUSIVE','objective_status':'INCONCLUSIVE','technical_gate':'PASS','oracle_gate':'PASS','ux_verdict':'INCONCLUSIVE',
+                  'position_results':[{'position_id':'P01','result':'INCOMPLETE','class':'EXECUTOR_REPORTED_BLOCKED'},{'position_id':'P02','result':'PASS','class':None}],
+                  'positions':[{'position_id':'P01','kind':'sieve','status':'BLOCKED','effort':effort(9,0),'save_status':'NOT_SAVED_AFTER_ENTRY','module_reached':True},
+                               {'position_id':'P02','kind':'sieve','status':'DONE','effort':effort(1,1),'save_status':'SAVED','module_reached':True}]},
+                 {'case_id':'NSN014-RIGHTS','persona':'p','result':'NOT_RUN','objective_status':'NOT_RUN','reason':'UPSTREAM_CRITICAL_STOP'}]
+        manifest={'run_id':'r','verdict':'PARTIAL GO','technical_status':'RESOURCE_STOP','functional_status':'INCOMPLETE','scenario_id':'ENZBERG-NSN014','scenario_version':'0.4.1',
+                  'scoring_version':module.SCORING_VERSION,'rubric_version':module.RUBRIC_VERSION,'resource_policy':suite()['resource_policy'],'budget_approval':{'status':'BASE_LIMITS'},
+                  'sqbf_commit':'c','software_version':'b','executor_model':'e','analyst_model':'a','suite_sha256':'s','dataset_sha256':'d','model_calls':120,
+                  'stop_reason':'PROVIDER_AUTHORIZATION_EXPIRED',
+                  'accounting':{'elapsed_seconds':3660,'actors':{'executor':{'model_calls':100,'tokens':{'total_tokens':{'known_sum':1500000,'unknown_calls':0,'complete_total':1500000}}},
+                                                                 'reviewer':{'model_calls':20,'tokens':{'total_tokens':{'known_sum':500000,'unknown_calls':0,'complete_total':500000}}}}}}
+        lines=module.kurzfassung(manifest,records);text='\n'.join(lines)
+        self.assertEqual(lines[0],'## Kurzfassung in einfachen Worten')
+        self.assertIn('teilweise bestanden',text);self.assertIn('vorzeitig beendet',text);self.assertIn('die Anmeldung beim Provider lief ab',text)
+        self.assertIn('**1 bestanden**, 1 nicht entschieden, 0 durchgefallen, 1 nicht gelaufen',text)
+        self.assertIn('Planproben anlegen',text);self.assertIn('Siebanalyse erfassen',text);self.assertIn('keine objektiv belegt',text)
+        self.assertIn('Positionen** (einzelne Proben je Modul oder Bericht): 1 von 2',text)
+        self.assertIn('1× Modell',text);self.assertIn('In 2 Modulen wurden alle Werte eingegeben; in 1 davon wurde **nicht gespeichert**',text)
+        self.assertIn('120 Modellanfragen, 1 Std. 1 Min., rund 2,0 Mio. Tokens',text);self.assertIn('unbestätigt',text)
+        for code in ('NOT\\_SAVED','EXECUTOR\\_REPORTED','NSN014','AUTHORIZATION','PERSISTED'):self.assertNotIn(code,text)
+        full=module.completion_text(manifest,records)
+        self.assertLess(full.index('## Kurzfassung in einfachen Worten'),full.index('## Stufenmatrix'))
+        # An invalid run says so in the first lines and a failed stage names its stage.
+        bad=[{'case_id':'NSN014-WPK','persona':'p','result':'INVALID','objective_status':'INVALID_HARNESS','technical_gate':'INVALID'},
+             {'case_id':'NSN014-SE','persona':'p','result':'FAIL','objective_status':'FAIL','fail_classes':['PERSISTED_VALUE_DEVIATION'],'position_results':[]}]
+        text=''.join(module.kurzfassung(dict(manifest,verdict='NO-GO'),bad))
+        self.assertIn('nicht gültig oder nicht bestanden',text);self.assertIn('Der Lauf ist ungültig',text);self.assertIn('Plan gegen Fertiggestelltes prüfen',text)
+        self.assertIn('belegter Abweichung (Sandäquivalent erfassen)',text)
+
     def test_cli_default_is_model_free_and_requires_explicit_execute_flag(self):
         s=suite()
         with patch.object(module,'load_inputs',return_value=(s,{},fixture(),{},{})), \

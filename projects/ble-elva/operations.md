@@ -204,6 +204,10 @@ Erneuerung abgelehnt, stoppt die Suite sofort (`PROVIDER_AUTHORIZATION_EXPIRED`)
 - `suite-sessions` erneuert je alter Sitzungsdatei höchstens einmal (Marker `login-attempt-<persona>-<sha>.json` im Seed-Ordner). Nie zweimal aus denselben abgelaufenen Sitzungen seeden; immer aus den neuesten, noch gültigen Sitzungen (BLE-Sitzungen verfielen nach etwa fünf Stunden), notfalls ein Seed-Manifest von Hand aus dem letzten `fixture-prepared-sessions.json` bauen.
 - Reihenfolge vor einem Lauf: Trockenlauf sauber und mit `--inject-executor-faults`, neue Fixture (`--purpose fixture`), Provider-Probe (12 h gültig), Readiness, Freigabe des PO, Start.
 
+## NSN014: Berichte lesen
+
+Jeder Lauf-Ordner (`D:/Temp/sqbf-regular-runs/<Lauf-ID>/`) enthält **`kurzfassung.md`**: eine Seite in einfachen Worten mit Stichpunkten (hat es funktioniert, was bestanden, was offen und warum, Speichern, Aufwand). Dieselbe Kurzfassung steht ganz oben im ausführlichen `completion-report.md`, der für den Review-Agenten und für Nachprüfungen gedacht ist (Stufentabelle, Abschnitt 3a mit Ursprung und Bedienaufwand je Position, Reviewer-Befunde). Die fortlaufende Dokumentation über alle Läufe steht in `docs/nsn014-v04-completion-report.md` (ein Abschnitt je Lauf).
+
 ## Evidenz und Aufbewahrung
 
 Private lokale Run-Ordner: PNGs mit SHA-256, Events, Usage, gemessene Modell-/Runnerzeit,

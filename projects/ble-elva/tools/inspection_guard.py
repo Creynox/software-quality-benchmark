@@ -20,6 +20,13 @@ def contract(fixture,paths,*,report=False,plan_samples=False):
 CLASSIFY=r"""
 const allowed=p=>config.paths.includes(p)||(config.report&&/^\/reports\/[0-9a-f-]{36}$/.test(p));
 const norm=e=>(e?.innerText||'').replace(/\s+/g,' ').trim();
+// Text and layout that does nothing when clicked (PO decision 2026-10-19, live run b7a34e94: about 14 harmless text clicks were rejected and tasks ended
+// on them). Passive means: no interactive element around it and no pointer cursor; the cursor is inherited, so a clickable container shows through.
+// A card title in BLE has cursor auto and a click on it does nothing (checked on a scratch clone, 19.10.2026).
+const INTERACTIVE='a,button,input,select,textarea,summary,label,[role="button"],[role="link"],[role="tab"],[role="menuitem"],[role="option"],[role="checkbox"],'
+  +'[role="switch"],[role="combobox"],[role="listbox"],[tabindex]:not([tabindex="-1"]),[onclick],.mud-button-root,.mud-chip,.mud-list-item,.mud-menu-item,.mud-select,'
+  +'.mud-expand-panel-header,.mud-nav-link,.mud-icon-button,.mud-tab,.mud-table-sort-label,.mud-input-control,.sa-kpi-editable';
+const passive=e=>{if(!e||e.nodeType!==1||e.closest(INTERACTIVE))return false;try{return getComputedStyle(e).cursor!=='pointer';}catch(_){return false;}};
 const text=s=>(s||'').replace(/\s+/g,' ').trim();
 // Purely presentational controls of BLE's list, plan and analytics views: quick filters, view switches, sorting, time ranges,
 // sidebar toggles, KPI tiles and the sample code that opens a sample. They change what is shown, never a record (live run 413f7abe: the
@@ -47,12 +54,15 @@ const classify=e=>{
  if(b?.getAttribute('title')==='Probe oeffnen'&&location.pathname.startsWith('/beprobung/'))return {kind:'read_control'};
  if(location.pathname==='/samples'&&['Detail anzeigen','Probe vollständig öffnen'].includes(norm(b)))return {kind:'read_control'};
  if(b?.getAttribute('aria-label')==='Weitere Aktionen')return {kind:'read_control'};
+ // Closing the detail panel of the plan only hides it (live run b7a34e94: the rejection ended RIGHTS).
+ if(b&&!b.closest('form')&&/^Detailpanel schlie(ß|ss)en$/.test(text(b.getAttribute('aria-label')||b.innerText)))return {kind:'read_control'};
  if(config.report){
    // BLE's menu entries are div.mud-menu-item (MudMenuItem), not buttons: the first version never recognised "Prüfbericht".
    const item=e?.closest('button,.mud-list-item,.mud-menu-item,[role="menuitem"]');
    if(norm(item)==='Prüfbericht'&&config.paths.includes(location.pathname))return {kind:'generate',scope:location.pathname};
    if(norm(item)==='PDF herunterladen'&&/^\/reports\/[0-9a-f-]{36}$/.test(location.pathname))return {kind:'download',scope:location.pathname};
  }
+ if(passive(e))return {kind:'read_control'};
  return {kind:'blocked'};
 };
 """

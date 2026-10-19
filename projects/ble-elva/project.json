@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "RUN_7_PARTIAL_GO_GUARD_EXPANSION_DECISION_OPEN_NEW_FIXTURE_AND_APPROVAL_REQUIRED",
+    "status": "RUN_7_DONE_GUARD_EXPANDED_DRY_RUNS_COMPLETED_NEW_FIXTURE_READY_NEW_APPROVAL_REQUIRED",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -456,7 +456,7 @@
       }
     ],
     "fixture_clone": {
-      "status": "CONSUMED_BY_RUN_7 (a new fixture is needed for the next run)",
+      "status": "PREPARED_UNUSED_NO_LEASE_NO_BUDGET_APPROVAL (new fixture after run 7; see the PR and Issue #21)",
       "created_at": "2026-10-16",
       "fixture_id": "nsn014-ux-b2e3a4b1d45a",
       "source_fixture_id": "nsn014-ux-536fe4e42888",
@@ -616,14 +616,14 @@
       "further": 5,
       "status": "all UNCONFIRMED, no issue filed; verify on a scratch clone before any BLE issue"
     },
-    "pending_po_decision": {
-      "topic": "guard expansion for suite-caused rejections (report section 23.6)",
-      "options": [
-        "a passive text clicks",
-        "b module card click",
-        "c boiling fraction selector",
-        "d save in the allocation task (needs a scratch experiment first)"
-      ]
+    "guard_policy_2026_10_19": {
+      "decision": "PO: implement a, b, c and check d first; d verified on a scratch clone and implemented",
+      "passive_clicks": "allowed when no interactive element surrounds the target and the cursor is not pointer (measurement stages: passive; read stages: read_control)",
+      "boiling_fraction_selector": "select and its popover option allowed only in the boiling task (writes no table)",
+      "allocation_task_save": "save allowed once (allocations persist on blur; save changed only workspace_sampling_info)",
+      "detail_panel_close": "read-only in the inspection stages",
+      "comparability": "guard_rules_sha256 in the run manifest; runs with different rules are not directly comparable",
+      "residual_risk": "Blazor does not mark event handlers in the DOM; a handler on an element without pointer cursor would not be detected (not found on 12 real pages)"
     }
   }
 }

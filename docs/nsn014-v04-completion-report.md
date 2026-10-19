@@ -14,6 +14,8 @@ Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-
 
 **Nachtrag Lauf 3 (Abschnitt 17):** `413f7abe…`, 16.10.2026: PARTIAL GO, alle zwölf Stufen durchgelaufen, PLAN und WPK PASS, zehn Stufen INCONCLUSIVE durch einen zu engen Guard (Menüeintrag „Prüfbericht“ nicht erkannt, Ablehnung beendet die Aufgabe, Hauptaktion „Testauftrag erzeugen“ nicht erlaubt). 124 Anfragen, 271.478 Tokens, 24 min. Keine Messung erfasst.
 
+**Nachtrag Guard-Erweiterung (Abschnitt 24):** Auf Entscheidung des PO („a, b, c umsetzen, d vorab prüfen“): Klicks auf rein darstellende Elemente (ohne interaktives Element und ohne Zeigercursor), Fraktionsauswahl im Kochversuch, Speichern einmal in der Zuteilungsaufgabe, „Detailpanel schließen“. Experimente auf einer Wegwerfkopie: Kartentitel nicht klickbar (b ist ein Fall von a), Fraktionsauswahl schreibt nichts, Entnahmen werden beim Verlassen des Feldes gespeichert und „Speichern“ ändert dabei nur `workspace_sampling_info`. An zwölf echten Seiten geprüft, 486 Tests OK, Trockenläufe sauber. Neu: `guard_rules_sha256` im Manifest.
+
 **Nachtrag Lauf 7 (Abschnitt 23):** Lauf 7 (b7a34e94, 19.10.2026, mit neutralem Hinweis, BLE-Wortlaut und gemessenem Bedienaufwand) ist `PARTIAL GO / COMPLETED`: sechs Stufen PASS (PLAN, RECEIPT, SE, ASSESS, WPK, ANALYSIS), sechs INCONCLUSIVE, keine FAIL/INVALID/BLOCKED, keine belegte BLE-Abweichung; 784 Anfragen, 5.471 s, rund 2,02 Mio. Tokens. In 7 von 15 vollständig eingegebenen Modulen wurde nicht gespeichert; ein Teil der Lücken sind Ablehnungen des Guards (SHAPE: Modul nie erreicht, Speichern in der Zuteilungsaufgabe, Fraktionsauswahl, harmlose Textklicks). Vorschlag zur Erweiterung des Guards liegt beim PO (Abschnitt 23.6).
 
 **Nachtrag Anpassungen nach Lauf 6 (Abschnitt 22):** Auf Entscheidung des PO: neutraler Hinweis zur Speicherschaltfläche (ohne Position oder Klickpfad), Aufgabenwortlaut in BLEs Bezeichnungen, Messung von Suchaufwand, Scrolls, abgelehnten Klicks und Speicherstatus (Abschnitt 3a des Berichts, Ursprung MODELL/SUITE/PROVIDER/VORSTUFE/BLE-ABWEICHUNG), fünf Reviewer-Auffälligkeiten getrennt als unbestätigte Beobachtungen (`docs/nsn014-ble-observations.md`). 480 Tests OK, Trockenläufe sauber, neue Fixture bereit. Lauf 7 braucht die ausdrückliche Freigabe des PO und ist mit Lauf 6 nicht direkt vergleichbar.
@@ -979,3 +981,42 @@ Mit neutralem Hinweis und BLE-Wortlaut ist die Zahl entschiedener Messpositionen
 - Ein einzelner Lauf je Wortlaut: Die Unterschiede zu Lauf 6 liegen im Rahmen der Streuung des Modells.
 - Die Spalte „Ursprung“ ordnet nach Klasse und Messwerten zu; MODELL und SUITE sind bei Ablehnungen nicht immer scharf zu trennen und werden dann gemeinsam ausgewiesen.
 - Dass die Suche nach „Speichern“ erfolglos blieb, zeigt nicht, dass die Schaltfläche nicht erreichbar war.
+
+## 24. Erweiterung des Guards nach Entscheidung des PO (19.10.2026)
+
+**Entscheidung des PO:** „a, b, c umsetzen und d vorab prüfen“ (Abschnitt 23.6). Ziel: Verluste durch Ablehnungen der Test-Suite beheben, die ein Laborant nicht hätte, ohne die Sicherheitsgrenze (kein Freigeben, Signieren, Löschen, Versenden, keine fremden Seiten) zu lockern. Es gab keine Modellaufrufe und keinen weiteren Live-Lauf.
+
+### 24.1 Experimente auf einer Wegwerfkopie (Wegwerf-Klon, keine Fixture eines Laufs)
+
+| Frage | Beobachtung |
+|---|---|
+| (b) Reagiert die Modulkarte auf einen Klick? | Der Titel „Kornform“ und die Kartenfläche haben den Cursor `auto`, der Klick bewirkt nichts (Adresse und Seite unverändert). Nur die Schaltfläche „Erfassen“ (Link, Cursor `pointer`) öffnet das Modul. **(b) ist damit ein Fall von (a).** |
+| (c) „Fraktion / Entnahme“ im Kochversuch | Erscheint, sobald für die Probe eine Entnahme „Koch 8 mm“ existiert (ohne Entnahme gibt es das Feld nicht). Auswahlfeld mit einer Option „8 mm (Kochen) (8 mm)“. **Die Auswahl änderte keine Tabelle.** |
+| (d) Werden Entnahmen beim Verlassen des Feldes gespeichert? | **Ja.** Wert getippt, Feld mit Tab verlassen: geändert wurde nur `workspace_sampling_info`, der Wert war nach dem Neuladen ohne Speichern vorhanden. |
+| (d) Was schreibt „Speichern“ in der Siebanalyse bei leerem Siebentwurf und einem geänderten, nicht verlassenen Entnahmewert? | **Nur `workspace_sampling_info`** (dieselbe, schon erlaubte Tabelle); der geänderte Wert war danach persistiert (Speichern verlässt das Feld). Der Entwurf selbst entsteht schon vorher (`lims_sieblinie_ergebnis`, `lims_sieblinie_punkt`). |
+
+### 24.2 Umgesetzte Regeln
+
+1. **Rein darstellende Elemente (a).** Ein Klick auf Text, Überschrift, Absatz oder eine Fläche gilt als `passive` (Messstufen) bzw. lesend (Lesestufen), wenn **kein interaktives Element** darum liegt (Link, Schaltfläche, Eingabe, Auswahl, Beschriftung, Rolle, Tab-Index, `onclick`, MudBlazor-Chips, Listeneinträge, Menüeinträge, Auswahlfelder, Expand-Köpfe, Nav-Links, Icon-Buttons, Tabs, Sortierköpfe, Eingabefelder, Einwaage-Box) und der **Zeigercursor fehlt** (der Cursor wird vererbt, ein anklickbarer Container scheint also durch). Das gilt auch auf der Probenseite selbst, nicht nur auf Modulseiten. Alles andere bleibt gesperrt.
+2. **Kochversuch: Fraktionsauswahl (c).** Nur in der Kochversuch-Aufgabe darf das Auswahlfeld „Fraktion / Entnahme“ geöffnet und eine Option in dessen Popover gewählt werden. In allen anderen Aufgaben bleibt beides gesperrt.
+3. **Zuteilungsaufgabe: Speichern (d).** „Speichern“ ist wie in jeder Modulaufgabe einmal erlaubt (Sperre je Browserkontext); der Speicherstatus der Zuteilung bleibt `NOT_REQUIRED`.
+4. **RIGHTS:** „Detailpanel schließen“ ist lesend (blendet das Panel nur aus).
+5. Unverändert gesperrt: Freigeben, Signieren, Löschen, Archivieren, Versenden, „Anforderungen anlegen“, Menüeinträge außer „Prüfbericht“ und „PDF herunterladen“, Seiten außerhalb des Vertrags, jede Tastatureingabe außer in freigegebenen Feldern, jeder Klick auf Elemente mit Zeigercursor oder Klickrolle.
+
+**Prüfung der Regel (a) an den echten Seiten:** Ich habe alle Div-, Span-, Absatz- und Tabellenelemente mit aktionsähnlichem Text („speichern“, „löschen“, „freigeben“, „anlegen“, „starten“, „öffnen“, „erfassen“ …) auf zwölf echten BLE-Seiten (Probe, alle sechs Modulseiten, Probenliste, Plan, WPK, Analytik, Start) daraufhin durchsucht, ob die Regel sie durchlassen würde: Es blieben nur Hinweis- und Beschreibungstexte, Beschriftungen und Wrapper um Schaltflächen („Zur Probe / Speichern“, „Wiederholung hinzufügen“). **Kein Element mit Handler und ohne Zeigercursor gefunden.** Das Restrisiko: Blazor markiert Ereignishandler nicht im DOM (die `_bl_`-Attribute sind Elementreferenzen), ein Handler ohne Zeigercursor wäre also nicht erkennbar. Dagegen stehen der Seiteneffekt-Vertrag je Stufe (Schreibzugriffe außerhalb des Vertrags sind Befunde), die unabhängigen Oracles und der Umstand, dass jede Schreibaktion in BLE eine Schaltfläche ist.
+
+**Echtes Verhalten bestätigt:** Auf den echten Seiten klassifiziert der Guard den Kartentitel „Kornform“ als `passive`, den Link „Erfassen“ als Navigation, „Siebanalyse öffnen“ und „Zu den Modulen“ weiter als gesperrt, „Speichern“ in der Zuteilungsaufgabe als Speichern, die Einwaage-Box und ihre Beschriftung als Feld, die Fraktionsauswahl und ihre Option nur in der Kochversuch-Aufgabe als Auswahl.
+
+### 24.3 Vergleichbarkeit
+
+Die Klickregeln gehören jetzt wie der Wortlaut zu dem, was Läufe unterscheidet: Lauf-Manifest und Bericht tragen `guard_rules_sha256`. Lauf 8 ist mit Lauf 7 nicht direkt vergleichbar: Lauf 7 lief mit dem alten Regelsatz (Hinweis und Wortlaut waren dieselben).
+
+### 24.4 Prüfung
+
+**486 Tests OK** (vorher 480): neu `passive`-Regel im echten Chromium (durchgelassen und gesperrt, Klick erreicht die Seite), Kochversuch-Auswahl nur in der Kochversuch-Aufgabe, Speichern in der Zuteilungsaufgabe (einmal, nichts sonst), Detailpanel schließen, Hash der Klickregeln. Zwei modellfreie Trockenläufe auf frischen Wegwerfkopien mit den neuen Regeln (0 Modellaufrufe): **sauber** (1.231 skriptierte Aktionen) und **mit drei eingespielten Providerfehlern** jeweils `DRY_RUN_COMPLETED`, unverändert zum Stand vor der Erweiterung; keine abgelehnte skriptierte Aktion, kein Vertragsbefund. Die neue Fixture ist vorbereitet (ohne Freigabe und Lease).
+
+### 24.5 Grenzen
+
+- Die Regel (a) ist eine Heuristik (Cursor und Elementtyp). Sie ist an den echten Seiten geprüft, aber nicht beweisbar vollständig.
+- Dass ein Modell ein Feld jetzt durch Klick auf Text „verlassen“ kann, ändert, wann Werte persistiert werden; das ist gewollt (so verhält sich ein Laborant), macht aber Lauf 8 mit Lauf 7 nicht vergleichbar.
+- Die Fraktionsauswahl wurde nur mit einer Option geprüft (Probe mit einer Koch-Entnahme).

@@ -270,6 +270,15 @@ class RegularRunnerTests(unittest.TestCase):
         with patch.object(module,'MODULE_TITLES',dict(module.MODULE_TITLES,wash='anders')):
             self.assertNotEqual(module.instructions_hash(),first)
 
+    def test_the_guard_rule_hash_changes_with_the_rules(self):
+        first=module.guard_rules_hash()
+        self.assertRegex(first,r'^[0-9a-f]{64}$');self.assertEqual(first,module.guard_rules_hash())
+        from unittest.mock import patch
+        with patch.object(module,'MEASUREMENT_GUARD_RULES',module.MEASUREMENT_GUARD_RULES+' // x'):
+            self.assertNotEqual(module.guard_rules_hash(),first)
+        with patch.object(module,'INSPECTION_GUARD_RULES',module.INSPECTION_GUARD_RULES+' // x'):
+            self.assertNotEqual(module.guard_rules_hash(),first)
+
     def test_cli_default_is_model_free_and_requires_explicit_execute_flag(self):
         s=suite()
         with patch.object(module,'load_inputs',return_value=(s,{},fixture(),{},{})), \

@@ -123,9 +123,80 @@ class MeasurementGuardTests(unittest.TestCase):
                   return classify(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}""".replace('__C__',module.CLASSIFY),{'config':c,'selector':selector})
             self.assertEqual(state('#box'),{'kind':'field','field':'main_input'})
             self.assertEqual(state('#lbl'),{'kind':'field','field':'main_input'})
-            self.assertEqual(state('#readonly')['kind'],'blocked')
+            self.assertEqual(state('#readonly')['kind'],'passive')  # a read-only box is only text
             self.assertEqual(state('#other')['kind'],'blocked')  # an editable box that is not an approved field
             context.close();browser.close()
+
+    def kind_of(self,kind,html,selector,*,path_of='path'):
+        """Classification of the element a click at the centre of `selector` would hit, in real Chromium with the real guard script."""
+        from playwright.sync_api import sync_playwright
+        c=self.contract(kind)
+        with sync_playwright() as p:
+            browser=p.chromium.launch();context=browser.new_context(viewport={'width':1280,'height':800});context.add_init_script(module.event_guard(c))
+            context.route(c['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(c['origin']+c[path_of])
+            result=page.evaluate("""({config,selector})=>{__C__const e=document.querySelector(selector);e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();
+              return classify(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}""".replace('__C__',module.CLASSIFY),{'config':c,'selector':selector})
+            context.close();browser.close()
+        return result['kind']
+
+    def test_passive_text_is_not_a_risk_but_anything_that_could_act_stays_blocked(self):
+        # PO decision 2026-10-19: live run b7a34e94 rejected about 14 clicks on plain text and tasks ended on them. A card title in BLE has cursor auto
+        # and does nothing when clicked (checked on a scratch clone). Passive = no interactive element around it and no pointer cursor.
+        passive=('<p id="x">Sieblinie</p>','<div id="x">Trockenmasse nach Waschen -</div>','<div><span id="x">Kornform</span></div>','<h3 id="x">Ergebnis</h3>',
+                 '<div tabindex="-1"><span id="x">Text</span></div>','<form><p id="x">Text in a form</p></form>')
+        for html in passive:
+            for kind,where in (('wash','path'),('wash','root')):
+                self.assertEqual(self.kind_of(kind,html,'#x',path_of=where),'passive',(html,where))
+        acting=('<div id="x" style="cursor:pointer">Karte</div>','<div id="x" onclick="window.n=1">Karte</div>','<div style="cursor:pointer"><span id="x">Text</span></div>',
+                '<button><span id="x">Text</span></button>','<div id="x" role="button">Text</div>','<div id="x" tabindex="0">Text</div>','<label id="x">Probenmasse</label>',
+                '<div class="mud-chip" id="x">Text</div>','<div class="mud-list-item" id="x">Text</div>','<div class="mud-menu-item" id="x">Freigeben</div>',
+                '<span id="x" class="mud-select">Text</span>','<a id="x" href="/admin"><span>Text</span></a>','<summary id="x">Text</summary>')
+        for html in acting:
+            self.assertEqual(self.kind_of('wash',html,'#x'),'blocked',html)
+        # An input stays a field click, the weigh-in box around it too; text never becomes a save or setup.
+        self.assertEqual(self.kind_of('wash','<div class="mud-input-control"><label>Probenmasse feucht</label><input id="x"></div>','#x'),'field')
+
+    def test_a_passive_click_reaches_the_page_and_a_blocked_one_does_not(self):
+        from playwright.sync_api import sync_playwright
+        c=self.contract('wash')
+        html=('<script>window.n=0;document.addEventListener("click",()=>{window.n++});</script><p id="text">Sieblinie</p><button id="free">Freigeben</button>')
+        with sync_playwright() as p:
+            browser=p.chromium.launch();context=browser.new_context();context.add_init_script(module.event_guard(c))
+            context.route(c['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(c['origin']+c['path'])
+            page.locator('#free').click();self.assertEqual(page.evaluate('window.n'),0)
+            page.locator('#text').click();self.assertEqual(page.evaluate('window.n'),1)
+            context.close();browser.close()
+
+    def test_the_boiling_fraction_selector_and_its_options_are_permitted_only_in_the_boiling_task(self):
+        # The module asks which allocation the test belongs to (BLE: "Fraktion / Entnahme"); choosing it wrote no table on a scratch clone.
+        html=('<div class="mud-select"><div class="mud-input-control"><label>Fraktion / Entnahme</label><input id="sel" readonly></div></div>'
+              '<div class="mud-popover"><div class="mud-list-item" id="opt">8 mm (Kochen) (8 mm)</div></div><div class="mud-list-item" id="outside">Text</div>')
+        self.assertEqual(self.kind_of('boiling',html,'#sel'),'select')
+        self.assertEqual(self.kind_of('boiling',html,'#opt'),'select')
+        self.assertEqual(self.kind_of('boiling',html,'#outside'),'blocked')  # a list item outside a popover is not an option
+        for kind in ('wash','sieve','shape','sand','partial','allocations'):
+            self.assertEqual(self.kind_of(kind,html,'#sel'),'blocked',kind)
+            self.assertEqual(self.kind_of(kind,html,'#opt'),'blocked',kind)
+
+    def test_the_allocation_task_may_save_the_module_once_like_every_other_module(self):
+        # Entnahmen are persisted when their field is left; Speichern repeats that and changed only workspace_sampling_info on a scratch clone.
+        from playwright.sync_api import sync_playwright
+        c=self.contract('allocations')
+        html='<script>window.saves=0</script><button id="save" onclick="window.saves++">Speichern</button><button id="release" onclick="window.saves+=100">Freigeben</button>'
+        self.assertEqual(self.kind_of('allocations','<button id="save">Speichern</button>','#save'),'save')
+        with sync_playwright() as p:
+            browser=p.chromium.launch();context=browser.new_context();context.add_init_script(module.event_guard(c))
+            context.route(c['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(c['origin']+c['path'])
+            page.locator('#release').click();page.locator('#save').click();page.locator('#save').click()
+            self.assertEqual(page.evaluate('window.saves'),1)  # once, and nothing else
+            context.close();browser.close()
+        page=MagicMock();page.url=c['origin']+c['path']
+        page.evaluate.return_value={'target':{'kind':'save','scope':'module'},'focused':None}
+        module.check_action(page,{'action':'click','x':1,'y':1},c,set())
+        with self.assertRaises(module.ReadOnlyViolation):module.check_action(page,{'action':'click','x':1,'y':1},c,{'module'})
 
     def test_the_wheel_scrolls_the_page_over_a_field_but_never_changes_the_focused_field(self):
         # Live-run lesson (dry run 16.10.2026): blocking every wheel event over a field made the page unscrollable over the input column.

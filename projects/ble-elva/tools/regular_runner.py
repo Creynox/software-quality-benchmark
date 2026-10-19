@@ -34,6 +34,8 @@ from .suite_acceptance import check_fixture
 from .persona_scope import check_persona
 from .measurement_runner import run_measurements, required_saves, INSTRUCTIONS as MEASUREMENT_INSTRUCTIONS
 from .task_vocabulary import MODULE_TITLES
+from .measurement_guard import CLASSIFY as MEASUREMENT_GUARD_RULES
+from .inspection_guard import CLASSIFY as INSPECTION_GUARD_RULES
 from .protected_oracle import collect_scoped_hashes
 from .side_effect_probe import table_hashes
 from .inspection_runner import run_inspection, run_reports, run_plan_creation, ENTRY_PATHS, INSTRUCTIONS as INSPECTION_INSTRUCTIONS
@@ -490,7 +492,7 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         'persona_context':ready['persona_context'],
         'executor_model':executor_id,'analyst_model':reviewer_id,'provider':'chatgpt_plan',
         'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'review_schema_sha256':canonical_hash(REVIEW_SCHEMA),
-        'executor_instructions_sha256':instructions_hash(),
+        'executor_instructions_sha256':instructions_hash(),'guard_rules_sha256':guard_rules_hash(),
         'sqbf_commit':ready['source']['commit'],'sqbf_source_clean':ready['source']['clean'],
         'suite_sha256':canonical_hash(suite),'dataset_sha256':canonical_hash(dataset),
         'reference_projection_sha256':canonical_hash(projection),'allocation_reference_sha256':canonical_hash(allocation),
@@ -659,6 +661,12 @@ def ux_summary(records):
             'note':'No global percentage; UX never compensates objective faults.'}
 
 
+def guard_rules_hash():
+    """Hash of the click rules of both guards: what the executor may do changes with them (PO decision 2026-10-19: passive text, boiling selector,
+    save in the allocation task), so runs with different rules are not directly comparable either."""
+    return canonical_hash({'measurement':MEASUREMENT_GUARD_RULES,'inspection':INSPECTION_GUARD_RULES})
+
+
 def instructions_hash():
     """Hash of everything the executor is told besides the screenshot (instructions of both runners, module titles): runs with different wording
     are not directly comparable (the neutral hint of 2026-10-19 changed run 7 against run 6)."""
@@ -701,7 +709,8 @@ def completion_text(manifest,records):
         f"- Modellanfragen: {text(manifest.get('model_calls',0))} von höchstens {text(manifest['resource_policy']['hard_model_calls'])}; "
         f"Zeitgrenze {text(manifest['resource_policy']['hard_seconds'])} s; Budgetfreigabe: {text(manifest['budget_approval']['status'])}",
         f"- Provider-Vorabprüfung: {text(manifest.get('provider_probe',{}).get('status','NOT_PROBED'))}",
-        f"- Executor-Anweisung und Aufgabenwortlaut (SHA256): {text(manifest.get('executor_instructions_sha256','nicht erfasst'))}; Läufe mit anderem Wortlaut sind nicht direkt vergleichbar",'']
+        f"- Executor-Anweisung und Aufgabenwortlaut (SHA256): {text(manifest.get('executor_instructions_sha256','nicht erfasst'))}; Läufe mit anderem Wortlaut sind nicht direkt vergleichbar",
+        f"- Klickregeln der Guards (SHA256): {text(manifest.get('guard_rules_sha256','nicht erfasst'))}; Läufe mit anderen Regeln sind ebenfalls nicht direkt vergleichbar",'']
     if manifest.get('final_oracles'):
         lines+=['Abschließende unabhängige Oracles: '+text({key:value.get('status') if isinstance(value,dict) else value
                                                        for key,value in manifest['final_oracles'].items()}),'']

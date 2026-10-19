@@ -83,6 +83,13 @@ def make_contract(fixture,probe_id,position,kind):
 CLASSIFY=r"""
 const norm=s=>(s||'').replace(/\s+/g,' ').replace(/\s*\*+$/,'').trim();
 const num=s=>{const m=(s||'').match(/\d+(?:[.,]\d+)?/);return m?String(Number(m[0].replace(',','.'))):null;};
+// Text and layout that does nothing when clicked (PO decision 2026-10-19, live run b7a34e94: about 14 harmless text clicks were rejected and tasks ended
+// on them). Passive means: no interactive element around it and no pointer cursor; the cursor is inherited, so a clickable container shows through.
+// A card title in BLE has cursor auto and a click on it does nothing (checked on a scratch clone, 19.10.2026).
+const INTERACTIVE='a,button,input,select,textarea,summary,label,[role="button"],[role="link"],[role="tab"],[role="menuitem"],[role="option"],[role="checkbox"],'
+  +'[role="switch"],[role="combobox"],[role="listbox"],[tabindex]:not([tabindex="-1"]),[onclick],.mud-button-root,.mud-chip,.mud-list-item,.mud-menu-item,.mud-select,'
+  +'.mud-expand-panel-header,.mud-nav-link,.mud-icon-button,.mud-tab,.mud-table-sort-label,.mud-input-control,.sa-kpi-editable';
+const passive=e=>{if(!e||e.nodeType!==1||e.closest(INTERACTIVE))return false;try{return getComputedStyle(e).cursor!=='pointer';}catch(_){return false;}};
 const field=(e,ignoreSaveLatch)=>{
  // The main weigh-in (Einwaage) is a KPI box that holds one input; a click anywhere in that box is a click on the field (live run fdea63ef: a click on
  // the box was rejected and the executor gave up, although BLE would simply not focus the input - which is what has to be observed).
@@ -122,11 +129,17 @@ const classify=e=>{
  // BLE's own first step of module work: the sample page offers "Testauftrag erzeugen" as its primary action (it writes only the work items
  // of the sample and its status; live run 413f7abe, dry run 16.10.2026). Allowed once per sample, on the sample page only.
  if(location.pathname===config.root&&norm(e?.closest('button')?.innerText)==='Testauftrag erzeugen')return {kind:'setup',scope:'test_order'};
+ if(passive(e))return {kind:'passive'};
  if(location.pathname!==config.path)return {kind:'blocked'};
  const name=field(e);if(name&&!e?.closest('button'))return {kind:'field',field:name};
+ // The boiling module asks which allocation ("Fraktion / Entnahme") the test belongs to as soon as one exists. Choosing it writes nothing
+ // (no table changed on a scratch clone, 19.10.2026); live run b7a34e94 lost two boiling positions to its rejection.
+ if(config.kind==='boiling'&&(e?.closest('.mud-select')||e?.closest('.mud-popover .mud-list-item,.mud-popover [role="option"]')))return {kind:'select'};
  if(e?.closest('.mud-expand-panel-header'))return {kind:'expand'};
  const b=e?.closest('button'),text=norm(b?.innerText);
- if(text==='Speichern'&&config.kind!=='allocations'){
+ // Allocations are persisted when their field is left; the module's Save then only repeats that (on a scratch clone only workspace_sampling_info
+ // changed, 19.10.2026), so the allocation task may use it once like every other module (live run b7a34e94: four rejected save clicks).
+ if(text==='Speichern'){
    const scope=config.kind==='shape'?num(b.closest('.kf-panel')?.querySelector('.kf-panel-label')?.innerText):'module';
    if(scope&&(config.kind!=='shape'||Object.hasOwn(config.fields,'Einwaage gesamt (g):'+scope)))return {kind:'save',scope:scope};
  }
@@ -197,7 +210,7 @@ return {target:classify(Number.isFinite(x)&&Number.isFinite(y)?document.elementF
 }""".replace('__CLASSIFY__',CLASSIFY),{'config':contract,'x':action.get('x'),'y':action.get('y')})
     target=state['target'];kind=action['action']
     if kind in ('done','blocked','wait','scroll'):return state
-    if kind=='click' and target['kind'] in ('navigation','expand','field','add_repetition'):return state
+    if kind=='click' and target['kind'] in ('navigation','expand','field','add_repetition','passive','select'):return state
     if kind=='click' and target['kind'] in ('save','setup') and target['scope'] not in saved:return state
     focused=state['focused']
     if kind=='type' and focused in contract['fields'] and action.get('text')==german(contract['fields'][focused]):

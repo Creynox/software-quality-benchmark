@@ -106,11 +106,14 @@ class InspectionGuardTests(unittest.TestCase):
         row='<table><tbody><tr id="x" %s><td>ENZBERG-20260508-NSN-014-02</td><td>KSM</td></tr></tbody></table>'
         for attributes in ('aria-label="Probe ENZBERG-20260508-NSN-014-02 auswählen"','aria-selected="false" aria-label="Probe ENZBERG-20260508-NSN-014-02 auswählen"'):
             self.assertEqual(self.classify(row%attributes,'#x'),'read_control',attributes)
-        # Everything else that is a row, or says "Probe ...", stays blocked.
-        for attributes in ('','aria-label="Probe ENZBERG-20260508-NSN-014-02 löschen"','aria-label="Plan NSN 014 auswählen"','aria-label="Zeile auswählen"'):
+        # A row that looks clickable (pointer cursor) but is not the sample row, or says "Probe ... löschen", stays blocked.
+        for attributes in ('style="cursor:pointer"','style="cursor:pointer" aria-label="Probe ENZBERG-20260508-NSN-014-02 löschen"',
+                           'style="cursor:pointer" aria-label="Plan NSN 014 auswählen"','style="cursor:pointer" aria-label="Zeile auswählen"'):
             self.assertEqual(self.classify(row%attributes,'#x'),'blocked',attributes)
+        # A row without any click behaviour is only text (passive): clicking it does nothing, so it is no harm.
+        self.assertEqual(self.classify(row%'','#x'),'read_control')
         self.assertEqual(self.classify(row%'aria-label="Probe ENZBERG-20260508-NSN-014-02 auswählen"','#x',path='/beprobung',
-                                       config=module.contract(owned_fixture(),['/samples','/beprobung'])),'blocked')
+                                       config=module.contract(owned_fixture(),['/samples','/beprobung'])),'read_control')
 
     def test_native_guard_blocks_release_sign_delete_and_latches_report_generation(self):
         from playwright.sync_api import sync_playwright
@@ -136,3 +139,15 @@ class InspectionGuardTests(unittest.TestCase):
         self.assertEqual(self.classify(group%'Beprobung löschen','#x'),'blocked')
         self.assertEqual(self.classify(group%'Toggle Beprobung/Plan archivieren','#x'),'blocked')
         self.assertEqual(self.classify('<form><div class="mud-nav-group"><button id="x" aria-label="Toggle Beprobung">B</button></div></form>','#x'),'blocked')
+
+    def test_passive_text_and_the_detail_panel_close_button_are_read_only_and_anything_that_could_act_stays_blocked(self):
+        # Live run b7a34e94: RIGHTS ended on rejected clicks on plain text and on "Detailpanel schließen".
+        for html in ('<p id="x">NSN 014 10</p>','<div><span id="x">Konfigurationshinweise zur Produktgrundlage</span></div>','<h3 id="x">Ergebnis</h3>'):
+            self.assertEqual(self.classify(html,'#x'),'read_control',html)
+        for html in ('<div id="x" style="cursor:pointer">Karte</div>','<div id="x" onclick="window.n=1">Karte</div>','<button><span id="x">Neue Probe</span></button>',
+                     '<div id="x" role="button">Text</div>','<div class="mud-chip" id="x">Sandäquivalent starten</div>','<label id="x">Text</label>'):
+            self.assertEqual(self.classify(html,'#x'),'blocked',html)
+        self.assertEqual(self.classify('<button id="x" aria-label="Detailpanel schließen">x</button>','#x'),'read_control')
+        self.assertEqual(self.classify('<button id="x" aria-label="Probe ENZBERG-20260508-NSN-014-05 schließen">x</button>','#x'),'blocked')
+        self.assertEqual(self.classify('<form><button id="x" aria-label="Detailpanel schließen">x</button></form>','#x'),'blocked')
+

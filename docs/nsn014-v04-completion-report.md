@@ -14,6 +14,8 @@ Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-
 
 **Nachtrag Lauf 3 (Abschnitt 17):** `413f7abe…`, 16.10.2026: PARTIAL GO, alle zwölf Stufen durchgelaufen, PLAN und WPK PASS, zehn Stufen INCONCLUSIVE durch einen zu engen Guard (Menüeintrag „Prüfbericht“ nicht erkannt, Ablehnung beendet die Aufgabe, Hauptaktion „Testauftrag erzeugen“ nicht erlaubt). 124 Anfragen, 271.478 Tokens, 24 min. Keine Messung erfasst.
 
+**Nachtrag Auswertung mit Punkten (Abschnitt 25):** Auf Entscheidung des PO gibt es künftig immer eine feste, versionierte Auswertung mit einem Punktesystem (bestanden / nicht bestanden, 46 Prüfpunkte, nur Zahlen und Fakten, neun feste Abschnitte, Regeln auch für den Sol-Agenten); `scorecard.json` und `punktebericht.md` je Lauf, Nachbewertung der Läufe 5 bis 7 (6, 17 und 16 Punkte), `suite-score`, 500 Tests OK. Die Kurzfassung aus Abschnitt 23 ist dadurch ersetzt.
+
 **Nachtrag Guard-Erweiterung (Abschnitt 24):** Auf Entscheidung des PO („a, b, c umsetzen, d vorab prüfen“): Klicks auf rein darstellende Elemente (ohne interaktives Element und ohne Zeigercursor), Fraktionsauswahl im Kochversuch, Speichern einmal in der Zuteilungsaufgabe, „Detailpanel schließen“. Experimente auf einer Wegwerfkopie: Kartentitel nicht klickbar (b ist ein Fall von a), Fraktionsauswahl schreibt nichts, Entnahmen werden beim Verlassen des Feldes gespeichert und „Speichern“ ändert dabei nur `workspace_sampling_info`. An zwölf echten Seiten geprüft, 486 Tests OK, Trockenläufe sauber. Neu: `guard_rules_sha256` im Manifest.
 
 **Nachtrag Lauf 7 (Abschnitt 23):** Lauf 7 (b7a34e94, 19.10.2026, mit neutralem Hinweis, BLE-Wortlaut und gemessenem Bedienaufwand) ist `PARTIAL GO / COMPLETED`: sechs Stufen PASS (PLAN, RECEIPT, SE, ASSESS, WPK, ANALYSIS), sechs INCONCLUSIVE, keine FAIL/INVALID/BLOCKED, keine belegte BLE-Abweichung; 784 Anfragen, 5.471 s, rund 2,02 Mio. Tokens. In 7 von 15 vollständig eingegebenen Modulen wurde nicht gespeichert; ein Teil der Lücken sind Ablehnungen des Guards (SHAPE: Modul nie erreicht, Speichern in der Zuteilungsaufgabe, Fraktionsauswahl, harmlose Textklicks). Vorschlag zur Erweiterung des Guards liegt beim PO (Abschnitt 23.6).
@@ -1020,3 +1022,37 @@ Die Klickregeln gehören jetzt wie der Wortlaut zu dem, was Läufe unterscheidet
 - Die Regel (a) ist eine Heuristik (Cursor und Elementtyp). Sie ist an den echten Seiten geprüft, aber nicht beweisbar vollständig.
 - Dass ein Modell ein Feld jetzt durch Klick auf Text „verlassen“ kann, ändert, wann Werte persistiert werden; das ist gewollt (so verhält sich ein Laborant), macht aber Lauf 8 mit Lauf 7 nicht vergleichbar.
 - Die Fraktionsauswahl wurde nur mit einer Option geprüft (Probe mit einer Koch-Entnahme).
+
+## 25. Feste, versionierte Auswertung mit Punkten (20.10.2026)
+
+**Entscheidung des PO (19.10.2026):** Es gibt künftig immer ein Punktesystem mit bestanden / nicht bestanden. Reine Textbewertungen machen den Folgetest nicht sauber reproduzierbar und lassen nicht beurteilen, ob ein Lauf gut oder schlecht war; dafür braucht es Zahlen, Daten und Fakten, keine Annahmen. Für den Sol-Agenten muss es immer eine feste Definition geben, wie der Auswertungsbericht aussieht; sie ist nicht variabel, sondern nur versionierbar mit Erweiterungen oder Feinanpassungen. Es gab keine Modellaufrufe und keinen weiteren Live-Lauf.
+
+### 25.1 Umsetzung
+
+- **Definition:** `projects/ble-elva/suites/nsn014-report-spec-v1.json` (Version 1.0.0) und die Beschreibung `docs/nsn014-report-spec.md`: Katalog von 46 Prüfpunkten, Status und Punktregel (bestanden = 1 Punkt), Ursprungsregeln, Formeln, Ergebnis des Laufs in fester Reihenfolge, neun feste Abschnitte mit festen Tabellen und festem Wortlaut, Regeln für jeden Agenten, der einen Lauf liest, Versionsregeln (MAJOR/MINOR/PATCH) und Änderungsverlauf.
+- **Berechnung und Bericht:** `projects/ble-elva/tools/report_spec.py`. Die Punktekarte (`scorecard.json`) entsteht allein aus den aufgezeichneten Ergebnissen (Stufen- und Positionsergebnisse der Oracles, Bedienmessung, Abrechnung); der Bericht (`punktebericht.md`) wird allein aus der Punktekarte und der Definition erzeugt. Kein Freitext und keine Annahme geht in eine Zahl ein; was nicht gemessen wurde, steht als „—“, nie als 0.
+- **Im Lauf:** `regular_runner.run_suite` schreibt `scorecard.json` und `punktebericht.md` in den Lauf-Ordner; `completion-report.md` beginnt mit dem Punktebericht, der bisherige Detailbericht folgt als Anhang A0 bis A9 (die Kurzfassung aus Abschnitt 23 ist ersetzt). Das Lauf-Manifest trägt `report_spec` (Version, Hash, Ergebnis, Punkte).
+- **Werkzeug:** `suite-score --run <Ordner> [--compare-with <Ordner>]` bewertet gespeicherte Läufe modellfrei nach, überschreibt nie und nennt beim Vergleich die Schlüssel, die den Vergleich verhindern.
+- **Reviewer (Sol-Agent):** Rubrik und JSON-Schema bleiben unverändert (Lauf-Vergleichbarkeit). Seine Antworten erscheinen nur als Zahlen (Urteile, Minimum/Mittelwert/Maximum je Dimension, Befunde je Kategorie und Schweregrad) in Abschnitt 8 und ändern keinen Punkt.
+- **Sicherung gegen unbemerkte Änderungen:** Der Test pinnt den Hash der Definition je Version und vergleicht den gerenderten Bericht mit einer Golden-Datei (`tests/golden/nsn014-punktebericht-1.0.0.md`). Wer Wortlaut, Reihenfolge, Katalog oder Regel ändert, muss die Version erhöhen, den Änderungsverlauf ergänzen und Hash und Golden-Datei erneuern.
+
+### 25.2 Nachbewertung der Läufe 5 bis 7 (nur aus den gespeicherten Daten, 0 Modellaufrufe)
+
+| Lauf | Ergebnis | Punkte | in Prozent | bestanden / nicht bestanden / nicht entschieden / ungültig / nicht ausgeführt |
+|---|---|---|---|---|
+| 5 (6c23f768) | nicht bestanden | 6 von 46 | 13,0 % | 6 / 1 / 20 / 0 / 19 |
+| 6 (fdea63ef) | unvollständig | 17 von 46 | 37,0 % | 17 / 0 / 29 / 0 / 0 |
+| 7 (b7a34e94) | unvollständig | 16 von 46 | 34,8 % | 16 / 0 / 30 / 0 / 0 |
+
+Lauf 6 und Lauf 7 sind nach Abschnitt 7 des Berichts nicht vergleichbar (anderer Executor-Wortlaut); 17 gegen 16 Punkte sagen nichts über BLE. In Lauf 7 sind 21 der 30 offenen Prüfpunkte dem Modell oder Modell und Suite zuzuordnen, 2 der Suite, 1 dem Provider, 6 der Vorstufe; kein Prüfpunkt ist durch eine belegte BLE-Abweichung nicht bestanden. Die Punktekarten liegen als `scorecard.json` und `punktebericht.md` in den privaten Lauf-Ordnern.
+
+### 25.3 Prüfung
+
+**500 Tests OK** (vorher 487): 13 neue Tests für Definition und Hash, vollständigen Katalog, Statusregeln, Ursprung, Ergebnis in fester Reihenfolge, Konsistenzbefunde, Rundung, Bedienkennzahlen ohne Messung („—“), Reviewer ohne Einfluss auf die Punkte, feste Abschnittsfolge, Golden-Datei, Vergleich und das Kommando `suite-score`; ein Test des Abschlussberichts ersetzt den der Kurzfassung. Vor dem nächsten Live-Lauf ist wie immer ein sauberer und ein fehlerinjizierter Trockenlauf nötig; die Änderung betrifft nur die Berichtserzeugung am Ende des Laufs.
+
+### 25.4 Grenzen und offene Entscheidungen
+
+- Alle Prüfpunkte zählen gleich. Eine Gewichtung oder ein Zielwert (etwa „mindestens 80 % Punkte“) ist eine Entscheidung des PO und eine neue Version; Version 1.0.0 nennt kein Ziel.
+- Die Punkte zeigen, wie viel die Suite objektiv entscheiden konnte und wie viel davon bestanden ist. Bei den Läufen 6 und 7 begrenzen Modell und Suite die Punkte, nicht belegte BLE-Fehler (Abschnitt 3 des Berichts).
+- Die UX-Rubrik des Reviewers bleibt eine Skala von 0 bis 5 mit Freitext-Befunden. Eine Checkliste mit festen Ja/Nein-Fragen wäre ein neues Review-Schema (neue Rubrikversion) und braucht die Entscheidung des PO.
+- Lauf 8 ist nicht gestartet; er braucht eine neue ausdrückliche Freigabe des PO.

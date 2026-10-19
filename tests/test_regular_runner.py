@@ -12,6 +12,7 @@ from test_suite_fixture import owned_fixture
 from test_measurement_guard import position
 
 module=importlib.import_module('projects.ble-elva.tools.regular_runner')
+report_spec=importlib.import_module('projects.ble-elva.tools.report_spec')
 DIMENSIONS=('findability','clarity','task_progress','error_recovery')
 
 
@@ -223,8 +224,8 @@ class RegularRunnerTests(unittest.TestCase):
                   'sqbf_commit':'c','software_version':'b','executor_model':'e','analyst_model':'a','suite_sha256':'s',
                   'dataset_sha256':'d','case_matrix':matrix,'ux_summary':summary}
         text=module.completion_text(manifest,records)
-        for heading in ('## 1. Was in BLE funktioniert','## 2. Was in BLE nicht funktioniert','## 3. BLE- oder SQBF-Problem',
-                        '## 4. UX-Befunde nach Kategorie und Schweregrad','## 5. Priorität','## 6. Retest-Benchmark'):
+        for heading in ('## A1. Was in BLE funktioniert','## A2. Was in BLE nicht funktioniert','## A3. BLE- oder SQBF-Problem',
+                        '## A4. UX-Befunde nach Kategorie und Schweregrad','## A5. Priorität','## A6. Retest-Benchmark'):
             self.assertIn(heading,text)
         self.assertIn('NSN014-SE: \\[\'PERSISTED\\_VALUE\\_DEVIATION\'\\]',text)
         self.assertIn('SQBF/Harness',text);self.assertIn('BLE-Kandidat (unbestätigt): major 1',text)
@@ -250,7 +251,7 @@ class RegularRunnerTests(unittest.TestCase):
                   'budget_approval':{'status':'BASE_LIMITS'},'sqbf_commit':'c','software_version':'b','executor_model':'e','analyst_model':'a','suite_sha256':'s',
                   'dataset_sha256':'d'}
         text=module.completion_text(manifest,records)
-        self.assertIn('## 3a. Ursachen unvollständiger Positionen und Bedienaufwand',text)
+        self.assertIn('## A3a. Ursachen unvollständiger Positionen und Bedienaufwand',text)
         self.assertIn('| SIEVE | P01 | sieve | ja | BLOCKED | MODELL/SUITE (vorher abgelehnte Aktion) | 20 | 7 | 6 | 1 | NOT\\_SAVED\\_AFTER\\_ENTRY |',text)
         self.assertIn('| SIEVE | P02 | sieve | ja | DONE | — | 20 | 1 | 0 | 0 | SAVED |',text)
         # A module that was never reached after rejected actions is not a missing prerequisite; a reached module without the field is.
@@ -279,14 +280,14 @@ class RegularRunnerTests(unittest.TestCase):
         with patch.object(module,'INSPECTION_GUARD_RULES',module.INSPECTION_GUARD_RULES+' // x'):
             self.assertNotEqual(module.guard_rules_hash(),first)
 
-    def test_the_summary_is_plain_language_with_bullet_points_and_sits_on_top_of_the_report(self):
-        # The PO asked for a readable summary: did it work, what passed, what is open and why. No codes, no tables.
-        effort=lambda scrolls,rejected:{'actions':20,'scrolls':scrolls,'clicks':5,'typed':4,'keys':2,'waits':1,'rejected':rejected,'scrolls_after_last_entry':1}
+    def test_the_completion_report_starts_with_the_fixed_points_report_and_keeps_the_detail_report_as_appendix(self):
+        # PO decision 2026-10-19: one fixed, versioned evaluation report with points; the detail report only follows as an appendix.
+        effort={'actions':20,'scrolls':3,'clicks':5,'typed':4,'keys':2,'waits':1,'rejected':0,'scrolls_after_last_entry':1}
         records=[{'case_id':'NSN014-PLAN','persona':'p','result':'PASS','objective_status':'PASS','technical_gate':'PASS','oracle_gate':'PASS','ux_verdict':'PASS'},
                  {'case_id':'NSN014-SIEVE','persona':'p','result':'INCONCLUSIVE','objective_status':'INCONCLUSIVE','technical_gate':'PASS','oracle_gate':'PASS','ux_verdict':'INCONCLUSIVE',
                   'position_results':[{'position_id':'P01','result':'INCOMPLETE','class':'EXECUTOR_REPORTED_BLOCKED'},{'position_id':'P02','result':'PASS','class':None}],
-                  'positions':[{'position_id':'P01','kind':'sieve','status':'BLOCKED','effort':effort(9,0),'save_status':'NOT_SAVED_AFTER_ENTRY','module_reached':True},
-                               {'position_id':'P02','kind':'sieve','status':'DONE','effort':effort(1,1),'save_status':'SAVED','module_reached':True}]},
+                  'positions':[{'position_id':'P01','kind':'sieve','status':'BLOCKED','effort':effort,'save_status':'NOT_SAVED_AFTER_ENTRY','module_reached':True},
+                               {'position_id':'P02','kind':'sieve','status':'DONE','effort':effort,'save_status':'SAVED','module_reached':True}]},
                  {'case_id':'NSN014-RIGHTS','persona':'p','result':'NOT_RUN','objective_status':'NOT_RUN','reason':'UPSTREAM_CRITICAL_STOP'}]
         manifest={'run_id':'r','verdict':'PARTIAL GO','technical_status':'RESOURCE_STOP','functional_status':'INCOMPLETE','scenario_id':'ENZBERG-NSN014','scenario_version':'0.4.1',
                   'scoring_version':module.SCORING_VERSION,'rubric_version':module.RUBRIC_VERSION,'resource_policy':suite()['resource_policy'],'budget_approval':{'status':'BASE_LIMITS'},
@@ -294,23 +295,20 @@ class RegularRunnerTests(unittest.TestCase):
                   'stop_reason':'PROVIDER_AUTHORIZATION_EXPIRED',
                   'accounting':{'elapsed_seconds':3660,'actors':{'executor':{'model_calls':100,'tokens':{'total_tokens':{'known_sum':1500000,'unknown_calls':0,'complete_total':1500000}}},
                                                                  'reviewer':{'model_calls':20,'tokens':{'total_tokens':{'known_sum':500000,'unknown_calls':0,'complete_total':500000}}}}}}
-        lines=module.kurzfassung(manifest,records);text='\n'.join(lines)
-        self.assertEqual(lines[0],'## Kurzfassung in einfachen Worten')
-        self.assertIn('teilweise bestanden',text);self.assertIn('vorzeitig beendet',text);self.assertIn('die Anmeldung beim Provider lief ab',text)
-        self.assertIn('**1 bestanden**, 1 nicht entschieden, 0 durchgefallen, 1 nicht gelaufen',text)
-        self.assertIn('Planproben anlegen',text);self.assertIn('Siebanalyse erfassen',text);self.assertIn('keine objektiv belegt',text)
-        self.assertIn('Positionen** (einzelne Proben je Modul oder Bericht): 1 von 2',text)
-        self.assertIn('1× Modell',text);self.assertIn('In 2 Modulen wurden alle Werte eingegeben; in 1 davon wurde **nicht gespeichert**',text)
-        self.assertIn('120 Modellanfragen, 1 Std. 1 Min., rund 2,0 Mio. Tokens',text);self.assertIn('unbestätigt',text)
-        for code in ('NOT\\_SAVED','EXECUTOR\\_REPORTED','NSN014','AUTHORIZATION','PERSISTED'):self.assertNotIn(code,text)
         full=module.completion_text(manifest,records)
-        self.assertLess(full.index('## Kurzfassung in einfachen Worten'),full.index('## Stufenmatrix'))
-        # An invalid run says so in the first lines and a failed stage names its stage.
-        bad=[{'case_id':'NSN014-WPK','persona':'p','result':'INVALID','objective_status':'INVALID_HARNESS','technical_gate':'INVALID'},
-             {'case_id':'NSN014-SE','persona':'p','result':'FAIL','objective_status':'FAIL','fail_classes':['PERSISTED_VALUE_DEVIATION'],'position_results':[]}]
-        text=''.join(module.kurzfassung(dict(manifest,verdict='NO-GO'),bad))
-        self.assertIn('nicht gültig oder nicht bestanden',text);self.assertIn('Der Lauf ist ungültig',text);self.assertIn('Plan gegen Fertiggestelltes prüfen',text)
-        self.assertIn('belegter Abweichung (Sandäquivalent erfassen)',text)
+        self.assertTrue(full.startswith('# NSN014 Punktebericht'))
+        sections=[f'## {s["id"]}. {s["title"]}' for s in report_spec.load_spec()['sections']]
+        positions=[full.index(heading) for heading in sections]
+        self.assertEqual(positions,sorted(positions),'the nine sections of the specification appear in their fixed order')
+        self.assertLess(positions[-1],full.index('# Anhang: Detailbericht'));self.assertLess(full.index('# Anhang: Detailbericht'),full.index('## A0a. Stufenmatrix'))
+        card=module.scorecard_of(manifest,records)
+        self.assertEqual(card['points'],{'points':2,'max_points':46});self.assertEqual(card['result']['run_result'],'ABGEBROCHEN')
+        self.assertEqual(card['operating']['saves']['SAVED'],1);self.assertEqual(card['operating']['saves']['NOT_SAVED_AFTER_ENTRY'],1)
+        self.assertEqual(report_spec.scorecard_problems(card),[])
+        self.assertIn('| Punkte | 2 von 46 |',full);self.assertIn('| Speicherquote | 50,0 % |',full)
+        self.assertNotIn('Kurzfassung',full)
+        # The same data always give the same report, byte for byte.
+        self.assertEqual(module.completion_text(manifest,records),full)
 
     def test_cli_default_is_model_free_and_requires_explicit_execute_flag(self):
         s=suite()

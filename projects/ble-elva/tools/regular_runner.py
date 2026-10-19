@@ -23,7 +23,7 @@ from sqbf.suites import suite_check, canonical_hash, aggregate, validate_suite, 
 from sqbf.no_write_oracle import snapshot
 from sqbf.oracle import verify_docker_identity
 from sqbf.scope_check import verify_runtime
-from . import stage_effects
+from . import report_spec, stage_effects
 from .allocation_oracle import collect_allocations, verify_allocations
 from .calculation_oracle import collect_report_calculations, persisted_basis, verify_calculations, expected_calculations
 from .measurement_guard import make_contract
@@ -569,10 +569,13 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         records=result.get('records',[])
         manifest.update(case_matrix=case_matrix(records),ux_summary=ux_summary(records))
         manifest['completed_at']=now_iso()
+        card=scorecard_of(manifest,records)
+        manifest['report_spec']={'spec_version':card['spec_version'],'spec_sha256':card['spec_sha256'],'run_result':card['result']['run_result'],'points':card['points']['points'],'max_points':card['points']['max_points']}
         # Credentials/tokens never enter persisted manifests or reports.
         (evidence.path/'run.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
         (evidence.path/'completion-report.md').write_text(completion_text(manifest,records),encoding='utf-8')
-        (evidence.path/'kurzfassung.md').write_text('# NSN014 Kurzfassung\n\n'+'\n'.join(kurzfassung(manifest,records)[1:])+'\n',encoding='utf-8')
+        (evidence.path/'scorecard.json').write_text(json.dumps(card,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+        (evidence.path/'punktebericht.md').write_text('\n'.join(report_spec.render(card))+'\n',encoding='utf-8')
         index_run(output,evidence.path)
     return {'status':'SUITE_RUN_RECORDED','run_id':manifest['run_id'],'verdict':manifest['verdict'],
             'technical_status':manifest['technical_status'],'path':str(evidence.path)}
@@ -693,76 +696,15 @@ def effort_rows(records):
     return rows
 
 
-STAGE_PLAIN={'NSN014-PLAN':'Planproben anlegen','NSN014-RECEIPT':'Probeneingang prüfen','NSN014-PREPARATION':'Abschlämmung und Entnahmen erfassen',
-             'NSN014-SIEVE':'Siebanalyse erfassen','NSN014-SHAPE':'Kornform erfassen','NSN014-BOILING':'Kochversuch erfassen','NSN014-SE':'Sandäquivalent erfassen',
-             'NSN014-ASSESS':'Bewertungsansicht prüfen','NSN014-WPK':'Plan gegen Fertiggestelltes prüfen','NSN014-ANALYSIS':'Analytik prüfen',
-             'NSN014-REPORT':'Prüfberichte erzeugen','NSN014-RIGHTS':'Rechte der Werksleitung prüfen'}
-VERDICT_PLAIN={'GO':'bestanden','PARTIAL GO':'teilweise bestanden: nicht alles konnte entschieden werden','NO-GO':'nicht gültig oder nicht bestanden'}
-ORIGIN_PLAIN=(('MODELL/SUITE','Modell und Test-Suite gemeinsam (eine Aktion wurde vorher abgelehnt)'),('MODELL','Modell (hat aufgegeben, nicht gespeichert oder ein Feld nicht übernommen)'),
-              ('SUITE','Test-Suite (Aktion vom Guard abgelehnt)'),('PROVIDER','Provider (Anfrage ausgefallen)'),('VORSTUFE','fehlende Voraussetzung oder Modul nicht erreicht'),
-              ('BLE-ABWEICHUNG','BLE (objektiv belegt)'))
+def scorecard_of(manifest,records):
+    """The evaluation as numbers by the fixed specification (report_spec): checks, points, origins, operating measurements, cost, comparability.
+    The reviewer answers are counted for their own section; they never change a point."""
+    return report_spec.build_scorecard(manifest,records,effort_rows(records),[review for record in records for review in _reviews(record)])
 
 
-STOP_PLAIN={'PROVIDER_AUTHORIZATION_EXPIRED':'die Anmeldung beim Provider lief ab','EXECUTOR_UNAVAILABLE_AFTER_REPEATED_FAILURES':'der Provider fiel wiederholt aus (zuletzt: Anmeldung abgelaufen)',
-            'SUITE_TIME_CEILING':'die Zeitgrenze wurde erreicht','SUITE_CALL_CEILING':'die Grenze für Modellanfragen wurde erreicht'}
-
-
-def _duration(seconds):
-    minutes=int(round(float(seconds)/60))
-    return (f'{minutes//60} Std. {minutes%60} Min.' if minutes>=60 else f'{minutes} Min.')
-
-
-def kurzfassung(manifest,records):
-    """The report in plain words and bullet points for the PO: what ran, what passed, what is open and why. No codes, no tables.
-
-    The detailed report below it is written for the review agent; this part answers "did it work?" on one screen."""
-    def text(value):
-        value=str(value).replace('\\','\\\\').replace('\n',' ').replace('\r',' ').replace('`',"'")
-        for char in ('[',']','!','*','_','#','|'):value=value.replace(char,'\\'+char)
-        return value.replace('<','&lt;').replace('>','&gt;')
-    matrix=manifest.get('case_matrix') or case_matrix(records)
-    counts={}
-    for row in matrix:counts[row['objective_status']]=counts.get(row['objective_status'],0)+1
-    passed=[r for r in matrix if r['objective_status']=='PASS']
-    open_=[r for r in matrix if r['objective_status'] in ('INCONCLUSIVE','BLOCKED')]
-    failed=[r for r in matrix if r['objective_status']=='FAIL']
-    invalid=[r for r in matrix if r['objective_status']=='INVALID_HARNESS']
-    not_run=[r for r in matrix if r['objective_status']=='NOT_RUN']
-    name=lambda row:STAGE_PLAIN.get(row['case_id'],row['case_id'])
-    accounting=manifest.get('accounting',{})
-    verdict=VERDICT_PLAIN.get(manifest.get('verdict'),str(manifest.get('verdict')))
-    lines=['## Kurzfassung in einfachen Worten','',f"**Gesamtergebnis: {text(verdict)}.**",'']
-    if invalid:lines.append(f"- **Der Lauf ist ungültig.** Ein Fehler der Test-Suite hat ihn gestört ({text(', '.join(name(r) for r in invalid))}); das sagt nichts über BLE.")
-    elif not_run:lines.append(f"- **Der Lauf wurde vorzeitig beendet** ({text(STOP_PLAIN.get(manifest.get('stop_reason'),manifest.get('stop_reason') or manifest.get('technical_status')))}); {len(not_run)} Stufen liefen nicht.")
-    else:lines.append(f"- Der Lauf ist **vollständig durchgelaufen**: alle {len(matrix)} Stufen wurden ausgeführt.")
-    lines.append(f"- Ergebnis der Stufen: **{len(passed)} bestanden**, {len(open_)} nicht entschieden, {len(failed)} durchgefallen"+(f", {len(not_run)} nicht gelaufen" if not_run else '')+'.')
-    lines.append('- **Fehler in BLE:** '+('keine objektiv belegt.' if not failed else f"{len(failed)} Stufe(n) mit belegter Abweichung ({text(', '.join(name(r) for r in failed))}); fachlich zu bestätigen."))
-    if passed:lines.append('- **Bestanden:** '+text('; '.join(name(r) for r in passed))+'.')
-    if open_:lines.append('- **Nicht entschieden:** '+text('; '.join(name(r) for r in open_))+'.')
-    positions=[(row['case_id'],p) for row in matrix for p in row['position_results']]
-    if positions:
-        decided=sum(1 for _,p in positions if p['result']=='PASS')
-        lines.append(f"- **Positionen** (einzelne Proben je Modul oder Bericht): {decided} von {len(positions)} entschieden und bestanden.")
-    rows=effort_rows(records)
-    if rows:
-        origins={}
-        for row in rows:
-            if row['origin']!='—':
-                key=next((label for prefix,label in ORIGIN_PLAIN if row['origin'].startswith(prefix)),'unklar')
-                origins[key]=origins.get(key,0)+1
-        if origins:
-            lines.append('- **Warum Positionen offen blieben** (je Modulaufgabe): '+text('; '.join(f'{n}× {k}' for k,n in sorted(origins.items(),key=lambda x:-x[1])))+'.')
-        saves={}
-        for row in rows:saves[row['save']]=saves.get(row['save'],0)+1
-        entered=saves.get('SAVED',0)+saves.get('NOT_SAVED_AFTER_ENTRY',0)
-        if entered:
-            lines.append(f"- **Speichern:** In {entered} Modulen wurden alle Werte eingegeben; in {saves.get('NOT_SAVED_AFTER_ENTRY',0)} davon wurde **nicht gespeichert** (Schaltfläche nicht gefunden).")
-        lines.append(f"- **Bedienaufwand:** {text(sum(r['effort']['actions'] for r in rows))} Aktionen, {text(sum(r['effort']['scrolls'] for r in rows))} Scrolls, {text(sum(r['effort']['rejected'] for r in rows))} abgelehnte Klicks (Details im Abschnitt 3a).")
-    tokens=sum(v['tokens']['total_tokens']['known_sum'] for v in accounting.get('actors',{}).values()) if accounting.get('actors') else None
-    lines.append(f"- **Aufwand des Laufs:** {text(manifest.get('model_calls',0))} Modellanfragen, {text(_duration(accounting.get('elapsed_seconds',0)))}"+(f", rund {format(tokens/1e6,'.1f').replace('.',',')} Mio. Tokens" if tokens else '')+'.')
-    lines+=['- Hinweis: Beobachtungen des Reviewers zu BLE sind **unbestätigt** und kein Testergebnis; sie stehen in Abschnitt 4 und im Dokument der unbestätigten Beobachtungen.','',
-            '*Der ausführliche Bericht darunter ist für den Review-Agenten und für Nachprüfungen gedacht.*','']
-    return lines
+def punktebericht(manifest,records):
+    """The report for the PO and the review agent: fixed sections, fixed tables, fixed wording (specification nsn014-report-spec, versioned)."""
+    return report_spec.render(scorecard_of(manifest,records))
 
 
 def completion_text(manifest,records):
@@ -771,7 +713,7 @@ def completion_text(manifest,records):
         for char in ('[',']','!','*','_','#','|'):value=value.replace(char,'\\'+char)
         return value.replace('<','&lt;').replace('>','&gt;')
     accounting=manifest.get('accounting',{})
-    lines=['# NSN014 Abschlussbericht','',
+    lines=punktebericht(manifest,records)+['','---','','# Anhang: Detailbericht (Belege, nicht Teil der Punkte)','','## A0. Lauf','',
         f"- Lauf: {text(manifest['run_id'])}",f"- Gesamtergebnis: {text(manifest['verdict'])}",
         f"- Technischer Status: {text(manifest['technical_status'])}",f"- Funktionaler Status: {text(manifest['functional_status'])}",
         f"- Messstatus: {text(manifest.get('measurement_status','NOT_STARTED'))}",
@@ -784,36 +726,35 @@ def completion_text(manifest,records):
         f"- Provider-Vorabprüfung: {text(manifest.get('provider_probe',{}).get('status','NOT_PROBED'))}",
         f"- Executor-Anweisung und Aufgabenwortlaut (SHA256): {text(manifest.get('executor_instructions_sha256','nicht erfasst'))}; Läufe mit anderem Wortlaut sind nicht direkt vergleichbar",
         f"- Klickregeln der Guards (SHA256): {text(manifest.get('guard_rules_sha256','nicht erfasst'))}; Läufe mit anderen Regeln sind ebenfalls nicht direkt vergleichbar",'']
-    lines+=kurzfassung(manifest,records)
     if manifest.get('final_oracles'):
         lines+=['Abschließende unabhängige Oracles: '+text({key:value.get('status') if isinstance(value,dict) else value
                                                        for key,value in manifest['final_oracles'].items()}),'']
     matrix=manifest.get('case_matrix') or case_matrix(records)
-    lines+=['## Stufenmatrix','','| Stufe | Persona | Objektiver Status | Grund | UX-Urteil |','|---|---|---|---|---|']
+    lines+=['## A0a. Stufenmatrix','','| Stufe | Persona | Objektiver Status | Grund | UX-Urteil |','|---|---|---|---|---|']
     for row in matrix:
         lines.append('| '+' | '.join(text(v) for v in (row['case_id'],row['persona'],row['objective_status'],
                                                        row['reason'] or '—',row['ux_verdict']))+' |')
     passed=[r for r in matrix if r['objective_status']=='PASS']
     failed=[r for r in matrix if r['objective_status']=='FAIL']
-    lines+=['','## 1. Was in BLE funktioniert','']
+    lines+=['','## A1. Was in BLE funktioniert','']
     lines+=['- '+text(r['case_id'])+': objektiv bestanden' for r in passed] or ['- Keine Stufe objektiv bestanden.']
     for row in matrix:
         good=[p['position_id'] for p in row['position_results'] if p['result']=='PASS']
         if good and row['objective_status']!='PASS':lines.append('- '+text(row['case_id'])+': bestandene Positionen '+text(good))
-    lines+=['','## 2. Was in BLE nicht funktioniert','']
+    lines+=['','## A2. Was in BLE nicht funktioniert','']
     lines+=['- '+text(r['case_id'])+': '+text(r['fail_classes'] or r['reason'])+'; Positionen '+
             text([p['position_id'] for p in r['position_results'] if p['result']=='FAIL']) for r in failed] or [
             '- Keine objektiv belegte BLE-Abweichung.']
-    lines+=['','## 3. BLE- oder SQBF-Problem','']
+    lines+=['','## A3. BLE- oder SQBF-Problem','']
     for row in matrix:
         if row['objective_status']!='PASS':
             lines.append('- '+text(row['case_id'])+' ('+text(row['objective_status'])+'): '+
                          text(ATTRIBUTION.get({'INVALID_HARNESS':'INVALID'}.get(row['objective_status'],row['objective_status']),'')))
-    lines+=['','## 3a. Ursachen unvollständiger Positionen und Bedienaufwand','',
+    lines+=['','## A3a. Ursachen unvollständiger Positionen und Bedienaufwand','',
             'Ursprung: MODELL = der Agent hat aufgegeben, nicht gespeichert oder ein Feld nicht übernommen; SUITE = Test-Suite (Guard-Ablehnung, Wortlaut, Harness); '
             'PROVIDER = Anfrage ausgefallen; VORSTUFE = Voraussetzung fehlt (Modul nicht geöffnet, Feld nicht angeboten, Vorstufe unvollständig); '
             'BLE-ABWEICHUNG = objektiv belegt. Bedienprobleme von BLE (etwa die Auffindbarkeit der Speicherschaltfläche) stehen nur als unbestätigte '
-            'Reviewer-Beobachtungen in Abschnitt 4. Aktionen, Scrolls, abgelehnte Klicks und Speicherstatus sind Messwerte, kein Urteil.','']
+            'Reviewer-Beobachtungen in Abschnitt A4 und in Abschnitt 8 des Punkteberichts (nur gezählt). Aktionen, Scrolls, abgelehnte Klicks und Speicherstatus sind Messwerte, kein Urteil.','']
     rows=effort_rows(records)
     if rows:
         lines+=['| Stufe | Position | Modul | Modul erreicht | Status | Ursprung | Aktionen | Scrolls | davon nach letzter Eingabe | abgelehnte Klicks | Speichern |','|---|---|---|---|---|---|---|---|---|---|---|']
@@ -829,7 +770,7 @@ def completion_text(manifest,records):
     else:
         lines+=['- Keine Bedienaufwand-Messung vorhanden.','']
     summary=manifest.get('ux_summary') or ux_summary(records)
-    lines+=['','## 4. UX-Befunde nach Kategorie und Schweregrad','',
+    lines+=['','## A4. UX-Befunde nach Kategorie und Schweregrad','',
             'Reviewer-Befunde sind unbestätigte Beobachtungen; sie ändern keinen objektiven Status.','']
     for category,severities in summary['finding_counts'].items():
         if any(severities.values()):
@@ -841,7 +782,7 @@ def completion_text(manifest,records):
                    +text(finding.get('severity'))+': '+text(finding.get('observed'))+' → erwartet: '+text(finding.get('expected'))
                    +'; Vorschlag: '+text(finding.get('suggestion'))+' (Evidenz: '+text(finding.get('evidence'))+')')
             (priority if finding.get('severity') in ('critical','major') else minor).append(entry)
-    lines+=['','## 5. Priorität','',
+    lines+=['','## A5. Priorität','',
             'P1 objektive BLE-Abweichungen (fachlich bestätigen, dann BLE-Issue):']
     lines+=['- '+text(r['case_id'])+': '+text(r['fail_classes']) for r in failed] or ['- keine']
     lines+=['P2 Harness-/Voraussetzungsstopps vor einem Retest beheben:']
@@ -849,13 +790,13 @@ def completion_text(manifest,records):
     lines+=['- UX-Review ausgefallen in '+text(r['case_id'])+': '+text(', '.join(r['review_errors'])) for r in matrix if r['review_errors']]
     lines+=['P3 kritische/major UX-Befunde:']+(['- '+e for e in priority] or ['- keine'])
     lines+=['P4 weitere UX-Befunde (minor/info):']+(['- '+e for e in minor] or ['- keine'])
-    lines+=['','## 6. Retest-Benchmark','',
+    lines+=['','## A6. Retest-Benchmark','',
         f"- Vergleichsschlüssel (Suite, Datensatz, Modelle, Viewport, Browser): {text(manifest.get('comparison_key','nicht verfügbar'))}",
         f"- Suite-SHA256: {text(manifest['suite_sha256'])}; Datensatz-SHA256: {text(manifest['dataset_sha256'])}",
         f"- Fixture-Startzustand-SHA256: {text(manifest.get('prepared_state_sha256'))}",
         '- Retest: neue Fixture aus derselben Golden-Basis, gleiche Suite-/Bewertungs-/Rubrik-Version, ein Lauf ohne Retry.',
-        '- Verglichen werden objektive Status je Stufe und Position sowie UX-Werte je Dimension; keine globale Prozentzahl.',
-        '','## 7. Zeit und Nutzung','',
+        '- Verglichen werden Prüfpunkte, Punkte und Quoten des Punkteberichts (Abschnitt 7 dort nennt die Bedingungen); UX-Werte nur als Beobachtung.',
+        '','## A7. Zeit und Nutzung','',
         f"Controller-Laufzeit (s): {text(accounting.get('elapsed_seconds','unbekannt'))}",
         f"Modell-Wartezeit (s): {text(accounting.get('model_wait_seconds','unbekannt'))}",
         f"Übrige Controller-Zeit (s): {text(accounting.get('non_model_elapsed_seconds','unbekannt'))}",'']
@@ -864,7 +805,7 @@ def completion_text(manifest,records):
         for key,value in usage['tokens'].items():
             total=value['complete_total'] if value['complete_total'] is not None else 'unbekannt'
             lines.append(f"  - {text(key)}: gesamt {text(total)}; bekannte Summe {text(value['known_sum'])}; ohne Angabe {text(value['unknown_calls'])}")
-    lines+=['','## 8. Stufendetails','']
+    lines+=['','## A8. Stufendetails','']
     for record in records:
         lines+=['### '+text(record['case_id']),'',
             f"Status: {text(objective_status(record['result']))}; technisch: {text(record.get('technical_gate','ungeprüft'))}; "
@@ -882,10 +823,10 @@ def completion_text(manifest,records):
             for review in item.get('pdf_reviews',[]):
                 lines.append('- PDF-Seiten '+text(review['pages'])+': '+text(review['verdict'])+'; UX-Werte: '+text(review.get('scores',{})))
         lines.append('')
-    lines+=['## Evidenz und Interpretation','',
+    lines+=['## A9. Evidenz und Interpretation','',
         '- Ereignisse, Screenshots, PDF-Downloads, cases.json, accounting.json und run.json bleiben lokal und privat.',
         '- Objektive Status stammen aus Controller- und unabhängigen Read-only-Oracles; der Reviewer bestimmt sie nicht.',
-        '- Harte Sicherheits- oder Datenfehler werden nicht durch UX-Werte kompensiert; es gibt keine Gesamtprozentzahl.',
+        '- Harte Sicherheits- oder Datenfehler werden nicht durch UX-Werte kompensiert; die Punkte stehen im Punktebericht oben.',
         '- Berechnungen werden aus persistierten Rohdaten unabhängig nachgerechnet; Teilsiebung/gekoppelte Siebung ist NOT_COVERED.',
         '- KI-Controllerzeit ist keine menschliche Arbeitszeit. Normkonformität und Freigabe sind ausgeschlossen.',
         '- Fehlende Voraussetzungen und Ressourcenstopps bleiben explizit; es gibt keinen automatischen Retry.']

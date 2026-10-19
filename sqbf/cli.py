@@ -215,6 +215,9 @@ def main(argv=None) -> int:
     probe.add_argument('--executor-model',default='gpt-6-luna')
     probe.add_argument('--reviewer-model',default='gpt-6.1-sol')
     probe.add_argument('--execute',action='store_true',help='Fresh subscription OAuth and exactly two requests, no retry')
+    score=sub.add_parser('suite-score',help='Model-free evaluation of a recorded NSN014 run by the fixed report specification; writes scorecard.json and punktebericht.md next to the run, never overwrites',allow_abbrev=False)
+    score.add_argument('--run',required=True,help='Run folder with run.json and cases.json')
+    score.add_argument('--compare-with',help='Second run folder; prints the fixed comparison of both scorecards')
     registry.add_argument("--output",default="runs")
     for option in ["test-id","software-version","date"]:
         registry.add_argument("--"+option, help="Case-sensitive substring match")
@@ -332,6 +335,32 @@ def main(argv=None) -> int:
             return 2
         print(json.dumps(report,indent=2))
         return 0 if report['status'] in ('PROBE_PLAN_ONLY','PROBE_RECORDED') and report.get('verdict','PROBE_PASS')=='PROBE_PASS' else 2
+    if args.command=='suite-score':
+        from importlib import import_module
+        runner=import_module('projects.ble-elva.tools.regular_runner');spec=import_module('projects.ble-elva.tools.report_spec')
+        try:
+            cards,files=[],{}
+            for folder in [args.run]+([args.compare_with] if args.compare_with else []):
+                path=Path(folder)
+                card=runner.scorecard_of(json.loads((path/'run.json').read_text(encoding='utf-8')),json.loads((path/'cases.json').read_text(encoding='utf-8')))
+                if spec.scorecard_problems(card):raise ValueError('scorecard contract')
+                cards.append(card)
+                for name,content in (('scorecard.json',json.dumps(card,ensure_ascii=False,indent=2)+'\n'),('punktebericht.md','\n'.join(spec.render(card))+'\n')):
+                    target=path/name
+                    if target.exists():state='IDENTICAL' if target.read_text(encoding='utf-8')==content else 'DIFFERS'
+                    else:
+                        with open(target,'x',encoding='utf-8',newline='') as handle:handle.write(content)
+                        state='CREATED'
+                    files[str(target)]=state
+            report={'status':'SCORED','spec_version':cards[0]['spec_version'],'files':files,
+                    'runs':[{'run_id':c['run']['run_id'],'result':c['result']['run_result'],'points':c['points']['points'],'max_points':c['points']['max_points'],
+                             'points_percent':c['rates']['points_percent']} for c in cards]}
+            if len(cards)==2:report['comparison']=spec.compare(cards[0],cards[1])
+        except Exception as error:
+            print('BLOCKED_SCORE: run folder or contract invalid; error_type='+type(error).__name__)
+            return 2
+        print(json.dumps(report,indent=2,ensure_ascii=False))
+        return 2 if 'DIFFERS' in files.values() else 0
     if args.command=='suite-sessions':
         from importlib import import_module
         try:

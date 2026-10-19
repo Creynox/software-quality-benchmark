@@ -624,6 +624,22 @@
       "detail_panel_close": "read-only in the inspection stages",
       "comparability": "guard_rules_sha256 in the run manifest; runs with different rules are not directly comparable",
       "residual_risk": "Blazor does not mark event handlers in the DOM; a handler on an element without pointer cursor would not be detected (not found on 12 real pages)"
+    },
+    "report_spec": {
+      "decision": "PO 2026-10-19: always a points system with passed / not passed from numbers and facts; one fixed evaluation report definition, versioned, no free-text judgement",
+      "definition": "projects/ble-elva/suites/nsn014-report-spec-v1.json",
+      "version": "1.0.0",
+      "description": "docs/nsn014-report-spec.md",
+      "implementation": "projects/ble-elva/tools/report_spec.py",
+      "catalogue_checks": 46,
+      "outputs_per_run": [
+        "scorecard.json",
+        "punktebericht.md"
+      ],
+      "rescoring": "python -m sqbf.cli suite-score --run <run folder> [--compare-with <run folder>] (model-free, never overwrites)",
+      "reviewer": "observation layer only; counted in section 8; rubric nsn014-ux-rubric-v1 unchanged",
+      "change_rule": "new version with changelog entry, new pinned hash and golden file; MAJOR for catalogue/point/status/origin/formula, MINOR for additions at the end, PATCH for wording",
+      "targets": "none defined in 1.0.0 (PO decision and new version)"
     }
   }
 }

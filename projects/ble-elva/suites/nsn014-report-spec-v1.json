@@ -1,0 +1,396 @@
+{
+  "spec_id": "NSN014-REPORT-SPEC",
+  "spec_version": "1.0.0",
+  "decided_by": "PO, 2026-10-19: one fixed, versioned definition of the evaluation report; a points system of numbers and facts (passed / not passed); no free-text judgement and no assumption in any number",
+  "applies_to": {
+    "suite_id": "ENZBERG-NSN014",
+    "suite_version": "0.4.1"
+  },
+  "version_policy": {
+    "MAJOR": "the check catalogue, a point rule, a status rule, an origin rule or a formula changes: numbers of different MAJOR versions are not comparable",
+    "MINOR": "a field, a table row or a section is added at the end; existing fields, positions and numbers stay unchanged",
+    "PATCH": "wording, labels or formatting change; no number changes"
+  },
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2026-10-19",
+      "change": "first fixed definition: 46 checks, one point per passed check, nine fixed sections, scorecard.json schema, comparison rule"
+    }
+  ],
+  "stage_order": [
+    "NSN014-PLAN",
+    "NSN014-RECEIPT",
+    "NSN014-PREPARATION",
+    "NSN014-SIEVE",
+    "NSN014-SHAPE",
+    "NSN014-BOILING",
+    "NSN014-SE",
+    "NSN014-ASSESS",
+    "NSN014-WPK",
+    "NSN014-ANALYSIS",
+    "NSN014-REPORT",
+    "NSN014-RIGHTS"
+  ],
+  "stage_labels": {
+    "NSN014-PLAN": "Planproben anlegen",
+    "NSN014-RECEIPT": "Probeneingang prüfen",
+    "NSN014-PREPARATION": "Abschlämmung und Entnahmen erfassen",
+    "NSN014-SIEVE": "Siebanalyse erfassen",
+    "NSN014-SHAPE": "Kornform erfassen",
+    "NSN014-BOILING": "Kochversuch erfassen",
+    "NSN014-SE": "Sandäquivalent erfassen",
+    "NSN014-ASSESS": "Bewertungsansicht prüfen",
+    "NSN014-WPK": "Plan gegen Fertiggestelltes prüfen",
+    "NSN014-ANALYSIS": "Analytik prüfen",
+    "NSN014-REPORT": "Prüfberichte erzeugen",
+    "NSN014-RIGHTS": "Rechte der Werksleitung prüfen"
+  },
+  "check_catalogue": {
+    "rule": "One check per stage for the single-task stages and one check per position for the measurement and report stages. The catalogue is fixed by this version; a position or stage that is not listed is a catalogue mismatch and is reported in section 9, never silently counted.",
+    "single": [
+      "NSN014-PLAN",
+      "NSN014-RECEIPT",
+      "NSN014-ASSESS",
+      "NSN014-WPK",
+      "NSN014-ANALYSIS",
+      "NSN014-RIGHTS"
+    ],
+    "positions": {
+      "NSN014-PREPARATION": [
+        "P01",
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "P09",
+        "P10"
+      ],
+      "NSN014-SIEVE": [
+        "P01",
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "P09",
+        "P10"
+      ],
+      "NSN014-SHAPE": [
+        "P01",
+        "P05",
+        "P06",
+        "P09",
+        "P10"
+      ],
+      "NSN014-BOILING": [
+        "P01",
+        "P04",
+        "P05",
+        "P10"
+      ],
+      "NSN014-SE": [
+        "P01"
+      ],
+      "NSN014-REPORT": [
+        "P01",
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "P09",
+        "P10"
+      ]
+    }
+  },
+  "status_order": [
+    "PASSED",
+    "FAILED",
+    "NOT_DECIDED",
+    "INVALID",
+    "NOT_RUN"
+  ],
+  "status_labels": {
+    "PASSED": "bestanden",
+    "FAILED": "nicht bestanden",
+    "NOT_DECIDED": "nicht entschieden",
+    "INVALID": "ungültig",
+    "NOT_RUN": "nicht ausgeführt"
+  },
+  "status_rules": {
+    "PASSED": "the independent Oracle matches the approved values and the task is complete (stage result PASS or position result PASS); 1 point",
+    "FAILED": "an objective deviation proven by an independent Oracle (stage result FAIL or position result FAIL); 0 points",
+    "NOT_DECIDED": "no objective result was reached (stage result INCONCLUSIVE or BLOCKED, position result INCOMPLETE, or a position of a stage that ended without a result for it); 0 points; the origin says why",
+    "INVALID": "the measurement itself is invalid (stage result INVALID or INVALID_HARNESS, which makes every check of that stage INVALID); 0 points; not a finding about BLE",
+    "NOT_RUN": "the stage did not run or has no record (upstream stop); 0 points"
+  },
+  "origin_order": [
+    "MODELL",
+    "MODELL/SUITE",
+    "SUITE",
+    "PROVIDER",
+    "VORSTUFE",
+    "UNKLAR",
+    "NICHT_AUSGEFUEHRT",
+    "UNGUELTIG",
+    "BLE-ABWEICHUNG"
+  ],
+  "origin_labels": {
+    "MODELL": "Modell (hat aufgegeben, nicht gespeichert, Feld nicht übernommen)",
+    "MODELL/SUITE": "Modell und Test-Suite gemeinsam (vorher abgelehnte Aktion)",
+    "SUITE": "Test-Suite (Guard, Wortlaut, Harness)",
+    "PROVIDER": "Provider (Anfrage ausgefallen)",
+    "VORSTUFE": "Voraussetzung fehlt oder Modul nicht erreicht",
+    "UNKLAR": "Ursprung aus den Daten nicht bestimmbar",
+    "NICHT_AUSGEFUEHRT": "Stufe nicht ausgeführt",
+    "UNGUELTIG": "Messung ungültig",
+    "BLE-ABWEICHUNG": "objektive Abweichung, durch unabhängige Oracles belegt (fachlich zu bestätigen)"
+  },
+  "origin_rules": {
+    "PASSED": "no origin",
+    "FAILED": "BLE-ABWEICHUNG",
+    "INVALID": "UNGUELTIG",
+    "NOT_RUN": "NICHT_AUSGEFUEHRT",
+    "NOT_DECIDED": "stage_support.cause_source(result, class, rejected actions, module reached, save click rejected) from the recorded position result; for a stage or a position without a recorded class: the recorded stop or stage reason through stage_reason_origin; otherwise UNKLAR"
+  },
+  "stage_reason_origin": {
+    "EXECUTOR_UNAVAILABLE_AFTER_REPEATED_FAILURES": "PROVIDER",
+    "PROVIDER_AUTHORIZATION_EXPIRED": "PROVIDER"
+  },
+  "stop_labels": {
+    "PROVIDER_AUTHORIZATION_EXPIRED": "Anmeldung beim Provider abgelaufen",
+    "EXECUTOR_UNAVAILABLE_AFTER_REPEATED_FAILURES": "Provider wiederholt ausgefallen",
+    "SUITE_TIME_CEILING": "Zeitgrenze erreicht",
+    "SUITE_CALL_CEILING": "Grenze für Modellanfragen erreicht"
+  },
+  "formulas": {
+    "points": "number of checks with status PASSED",
+    "max_points": "number of checks in the catalogue (46 in version 1.0.0)",
+    "points_percent": "points / max_points * 100, one decimal, rounded half up",
+    "coverage_percent": "(PASSED + FAILED) / max_points * 100, one decimal, rounded half up: the share of checks that reached an objective result",
+    "pass_rate_of_decided_percent": "PASSED / (PASSED + FAILED) * 100, one decimal, rounded half up; null if no check is decided",
+    "save_rate_percent": "SAVED / (SAVED + NOT_SAVED_AFTER_ENTRY) * 100 over the measured module tasks, one decimal, rounded half up; null if the denominator is 0. A task without a recorded save status counts as NOT_APPLICABLE."
+  },
+  "run_result": {
+    "order": [
+      "UNGUELTIG",
+      "NICHT_BESTANDEN",
+      "ABGEBROCHEN",
+      "BESTANDEN",
+      "UNVOLLSTAENDIG"
+    ],
+    "UNGUELTIG": "at least one check is INVALID or the technical status of the run is INVALID",
+    "NICHT_BESTANDEN": "at least one check is FAILED or at least one stage result is FAIL",
+    "ABGEBROCHEN": "the run recorded a stop reason, its technical status is RESOURCE_STOP, BLOCKED or BLOCKED_OR_INVALID, or at least one check is NOT_RUN",
+    "BESTANDEN": "all checks of the catalogue are PASSED, the verdict of the run is GO and section 9 has no finding",
+    "UNVOLLSTAENDIG": "none of the above: no deviation, but not every check is PASSED",
+    "bestanden_flag": "true only for BESTANDEN",
+    "labels": {
+      "UNGUELTIG": "ungültig",
+      "NICHT_BESTANDEN": "nicht bestanden",
+      "ABGEBROCHEN": "abgebrochen",
+      "BESTANDEN": "bestanden",
+      "UNVOLLSTAENDIG": "unvollständig"
+    },
+    "targets": "none defined in version 1.0.0; a target value (e.g. a minimum points percentage) is a decision of the PO and a new version"
+  },
+  "consistency_rules": {
+    "STAGE_PASS_WITH_OPEN_CHECK": "stage result PASS but a check of the stage is not PASSED",
+    "STAGE_FAIL_WITHOUT_FAILED_CHECK": "stage result FAIL but no check of the stage is FAILED",
+    "VERDICT_GO_WITH_OPEN_CHECK": "the verdict is GO but a check is not PASSED",
+    "ALL_PASSED_WITHOUT_GO": "all checks are PASSED but the verdict is not GO",
+    "DUPLICATE_RECORD": "a stage has more than one record",
+    "CATALOGUE_MISMATCH": "a recorded stage or position is not in the catalogue (listed separately)",
+    "UNKNOWN_RESULT": "a stage or position result outside the known vocabulary (counted as NOT_DECIDED)"
+  },
+  "sections": [
+    {
+      "id": "1",
+      "title": "Kennzahlen"
+    },
+    {
+      "id": "2",
+      "title": "Ergebnis je Stufe"
+    },
+    {
+      "id": "3",
+      "title": "Prüfpunkte ohne Bestanden nach Ursprung"
+    },
+    {
+      "id": "4",
+      "title": "Alle Prüfpunkte"
+    },
+    {
+      "id": "5",
+      "title": "Bedienkennzahlen"
+    },
+    {
+      "id": "6",
+      "title": "Aufwand"
+    },
+    {
+      "id": "7",
+      "title": "Vergleichbarkeit"
+    },
+    {
+      "id": "8",
+      "title": "Beobachtungen des Reviewers (nicht in den Punkten)"
+    },
+    {
+      "id": "9",
+      "title": "Konsistenzprüfung"
+    }
+  ],
+  "save_status_order": [
+    "SAVED",
+    "NOT_REQUIRED",
+    "SAVE_CLICK_REJECTED",
+    "NOT_SAVED_AFTER_ENTRY",
+    "NOT_SAVED_PARTIAL_ENTRY",
+    "NOT_REACHED",
+    "NOT_APPLICABLE"
+  ],
+  "comparability_keys": [
+    "spec_version",
+    "suite_sha256",
+    "dataset_sha256",
+    "reference_projection_sha256",
+    "allocation_reference_sha256",
+    "executor_instructions_sha256",
+    "guard_rules_sha256",
+    "review_schema_sha256",
+    "executor_model",
+    "reviewer_model",
+    "viewport",
+    "browser_version"
+  ],
+  "scorecard_keys": [
+    "spec_id",
+    "spec_version",
+    "spec_sha256",
+    "run",
+    "result",
+    "points",
+    "counts",
+    "rates",
+    "stages",
+    "checks",
+    "origins",
+    "operating",
+    "cost",
+    "comparability",
+    "reviewer_observations",
+    "consistency"
+  ],
+  "columns": {
+    "kennzahlen": [
+      "Kennzahl",
+      "Wert"
+    ],
+    "stages": [
+      "Stufe",
+      "Bezeichnung",
+      "Stufenergebnis",
+      "Punkte",
+      "bestanden",
+      "nicht bestanden",
+      "nicht entschieden",
+      "ungültig",
+      "nicht ausgeführt"
+    ],
+    "origins": [
+      "Ursprung",
+      "Bedeutung",
+      "Anzahl"
+    ],
+    "checks": [
+      "Prüfpunkt",
+      "Status",
+      "Ursprung",
+      "Klasse"
+    ],
+    "operating": [
+      "Messwert",
+      "Wert"
+    ],
+    "cost": [
+      "Messwert",
+      "Wert"
+    ],
+    "comparability": [
+      "Schlüssel",
+      "Wert"
+    ],
+    "reviewer_verdicts": [
+      "Urteil des Reviewers",
+      "Anzahl"
+    ],
+    "reviewer_scores": [
+      "Dimension",
+      "Anzahl",
+      "Minimum",
+      "Mittelwert",
+      "Maximum"
+    ],
+    "reviewer_findings": [
+      "Kategorie",
+      "critical",
+      "major",
+      "minor",
+      "info"
+    ],
+    "consistency": [
+      "Regel",
+      "Anzahl"
+    ]
+  },
+  "notes": {
+    "intro": "Der Bericht entsteht allein aus gemessenen Ergebnissen, ohne Freitext und ohne Annahmen. Jeder der {max_points} Prüfpunkte hat genau einen Status: bestanden, nicht bestanden, nicht entschieden, ungültig oder nicht ausgeführt. Nur ein bestandener Prüfpunkt zählt einen Punkt; „nicht entschieden“ ist kein Bestehen.",
+    "origin": "Der Ursprung ordnet einen Prüfpunkt ohne Bestehen nach aufgezeichneten Fakten ein; er ist kein Urteil über BLE. Ein BLE-Fehler ist ausschließlich ein Prüfpunkt „nicht bestanden“ (Ursprung BLE-ABWEICHUNG, fachlich zu bestätigen). Bedienbeobachtungen des Reviewers stehen unbestätigt in Abschnitt 8.",
+    "comparability": "Zwei Läufe sind nur vergleichbar, wenn alle Werte dieser Tabelle gleich sind; sonst unterscheiden sich die Messbedingungen, nicht nur die Ergebnisse.",
+    "reviewer": "Der Reviewer antwortet je Aufgabe im festen JSON-Schema (Urteil, vier Werte von 0 bis 5, Befunde). Seine Antworten sind unbestätigte Beobachtungen: Sie werden hier nur gezählt und ändern weder einen Prüfpunkt noch einen Punkt noch das Ergebnis des Laufs. Der Wortlaut der Befunde steht im Anhang A4."
+  },
+  "operating_labels": {
+    "actions": "Aktionen",
+    "scrolls": "Scrolls",
+    "scrolls_after_last_entry": "Scrolls nach der letzten Eingabe",
+    "clicks": "Klicks",
+    "typed": "Eingaben",
+    "keys": "Tastendrücke",
+    "waits": "Wartezeiten",
+    "rejected": "abgelehnte Aktionen"
+  },
+  "save_labels": {
+    "SAVED": "gespeichert",
+    "NOT_REQUIRED": "Speichern nicht nötig (Zuteilung)",
+    "SAVE_CLICK_REJECTED": "Klick auf Speichern abgelehnt",
+    "NOT_SAVED_AFTER_ENTRY": "alles eingegeben, nicht gespeichert",
+    "NOT_SAVED_PARTIAL_ENTRY": "nur teilweise eingegeben, nicht gespeichert",
+    "NOT_REACHED": "Modul nicht erreicht",
+    "NOT_APPLICABLE": "nicht zutreffend (Lese- oder Berichtsaufgabe)"
+  },
+  "reached_labels": {
+    "ja": "Modul erreicht",
+    "nein": "Modul nicht erreicht",
+    "unbekannt": "Modul erreicht: nicht erfasst"
+  },
+  "agent_rules": {
+    "applies_to": "every agent that reads, summarises or comments on a run, including the review agent (gpt-6.1-sol) when it works with the report; the numbers come from scorecard.json, the layout from this specification",
+    "rules": [
+      "Zahlen, Status und Ergebnis des Laufs werden ausschließlich aus scorecard.json bzw. punktebericht.md übernommen; sie werden nicht neu berechnet, geschätzt oder gerundet.",
+      "Es gibt kein anderes Ergebnis als result.run_result und kein anderes Bestehen als der Status eines Prüfpunkts; ein Satz wie „gut“, „schlecht“, „vermutlich“ oder „wahrscheinlich“ ersetzt keine Zahl.",
+      "Jede Aussage nennt ihre Quelle: eine Prüfpunkt-ID (Abschnitt 4), eine Zahl aus einem Abschnitt (1 bis 9) oder eine Belegdatei des Laufs.",
+      "Ein BLE-Fehler ist nur ein Prüfpunkt mit Status „nicht bestanden“ (Ursprung BLE-ABWEICHUNG); alles andere, auch jede Beobachtung des Reviewers, ist unbestätigt und wird so bezeichnet.",
+      "Läufe werden nur verglichen, wenn Abschnitt 7 gleich ist (suite-score --compare-with); sonst steht das Ergebnis des Vergleichs „nicht vergleichbar“ mit den abweichenden Schlüsseln.",
+      "Struktur, Reihenfolge, Spalten und Wortlaut des Berichts ändern sich nur durch eine neue Version dieser Spezifikation (MAJOR, MINOR, PATCH) mit Eintrag im Änderungsverlauf; ein Agent ergänzt oder ändert sie nicht von sich aus."
+    ]
+  }
+}

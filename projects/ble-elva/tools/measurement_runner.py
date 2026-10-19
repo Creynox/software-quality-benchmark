@@ -18,7 +18,8 @@ from .measurement_guard import make_contract, event_guard, check_action, transpo
 from .measurement_oracle import collect_inputs, verify_inputs
 from .receipt_oracle import collect_receipts
 from .allocation_oracle import collect_allocations, prerequisite_gaps, verify_allocations
-from .stage_support import (StallDetector, ExecutorRequestFailed, ask_executor, ask_review, classify_rejection, incomplete_reason, review_prompt, ux_verdicts,
+from .task_vocabulary import module_title, task_inputs
+from .stage_support import (StallDetector, ExecutorRequestFailed, ask_executor, ask_review, effort_of, classify_rejection, incomplete_reason, review_prompt, ux_verdicts,
                             MAX_REJECTIONS_PER_TASK, REJECTION_NOTE, describe_target, rejection_marker)
 from sqbf.suites import canonical_hash
 from sqbf.no_write_oracle import snapshot
@@ -31,8 +32,9 @@ A field may be pre-filled: select its content first (ControlOrMeta+A), then type
 Physical laboratory operations are simulated. Existing norms, method profiles and product settings stay unchanged.
 Save each module or individual shape fraction once only, then inspect the resulting state. No save retry.
 No release, signature, finalization, delete, dispatch, master data or optional notes.
-If the sample page asks for a test order ("Testauftrag erzeugen"), creating it once with that visible button is permitted; then open the module with its "Erfassen" button. Do not use "Anforderungen anlegen".
-The modules of a sample are listed as cards further down the sample page: scroll to them. Click the input field itself, not its label or heading. After the last value leave the field (Tab) so that it is applied.
+If the sample page asks for a test order ("Testauftrag erzeugen"), creating it once with that visible button is permitted. Do not use "Anforderungen anlegen".
+Operate the application only through its visible user interface. Controls may not be within the currently visible part of the page; look for the functions you need through the usual navigation options of the interface.
+After typing a value, leave the field so that the page can apply it.
 Allowed keys: ControlOrMeta+A, Backspace, Delete, Tab, Escape. Select controls only through visible UI.
 If a field or prerequisite is unavailable or validation fails, explain blocked instead of bypassing it.
 '''+REJECTION_NOTE+'\n'
@@ -45,6 +47,17 @@ def required_saves(contract):
     if contract['kind']=='allocations':return set()
     if contract['kind']=='shape':return {key.split(':')[-1] for key in contract['fields'] if key.startswith('Einwaage gesamt (g):')}
     return {'module'}
+
+
+def save_status(contract,outcome,saved,rejected):
+    """What became of the save, as a measurement of the operating path: SAVED, NOT_REQUIRED (the allocations have no save of their own),
+    SAVE_CLICK_REJECTED (a click on a save control was prevented), NOT_SAVED_AFTER_ENTRY (everything typed, no save click),
+    NOT_SAVED_PARTIAL_ENTRY or NOT_REACHED."""
+    if contract['kind']=='allocations':return 'NOT_REQUIRED'
+    if required_saves(contract)<=saved:return 'SAVED'
+    if any(isinstance(r.get('target'),dict) and r['target'].get('label')=='Speichern' for r in rejected):return 'SAVE_CLICK_REJECTED'
+    if outcome['fields_entered']>=outcome['fields_required']>0:return 'NOT_SAVED_AFTER_ENTRY'
+    return 'NOT_SAVED_PARTIAL_ENTRY' if outcome['fields_entered'] else 'NOT_REACHED'
 
 
 def field_shows(page,text):
@@ -77,7 +90,7 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
         page.goto(contract['origin']+contract['root'],wait_until='domcontentloaded',timeout=min(15000,budget.remaining()*1000))
         page.wait_for_timeout(800)
         task=json.dumps({'sample_code':position['sample_code'],'product':position['product'],
-                          'module':kind,'source_inputs':{name:german(value) for name,value in contract['fields'].items()}},ensure_ascii=False)
+                          'module':module_title(kind),'source_inputs':task_inputs(kind,{name:german(value) for name,value in contract['fields'].items()})},ensure_ascii=False)
         while True:
             budget.remaining()
             if urlsplit(page.url).path=='/login':raise ReadOnlyViolation('SESSION_INVALIDATED')
@@ -150,6 +163,7 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
                    fully_entered=set(contract['fields'])<=filled and required_saves(contract)<=saved and not outcome['field_focused_at_end'],
                    fields_offered=len(offered),fields_not_offered=fields_not_offered(contract,offered),
                    offered_entered=offered<=filled and (required_saves(contract)<=saved or not offered))
+    outcome.update(effort=effort_of(actions,rejected),save_status=save_status(contract,outcome,saved,rejected))
     return outcome
 
 

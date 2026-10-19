@@ -107,6 +107,26 @@ class MeasurementGuardTests(unittest.TestCase):
         broken=MagicMock();broken.evaluate.side_effect=RuntimeError('page gone');self.assertIsNone(module.focused_field(broken,c))
         self.assertIsNone(module.focused_field(MagicMock(),c))  # an unreadable answer counts as no focus
 
+    def test_a_click_in_the_editable_weigh_in_box_is_a_click_on_its_field_and_other_boxes_stay_blocked(self):
+        # Live run fdea63ef: a click on the box around the main weigh-in (div.sa-kpi-editable, "EINWAAGE g") was rejected and the executor gave up.
+        from playwright.sync_api import sync_playwright
+        c=self.contract('sieve');path=c['path']
+        html=('<div class="sa-kpi sa-kpi-editable sa-kpi-einwaage" id="box"><div class="sa-kpi-lbl" id="lbl">EINWAAGE</div><input id="in"></div>'
+              '<div class="sa-kpi" id="readonly"><div class="sa-kpi-lbl">RÜCKSTAND GES.</div><span>-</span></div>'
+              '<div class="sa-kpi sa-kpi-editable" id="other"><div>EINWAAGE</div><input id="in2"></div>')
+        with sync_playwright() as p:
+            browser=p.chromium.launch();context=browser.new_context(viewport={'width':1280,'height':800});context.add_init_script(module.event_guard(c))
+            context.route(c['origin']+'/**',lambda route:route.fulfill(body=html,content_type='text/html; charset=utf-8'))
+            page=context.new_page();page.goto(c['origin']+path)
+            def state(selector):
+                return page.evaluate("""({config,selector})=>{__C__const e=document.querySelector(selector);const r=e.getBoundingClientRect();
+                  return classify(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}""".replace('__C__',module.CLASSIFY),{'config':c,'selector':selector})
+            self.assertEqual(state('#box'),{'kind':'field','field':'main_input'})
+            self.assertEqual(state('#lbl'),{'kind':'field','field':'main_input'})
+            self.assertEqual(state('#readonly')['kind'],'blocked')
+            self.assertEqual(state('#other')['kind'],'blocked')  # an editable box that is not an approved field
+            context.close();browser.close()
+
     def test_the_wheel_scrolls_the_page_over_a_field_but_never_changes_the_focused_field(self):
         # Live-run lesson (dry run 16.10.2026): blocking every wheel event over a field made the page unscrollable over the input column.
         from playwright.sync_api import sync_playwright

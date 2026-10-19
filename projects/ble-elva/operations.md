@@ -197,6 +197,13 @@ einmal und listet den Katalog, `--forget` löscht die Anmeldung. Ohne gespeicher
 Bestätigung nicht rechtzeitig ab, endet der Start mit `SUITE_STOPPED_NO_RETRY`, 0 Anfragen und ohne Lease (zwei Versuche am 16.10.2026). Wird die
 Erneuerung abgelehnt, stoppt die Suite sofort (`PROVIDER_AUTHORIZATION_EXPIRED`). Details und Grenzen: `docs/chatgpt-plan-provider.md`.
 
+## NSN014: Fixture- und Sitzungsvorbereitung (Lehren 19.10.2026)
+
+- Nach einem Rechner-Neustart Docker Desktop von Hand starten und auf `docker info` warten, bevor ein Klon angelegt wird.
+- Ein liegengebliebenes `BLE.Web.exe` einer verbrauchten Fixture hält Port 5082 und lässt den Klon bei `phase=web` mit `NOT_LISTENING` scheitern: zuerst beenden (`taskkill /PID <id> /T /F`) oder `--occupant-fixture` mit dem Manifest angeben, dessen Web läuft.
+- `suite-sessions` erneuert je alter Sitzungsdatei höchstens einmal (Marker `login-attempt-<persona>-<sha>.json` im Seed-Ordner). Nie zweimal aus denselben abgelaufenen Sitzungen seeden; immer aus den neuesten, noch gültigen Sitzungen (BLE-Sitzungen verfielen nach etwa fünf Stunden), notfalls ein Seed-Manifest von Hand aus dem letzten `fixture-prepared-sessions.json` bauen.
+- Reihenfolge vor einem Lauf: Trockenlauf sauber und mit `--inject-executor-faults`, neue Fixture (`--purpose fixture`), Provider-Probe (12 h gültig), Readiness, Freigabe des PO, Start.
+
 ## Evidenz und Aufbewahrung
 
 Private lokale Run-Ordner: PNGs mit SHA-256, Events, Usage, gemessene Modell-/Runnerzeit,

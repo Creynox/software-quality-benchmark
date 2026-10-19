@@ -21,7 +21,7 @@ from .measurement_oracle import collect_inputs
 from .persona_scope import check_persona
 from .receipt_oracle import collect_receipts,verify_receipts
 from .report_oracle import collect_reports, verify_reports, expected_numbers
-from .stage_support import (StallDetector, ExecutorRequestFailed, ask_executor, ask_review, classify_rejection, incomplete_reason, review_prompt, ux_verdicts,
+from .stage_support import (StallDetector, ExecutorRequestFailed, ask_executor, ask_review, effort_of, classify_rejection, incomplete_reason, review_prompt, ux_verdicts,
                             MAX_REJECTIONS_PER_TASK, REJECTION_NOTE, describe_target, rejection_marker)
 
 MODULE_ROUTES=('sieve-analysis','kornform','kochversuch','sand-equivalent','partial-sieve','uf-fine')  # read-only views; the guard blocks every input and save there
@@ -139,7 +139,8 @@ def run_view(browser,fixture,persona,entry,paths,task,policy,executor,reviewer,b
         evidence.event('inspection_harness_failure',error_code='INSPECTION_RUNNER_ERROR',exception_type=type(error).__name__)
         outcome.update(status='INVALID',technical_gate='INVALID',error_code='INSPECTION_RUNNER_ERROR',exception_type=type(error).__name__)
     finally:context.close()
-    outcome.update(screenshots=len(images),visible_actions=len([a for a in actions if 'rejected_by_controller' not in a]),rejected_actions=rejected)
+    outcome.update(screenshots=len(images),visible_actions=len([a for a in actions if 'rejected_by_controller' not in a]),rejected_actions=rejected,
+                   effort=effort_of(actions,rejected))
     return outcome
 
 

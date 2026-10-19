@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "RUN_6_PARTIAL_GO_FIRST_COMPLETE_RUN_TASK_WORDING_AND_SAVE_HINT_OPEN_NEW_FIXTURE_AND_APPROVAL_REQUIRED",
+    "status": "RUN_6_DONE_ADJUSTMENTS_DONE_DRY_RUNS_COMPLETED_NEW_FIXTURE_READY_NEW_APPROVAL_REQUIRED",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -393,7 +393,7 @@
       }
     ],
     "fixture_clone": {
-      "status": "CONSUMED_BY_RUN_6 (a new fixture is needed for the next run)",
+      "status": "PREPARED_UNUSED_NO_LEASE_NO_BUDGET_APPROVAL (new fixture after run 6; see the PR and Issue #21)",
       "created_at": "2026-10-16",
       "fixture_id": "nsn014-ux-b2e3a4b1d45a",
       "source_fixture_id": "nsn014-ux-536fe4e42888",
@@ -471,7 +471,7 @@
     "guarded_dry_run": {
       "tool": "sqbf.cli suite-dry-run (tools/dry_run.py, tools/scripted_executor.py)",
       "scope": "whole real suite path with the real guards; models replaced by a scripted executor and a neutral review; scratch clones only (refuses any other fixture)",
-      "date": "2026-10-16",
+      "date": "2026-10-19",
       "model_calls": 0,
       "status": "DRY_RUN_COMPLETED",
       "stage_results": {
@@ -527,6 +527,31 @@
         "verified_with_provider": true,
         "note": "first --keep-signed-in by the PO on 2026-10-19: the provider issued a refresh token and accepted the refresh grant (refresh_verified true); login valid 7 days"
       }
+    },
+    "executor_instruction_policy": {
+      "decision": "PO 2026-10-19",
+      "hint": "neutral: controls may not be within the currently visible part of the page; look through the usual navigation options of the interface; leave the field after typing",
+      "never_named": [
+        "position of the save control",
+        "module cards",
+        "the button that opens a module",
+        "click paths"
+      ],
+      "findability_still_measured": [
+        "actions",
+        "scrolls",
+        "scrolls after the last typed value",
+        "rejected clicks",
+        "save status"
+      ],
+      "task_wording": "BLE labels (tools/task_vocabulary.py): module titles of the module cards, on-screen field labels, German notation",
+      "comparability": "runs with a different executor_instructions_sha256 are not directly comparable (run 7 differs from run 6)"
+    },
+    "unconfirmed_ble_observations": {
+      "document": "docs/nsn014-ble-observations.md",
+      "reviewer_run6": 5,
+      "further": 5,
+      "status": "all UNCONFIRMED, no issue filed; verify on a scratch clone before any BLE issue"
     }
   }
 }

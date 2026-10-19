@@ -84,7 +84,9 @@ CLASSIFY=r"""
 const norm=s=>(s||'').replace(/\s+/g,' ').replace(/\s*\*+$/,'').trim();
 const num=s=>{const m=(s||'').match(/\d+(?:[.,]\d+)?/);return m?String(Number(m[0].replace(',','.'))):null;};
 const field=(e,ignoreSaveLatch)=>{
- const input=e?.matches('input')?e:e?.closest('.mud-input-control')?.querySelector('input');
+ // The main weigh-in (Einwaage) is a KPI box that holds one input; a click anywhere in that box is a click on the field (live run fdea63ef: a click on
+ // the box was rejected and the executor gave up, although BLE would simply not focus the input - which is what has to be observed).
+ const input=e?.matches('input')?e:(e?.closest('.mud-input-control')||e?.closest('.sa-kpi-editable'))?.querySelector('input');
  if(!input||input.disabled||input.readOnly||['password','file','hidden'].includes(input.type))return null;
  let name=norm(input.closest('.mud-input-control')?.querySelector('label')?.innerText);
  if(config.kind==='sand'){const letter=norm(input.closest('.se-best-card')?.querySelector('.se-best-letter')?.innerText);name+=':'+letter;}

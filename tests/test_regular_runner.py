@@ -231,6 +231,37 @@ class RegularRunnerTests(unittest.TestCase):
         self.assertIn('bestandene Positionen',text);self.assertNotIn('<script',module.completion_text(
             dict(manifest,run_id='<script>'),records))
 
+    def test_the_report_separates_causes_and_lists_operating_effort_and_save_status(self):
+        effort=lambda scrolls,after,rejected:{'actions':20,'scrolls':scrolls,'clicks':5,'typed':4,'keys':2,'waits':1,'rejected':rejected,'scrolls_after_last_entry':after}
+        records=[{'case_id':'NSN014-SIEVE','persona':'laboratory_staff','result':'INCONCLUSIVE','objective_status':'INCONCLUSIVE','technical_gate':'PASS',
+                  'oracle_gate':'PASS','ux_verdict':'INCONCLUSIVE',
+                  'position_results':[{'position_id':'P01','result':'INCOMPLETE','class':'EXECUTOR_REPORTED_BLOCKED'},{'position_id':'P02','result':'PASS','class':None},
+                                      {'position_id':'P03','result':'INCOMPLETE','class':'APPROVED_FIELDS_NOT_PRESENT_ON_PAGE'}],
+                  'positions':[{'position_id':'P01','kind':'sieve','status':'BLOCKED','effort':effort(7,6,1),'save_status':'NOT_SAVED_AFTER_ENTRY'},
+                               {'position_id':'P02','kind':'sieve','status':'DONE','effort':effort(1,0,0),'save_status':'SAVED'},
+                               {'position_id':'P03','kind':'allocations','status':'BLOCKED','effort':effort(0,None,0),'save_status':'NOT_REQUIRED'}]}]
+        manifest={'run_id':'r','verdict':'PARTIAL GO','technical_status':'COMPLETED','functional_status':'INCOMPLETE','scenario_id':'ENZBERG-NSN014',
+                  'scenario_version':'0.4.1','scoring_version':module.SCORING_VERSION,'rubric_version':module.RUBRIC_VERSION,'resource_policy':suite()['resource_policy'],
+                  'budget_approval':{'status':'BASE_LIMITS'},'sqbf_commit':'c','software_version':'b','executor_model':'e','analyst_model':'a','suite_sha256':'s',
+                  'dataset_sha256':'d'}
+        text=module.completion_text(manifest,records)
+        self.assertIn('## 3a. Ursachen unvollständiger Positionen und Bedienaufwand',text)
+        self.assertIn('| SIEVE | P01 | sieve | BLOCKED | MODELL/SUITE (vorher abgelehnte Aktion) | 20 | 7 | 6 | 1 | NOT\\_SAVED\\_AFTER\\_ENTRY |',text)
+        self.assertIn('| SIEVE | P02 | sieve | DONE | — | 20 | 1 | 0 | 0 | SAVED |',text)
+        self.assertIn('| SIEVE | P03 | allocations | BLOCKED | VORSTUFE | 20 | 0 | — | 0 | NOT\\_REQUIRED |',text)
+        self.assertIn('Summe: 60 Aktionen, 8 Scrolls, 1 abgelehnte Klicks',text)
+        self.assertIn('NOT\\_SAVED\\_AFTER\\_ENTRY 1',text);self.assertIn('unbestätigte Reviewer-Beobachtungen',text)
+        self.assertIn('Keine Bedienaufwand-Messung vorhanden',module.completion_text(manifest,[{'case_id':'NSN014-PLAN','persona':'p','result':'PASS','objective_status':'PASS'}]))
+
+    def test_the_instruction_hash_changes_with_the_wording_so_that_runs_are_not_compared_blindly(self):
+        first=module.instructions_hash()
+        self.assertRegex(first,r'^[0-9a-f]{64}$');self.assertEqual(first,module.instructions_hash())
+        from unittest.mock import patch
+        with patch.object(module,'MEASUREMENT_INSTRUCTIONS',module.MEASUREMENT_INSTRUCTIONS+' extra'):
+            self.assertNotEqual(module.instructions_hash(),first)
+        with patch.object(module,'MODULE_TITLES',dict(module.MODULE_TITLES,wash='anders')):
+            self.assertNotEqual(module.instructions_hash(),first)
+
     def test_cli_default_is_model_free_and_requires_explicit_execute_flag(self):
         s=suite()
         with patch.object(module,'load_inputs',return_value=(s,{},fixture(),{},{})), \

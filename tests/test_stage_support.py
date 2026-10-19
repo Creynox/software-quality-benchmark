@@ -124,3 +124,23 @@ class ReviewerBestEffortTests(unittest.TestCase):
         with self.assertRaises(ResourceStop):
             module.ask_review(lambda *a: (_ for _ in ()).throw(ResourceStop('SUITE_CALL_CEILING')), 'r', 'p', [], budget, self.Evidence())
         self.assertFalse(hasattr(budget, 'reviewer_error'))
+
+    def test_effort_counts_visible_actions_and_the_search_after_the_last_typed_value(self):
+        actions=[{'action':'click'},{'action':'scroll'},{'action':'type'},{'rejected_by_controller':'X','action':{'action':'click'}},
+                 {'action':'key'},{'action':'scroll'},{'action':'scroll'},{'action':'wait'}]
+        self.assertEqual(module.effort_of(actions,[{'error_code':'X'}]),
+                         {'actions':7,'scrolls':3,'clicks':1,'typed':1,'keys':1,'waits':1,'rejected':1,'scrolls_after_last_entry':2})
+        self.assertIsNone(module.effort_of([{'action':'scroll'}],[])['scrolls_after_last_entry'])  # nothing was typed
+        self.assertEqual(module.effort_of([],[])['actions'],0)
+
+    def test_the_origin_of_an_incomplete_position_separates_model_suite_provider_and_prerequisite(self):
+        for cls,expected in (('EXECUTOR_REPORTED_BLOCKED','MODELL'),('NO_VISIBLE_PROGRESS','MODELL'),('LAST_FIELD_NOT_COMMITTED','MODELL'),
+                             ('AGENT_ACTION_REJECTED','SUITE'),('EXECUTOR_REQUEST_FAILED','PROVIDER'),('DERIVED_VALUE_UPSTREAM_INCOMPLETE','VORSTUFE'),
+                             ('APPROVED_FIELDS_NOT_PRESENT_ON_PAGE','VORSTUFE'),('PERSISTED_VALUE_DEVIATION','BLE-ABWEICHUNG'),('SOMETHING_NEW','UNKLAR')):
+            self.assertEqual(module.cause_source('INCOMPLETE',cls),expected,cls)
+        self.assertEqual(module.cause_source('INCOMPLETE','AGENT_ACTION_REJECTED:MEASUREMENT_ACTION_SCOPE_DENIED'),'SUITE')
+        self.assertEqual(module.cause_source('INCOMPLETE','EXECUTOR_REPORTED_BLOCKED',rejected=2),'MODELL/SUITE (vorher abgelehnte Aktion)')
+        self.assertEqual(module.cause_source('PASS',None),'—')
+        # A BLE usability problem is never derived from a position.
+        self.assertNotIn('BLE-UX',set(module.CAUSE_SOURCES.values()))
+

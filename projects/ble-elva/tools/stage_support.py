@@ -157,6 +157,38 @@ class StallDetector:
                 and len(set(self.actions[-self.actions_needed:])) == 1)
 
 
+def effort_of(actions, rejected):
+    """How much operating effort a task needed, from the visible actions the executor made (a measurement, never a verdict).
+
+    `scrolls_after_last_entry` is the search effort after the last value was typed, i.e. the search for the save control; None if nothing was typed.
+    """
+    visible = [a for a in actions if isinstance(a, dict) and 'rejected_by_controller' not in a]
+    kinds = [a.get('action') for a in visible]
+    last_type = max((i for i, k in enumerate(kinds) if k == 'type'), default=None)
+    return {'actions': len(visible), 'scrolls': kinds.count('scroll'), 'clicks': kinds.count('click'), 'typed': kinds.count('type'),
+            'keys': kinds.count('key'), 'waits': kinds.count('wait'), 'rejected': len(rejected),
+            'scrolls_after_last_entry': None if last_type is None else kinds[last_type + 1:].count('scroll')}
+
+
+# Where an incomplete position comes from. BLE usability problems are never derived from a position: they are unconfirmed reviewer
+# observations; objective deviations are the only BLE verdict.
+CAUSE_SOURCES = {
+    'EXECUTOR_REPORTED_BLOCKED': 'MODELL', 'EXECUTOR_DONE_WITHOUT_ALL_APPROVED_INPUTS': 'MODELL', 'NO_VISIBLE_PROGRESS': 'MODELL',
+    'LAST_FIELD_NOT_COMMITTED': 'MODELL', 'REPORT_NOT_GENERATED': 'MODELL', 'PDF_NOT_DOWNLOADED': 'MODELL',
+    'AGENT_ACTION_REJECTED': 'SUITE', 'EXECUTOR_REQUEST_FAILED': 'PROVIDER',
+    'DERIVED_VALUE_UPSTREAM_INCOMPLETE': 'VORSTUFE', 'APPROVED_FIELDS_NOT_PRESENT_ON_PAGE': 'VORSTUFE',
+    'PERSISTED_VALUE_DEVIATION': 'BLE-ABWEICHUNG',
+}
+
+
+def cause_source(result, cls, rejected=0):
+    """MODELL, SUITE, PROVIDER, VORSTUFE, BLE-ABWEICHUNG or UNKLAR for a position result; a give-up after a rejected action is shared."""
+    if result == 'PASS' or not cls:
+        return '—'
+    base = CAUSE_SOURCES.get(str(cls).split(':')[0], 'UNKLAR')
+    return 'MODELL/SUITE (vorher abgelehnte Aktion)' if base == 'MODELL' and rejected else base
+
+
 INCOMPLETE_REASONS = {
     'BLOCKED': 'EXECUTOR_REPORTED_BLOCKED',
     'REJECTED': 'AGENT_ACTION_REJECTED',

@@ -10,6 +10,7 @@ import json
 import re
 
 from .measurement_guard import CLASSIFY, ROUTES
+from .task_vocabulary import internal_inputs, kind_of
 
 SETUPS = {'allocations': ['Entwurf anlegen'], 'sieve': ['Entwurf anlegen'], 'partial': ['Teilsiebung starten', 'Sieb-Konfiguration anlegen'],
           'shape': [], 'boiling': [], 'sand': [], 'wash': []}
@@ -137,7 +138,9 @@ class ScriptedExecutor:
 
     def measurement(self, task):
         page = self.page_fn()
-        kind = task['module']
+        # The task speaks BLE's words (module titles, on-screen field labels); the contract and the guards keep the internal names.
+        kind = kind_of(task['module'])
+        task = dict(task, module=kind, source_inputs=internal_inputs(kind, task['source_inputs']))
         root = re.match(r'^(/samples/[0-9a-f-]{36})', page.evaluate('()=>location.pathname')).group(1)
         config = {'origin': '', 'root': root, 'path': root + '/' + ROUTES[kind], 'kind': kind, 'fields': task['source_inputs'],
                   'max_repetitions': len({k.split(':')[-1] for k in task['source_inputs'] if k.startswith('Einwaage vor Kochen:')})}

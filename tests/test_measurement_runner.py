@@ -330,6 +330,43 @@ class MeasurementRunnerTests(unittest.TestCase):
             result,_,_,_=(lambda r:(r[0],r[1],r[2],r[3]))(self.run_failing([WorkerFailed('RESPONSE_NOT_JSON')]))
         self.assertEqual(result['status'],'EXECUTOR_FAILED');self.assertFalse(result['fully_entered'])
 
-    def test_the_instructions_tell_the_executor_where_the_modules_are_and_to_leave_the_last_field(self):
-        self.assertIn('further down the sample page',module.INSTRUCTIONS);self.assertIn('leave the field (Tab)',module.INSTRUCTIONS)
-        self.assertIn('not its label',module.INSTRUCTIONS)
+    def test_the_instructions_give_the_neutral_hint_and_never_the_position_of_a_control_or_a_click_path(self):
+        # PO decision 2026-10-19: findability stays a measurement. The hint says controls may lie outside the visible part and that the usual
+        # navigation helps; it never names the save control, its position, the module cards or the button that opens a module.
+        text=module.INSTRUCTIONS
+        self.assertIn('Controls may not be within the currently visible part of the page',text)
+        self.assertIn('usual navigation options of the interface',text);self.assertIn('leave the field',text)
+        for forbidden in ('Speichern','Erfassen','further down','card','top of','header','scroll to','upper right','Zu den Modulen'):
+            self.assertNotIn(forbidden,text,forbidden)
+        self.assertIn('Testauftrag erzeugen',text)  # the one permitted setup action must still be named
+
+    def test_the_task_names_the_module_and_the_fields_in_bles_words(self):
+        # Live run fdea63ef: "no wash module", "no allocations module" - the task used internal names, a suite defect.
+        result,ask=self.run_boiling(set())
+        prompt=ask.call_args_list[0].args[1]
+        self.assertIn('"module": "Kochversuch"',prompt);self.assertIn('Einwaage vor Kochen, Wiederholung 1',prompt)
+        for internal in ('"module": "boiling"','Einwaage vor Kochen:1','source_inputs": {"Einwaage vor Kochen:'):
+            self.assertNotIn(internal,prompt)
+
+    def test_effort_and_save_status_are_recorded_for_every_position(self):
+        click=ModelResponse({'action':'click','x':10,'y':10,'reason':'focus'},{})
+        typed=ModelResponse({'action':'type','text':'95','reason':'enter'},{})
+        scroll=ModelResponse({'action':'scroll','x':1200,'y':400,'amount':300,'reason':'search'},{})
+        done=ModelResponse({'action':'blocked','reason':'no save control'},{})
+        state={'target':{'kind':'field'},'focused':'Sandhöhe:A'}
+        with patch.object(module,'focused_field',return_value=None):
+            result,_,_=self.run_with_states([click,typed,scroll,scroll,done],[state,state,{},{},{}],shown='95')
+        self.assertEqual(result['effort'],{'actions':4,'scrolls':2,'clicks':1,'typed':1,'keys':0,'waits':0,'rejected':0,'scrolls_after_last_entry':2})
+        self.assertEqual(result['save_status'],'NOT_SAVED_PARTIAL_ENTRY')  # one of the several sand fields only
+
+    def test_save_status_tells_saved_from_not_found_from_prevented(self):
+        c={'kind':'wash','fields':{'a':'1','b':'2'}}
+        entered=lambda n,total=2:{'fields_entered':n,'fields_required':total}
+        self.assertEqual(module.save_status({'kind':'allocations','fields':{}},entered(1),set(),[]),'NOT_REQUIRED')
+        self.assertEqual(module.save_status(c,entered(2),{'module'},[]),'SAVED')
+        self.assertEqual(module.save_status(c,entered(2),set(),[]),'NOT_SAVED_AFTER_ENTRY')
+        self.assertEqual(module.save_status(c,entered(1),set(),[]),'NOT_SAVED_PARTIAL_ENTRY')
+        self.assertEqual(module.save_status(c,entered(0),set(),[]),'NOT_REACHED')
+        self.assertEqual(module.save_status(c,entered(2),set(),[{'error_code':'X','action':'click','target':{'label':'Speichern'}}]),'SAVE_CLICK_REJECTED')
+        shape={'kind':'shape','fields':{'Einwaage gesamt (g):5.6':'1'}}
+        self.assertEqual(module.save_status(shape,entered(1,1),{'5.6'},[]),'SAVED')

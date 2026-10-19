@@ -14,6 +14,8 @@ Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-
 
 **Nachtrag Lauf 3 (Abschnitt 17):** `413f7abe…`, 16.10.2026: PARTIAL GO, alle zwölf Stufen durchgelaufen, PLAN und WPK PASS, zehn Stufen INCONCLUSIVE durch einen zu engen Guard (Menüeintrag „Prüfbericht“ nicht erkannt, Ablehnung beendet die Aufgabe, Hauptaktion „Testauftrag erzeugen“ nicht erlaubt). 124 Anfragen, 271.478 Tokens, 24 min. Keine Messung erfasst.
 
+**Nachtrag Anpassungen nach Lauf 6 (Abschnitt 22):** Auf Entscheidung des PO: neutraler Hinweis zur Speicherschaltfläche (ohne Position oder Klickpfad), Aufgabenwortlaut in BLEs Bezeichnungen, Messung von Suchaufwand, Scrolls, abgelehnten Klicks und Speicherstatus (Abschnitt 3a des Berichts, Ursprung MODELL/SUITE/PROVIDER/VORSTUFE/BLE-ABWEICHUNG), fünf Reviewer-Auffälligkeiten getrennt als unbestätigte Beobachtungen (`docs/nsn014-ble-observations.md`). 480 Tests OK, Trockenläufe sauber, neue Fixture bereit. Lauf 7 braucht die ausdrückliche Freigabe des PO und ist mit Lauf 6 nicht direkt vergleichbar.
+
 **Nachtrag Lauf 6 (Abschnitt 21):** Lauf 6 (fdea63ef, 19.10.2026) ist `PARTIAL GO / COMPLETED`, der erste vollständige Durchlauf aller zwölf Stufen: sechs Stufen PASS (PLAN, RECEIPT, ASSESS, WPK, ANALYSIS, RIGHTS), sechs INCONCLUSIVE, keine FAIL/INVALID/BLOCKED, keine belegte BLE-Abweichung; neun von zehn Prüfberichten erzeugt und vom Oracle bestätigt. 621 Anfragen, 4.596 s, rund 1,56 Mio. Tokens, ohne Unterbrechung über die Stunden-Marke (automatische Token-Erneuerung bewährt). Die Messstufen blieben überwiegend unvollständig: Speicherschaltfläche nicht gefunden (acht Module), Aufgabenwortlaut in meiner Fachsprache statt BLEs, abgelehnte Beschriftungsklicks.
 
 **Nachtrag Lauf 5 (Abschnitt 20):** Lauf 5 (6c23f768, 16.10.2026) ist `PARTIAL GO / RESOURCE_STOP`: erstmals objektiv belegte BLE-Ergebnisse (PLAN, RECEIPT, Abschlämmung P08, Siebanalyse P04/P06/P10 PASS), aber nur für fünf von zwölf Stufen. Abbruch nach 3.603 s, weil der Anmeldetoken nach etwa einer Stunde abläuft (HTTP 401); eine Entscheidung zum Token ist offen (Abschnitt 20.6). Das einzige FAIL (P09) war ein Auswertungsfehler (Feld nicht verlassen), mein Anker-Fix aus Abschnitt 19 war falsch (`<base href="/">`); beides behoben. 540 Anfragen, rund 1,37 Mio. Tokens.
@@ -852,3 +854,57 @@ Die Steuerung ist jetzt robust genug für einen ganzen Lauf. Die Aussagekraft de
 ### 21.6 Offene Entscheidung: Speicherschaltfläche
 
 In beiden Läufen (5 und 6) scheiterte rund ein Drittel der Eingaben daran, dass das Modell die Schaltfläche „Speichern“ oben im Modulkopf nicht fand. Das Ergebnis ist ein echtes UX-Signal, verhindert aber, die Datenrichtigkeit zu messen. Optionen: (a) unverändert lassen (UX-Signal bleibt, Messwerte bleiben lückenhaft); (b) neutraler Hinweis in der Anweisung („die Speicherschaltfläche kann außerhalb des sichtbaren Bereichs liegen; die Seite nach oben und unten absuchen“): sagt nicht, wo sie ist, das UX-Signal bleibt im Protokoll sichtbar (Suchaufwand, Reviewer-Befund), die Messwerte werden vollständiger. Empfohlen ist (b).
+
+## 22. Anpassungen nach Lauf 6 (19.10.2026): neutraler Hinweis, BLE-Wortlaut, Messung der Auffindbarkeit
+
+**Ziel: eine aussagekräftigere Messung mit sauberer Trennung zwischen Modellfehlern, Fehlern der Test-Suite und echten UX- oder Funktionsproblemen von BLE.** Die Änderungen reduzieren Fehler der Suite und machen den Bedienaufwand messbar; sie bewerten BLE nicht besser. Es gab keine Modellaufrufe und keinen weiteren Live-Lauf.
+
+### 22.1 Entscheidung des PO
+
+Der PO stimmte der Empfehlung zu: ein **neutraler Hinweis** zur Speicherschaltfläche, ohne ihre Position oder einen Klickpfad zu nennen; die **Auffindbarkeit wird weiter gemessen** (Suchaufwand, Scrollversuche, fehlgeschlagene Klicks, Probleme mit dem Speichervorgang); die **Aufgabenbegriffe werden konsequent an BLEs Bezeichnungen angepasst** (das soll Fehler der Suite verringern, nicht die Anwendung künstlich besser bewerten); die **fünf vom Reviewer gemeldeten Auffälligkeiten** werden getrennt als unbestätigte Beobachtungen dokumentiert und später gezielt verifiziert; danach Trockenlauf und Fixture-Vorbereitung. **Lauf 7 braucht weiter die ausdrückliche Freigabe des PO.**
+
+### 22.2 Der neutrale Hinweis
+
+Die Executor-Anweisung der Messstufen enthält jetzt (englischer Originaltext): *„Operate the application only through its visible user interface. Controls may not be within the currently visible part of the page; look for the functions you need through the usual navigation options of the interface. After typing a value, leave the field so that the page can apply it.“* Entfernt wurden drei Sätze, die Orte oder Wege verrieten: „The modules of a sample are listed as cards further down the sample page: scroll to them“, „then open the module with its Erfassen button“ und „Click the input field itself, not its label or heading“. Ein Test stellt sicher, dass die Anweisung weder „Speichern“, „Erfassen“, „card“, „top of“, „header“ noch „scroll to“ enthält und die eine erlaubte Einrichtungsaktion („Testauftrag erzeugen“) weiter nennt.
+
+### 22.3 Aufgabenwortlaut in BLEs Worten (Suite-Fehler, kein Vorteil für BLE)
+
+Lauf 6: Modelle meldeten für acht Positionen „kein Wash-Modul“ bzw. „kein Allocations-Modul“, weil die Aufgabe interne Namen nutzte. `tools/task_vocabulary.py` übersetzt zwischen internen Namen (Guards und Oracles behalten sie) und dem, was ein Laborant sieht. Die Titel stammen von den Modulkarten einer Wegwerfkopie von BLE.
+
+| Intern | In der Aufgabe | Beispiel Feldbeschriftung |
+|---|---|---|
+| wash | Abschlämmung / Feinanteil | Probenmasse feucht, Schale + Probe feucht |
+| sieve | Siebanalyse | Einwaage (g); Rückstand (g), Sieb 31,5 mm; Rückstand (g), Boden/Pfanne bzw. Anteile gesamt |
+| allocations | Entnahmen (Feldgruppe der Siebanalyse) | Entnahme KF, Sieb 31,5 mm (g); Entnahme SE, Pfanne (g) |
+| partial | Teilsiebung | Einwaage Siebturm A; Rückstand (g), Sieb 2 mm, Siebturm A |
+| shape | Kornform | Einwaage gesamt (g), Fraktion 5,6 mm |
+| boiling | Kochversuch | Einwaage vor Kochen, Wiederholung 1 |
+| sand | Sandäquivalent | Sandhöhe, Prüfung A |
+
+Zahlen stehen in deutscher Notation. Die Wörter nennen weder einen Ort noch einen Weg (getestet), und jedes Feld jeder Messstufe lässt sich verlustfrei zurückübersetzen (Test über alle Verträge). Die Fallbeschreibungen der Lesestufen (PLAN, RECEIPT, ASSESS, WPK, ANALYSIS, RIGHTS) waren schon in BLEs Sprache und bleiben unverändert; der Suite-Hash ändert sich nicht.
+
+### 22.4 Messung von Bedienaufwand und Speichervorgang
+
+Je Messposition und Modul (und je Lesestufe) hält der Controller jetzt fest: Aktionen, Scrolls, **Scrolls nach der letzten Eingabe (die Suche nach der Speicherschaltfläche)**, Klicks, Tastendrücke, Wartezeiten, abgelehnte Klicks und den **Speicherstatus**: `SAVED`, `NOT_REQUIRED` (Zuteilungen), `SAVE_CLICK_REJECTED`, `NOT_SAVED_AFTER_ENTRY` (alles eingegeben, nicht gespeichert), `NOT_SAVED_PARTIAL_ENTRY`, `NOT_REACHED`. Der Abschlussbericht hat dazu einen neuen **Abschnitt 3a** mit einer Tabelle je Position und einer Summe.
+
+**Ursprung unvollständiger Positionen** (Spalte „Ursprung“): `MODELL` (aufgegeben, nicht gespeichert, Feld nicht übernommen; bei vorheriger abgelehnter Aktion `MODELL/SUITE`), `SUITE` (Guard, Wortlaut), `PROVIDER` (Anfrage ausgefallen), `VORSTUFE` (Voraussetzung fehlt, Modul nicht geöffnet, Feld nicht angeboten), `BLE-ABWEICHUNG` (objektiv belegt). **BLE-Bedienprobleme werden nie aus einer Position abgeleitet**: Sie stehen nur als unbestätigte Reviewer-Beobachtungen in Abschnitt 4 des Berichts und in `docs/nsn014-ble-observations.md`.
+
+Neu im Lauf-Manifest und im Bericht: `executor_instructions_sha256`, ein Hash über beide Anweisungen und die Modultitel. **Läufe mit anderem Wortlaut sind nicht direkt vergleichbar**; Lauf 7 unterscheidet sich von Lauf 6 durch Hinweis und Wortlaut.
+
+### 22.5 Guard: Klick in die Einwaage-Box
+
+In Lauf 6 lehnte der Guard einen Klick auf die Box um die Haupteinwaage („EINWAAGE g“, `div.sa-kpi-editable`) ab, und der Executor gab auf. Ein Klick in diese Box gilt jetzt als Klick auf ihr Feld. Folge: Wenn BLE das Feld nicht fokussiert, sieht der Executor genau das (Beobachtung statt Verhinderung). Andere Boxen und Beschriftungen bleiben gesperrt (Test im echten Chromium).
+
+### 22.6 Unbestätigte Beobachtungen zu BLE
+
+`docs/nsn014-ble-observations.md` führt die **fünf Reviewer-Auffälligkeiten aus Lauf 6** (Speicherhinweis fehlt, Boden/Pfanne ohne Eingabefeld, „Keine Auffälligkeit“ bei 0 % Abdeckung, WPK „Teilweise“ ohne Aufschlüsselung, „Probe 10 von 10“ in der Planleiste) und fünf weitere (u. a. „Zu den Modulen“ verlässt die Probenseite, auf einer Wegwerfkopie reproduziert) je mit Quelle, Verifikationsschritten und Status. Alle sind `UNBESTÄTIGT`, keine ist ein Issue, keine ändert ein Ergebnis.
+
+### 22.7 Prüfung
+
+**480 Tests OK** (vorher 466): neu Wortschatz (Rückübersetzung aller Felder jedes Vertrags, Eindeutigkeit, keine Orts- oder Wegwörter), Neutralität der Anweisung, Aufgabenwortlaut im Prompt, Aufwand und Speicherstatus je Position, Ursprungsklassen, Abschnitt 3a des Berichts, Anweisungs-Hash, Klick in die Einwaage-Box im echten Chromium, skriptierter Executor mit BLE-Wortlaut. Zwei modellfreie Trockenläufe auf frischen Wegwerfkopien mit dem neuen Wortlaut und Hinweis (0 Modellaufrufe): **sauber** (1.231 skriptierte Aktionen) `DRY_RUN_COMPLETED`, unverändert zum Stand vor den Änderungen (PLAN, RECEIPT, SIEVE, BOILING, SE, ASSESS, WPK, ANALYSIS, REPORT mit zehn PDFs, RIGHTS PASS; PREPARATION 8/10 und SHAPE 4/5 nur wegen der drei von BLE nicht angebotenen Werte INCONCLUSIVE); **mit drei eingespielten Providerfehlern** `DRY_RUN_COMPLETED`, alle zwölf Stufen liefen, nur die betroffenen Positionen unvollständig. Die neue Fixture ist vorbereitet (ohne Freigabe und Lease).
+
+### 22.8 Grenzen
+
+- Der Hinweis macht Lauf 7 nicht mit Lauf 6 vergleichbar, und er kann die Vollständigkeit der Eingaben erhöhen. Das ist gewollt, ändert aber, wie die Zahlen zu lesen sind.
+- Ob der Hinweis reicht, zeigt erst ein Lauf. Der Trockenlauf kennt den Weg zu Modulen und zur Speicherschaltfläche.
+- Die Ursprungsspalte ordnet Positionen nach ihrer Klasse zu. `VORSTUFE` und `MODELL` sind dabei oft nicht scharf zu trennen (nicht geöffnetes Modul); der Bericht nennt es deshalb so und urteilt nicht über BLE.

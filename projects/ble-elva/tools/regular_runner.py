@@ -32,13 +32,14 @@ from .report_oracle import collect_reports, verify_reports, expected_numbers
 from .receipt_oracle import collect_receipts, verify_receipts, collect_plan_products, verify_plan_products
 from .suite_acceptance import check_fixture
 from .persona_scope import check_persona
-from .measurement_runner import run_measurements, required_saves
+from .measurement_runner import run_measurements, required_saves, INSTRUCTIONS as MEASUREMENT_INSTRUCTIONS
+from .task_vocabulary import MODULE_TITLES
 from .protected_oracle import collect_scoped_hashes
 from .side_effect_probe import table_hashes
-from .inspection_runner import run_inspection, run_reports, run_plan_creation, ENTRY_PATHS
+from .inspection_runner import run_inspection, run_reports, run_plan_creation, ENTRY_PATHS, INSTRUCTIONS as INSPECTION_INSTRUCTIONS
 from .receipt_contract_check import check_receipt_form, check_entry_routes
 from .stage_support import (REVIEW_SCHEMA, SCORING_VERSION, RUBRIC_VERSION, CATEGORIES, SEVERITIES, DIMENSIONS,
-                            executor_schema, valid_review)
+                            executor_schema, valid_review, cause_source)
 from .provider_probe import evaluate_probe, provider_probe
 
 CASE_KINDS={'NSN014-PREPARATION':['allocations','wash'],'NSN014-SIEVE':['sieve','partial'],
@@ -489,6 +490,7 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         'persona_context':ready['persona_context'],
         'executor_model':executor_id,'analyst_model':reviewer_id,'provider':'chatgpt_plan',
         'scoring_version':SCORING_VERSION,'rubric_version':RUBRIC_VERSION,'review_schema_sha256':canonical_hash(REVIEW_SCHEMA),
+        'executor_instructions_sha256':instructions_hash(),
         'sqbf_commit':ready['source']['commit'],'sqbf_source_clean':ready['source']['clean'],
         'suite_sha256':canonical_hash(suite),'dataset_sha256':canonical_hash(dataset),
         'reference_projection_sha256':canonical_hash(projection),'allocation_reference_sha256':canonical_hash(allocation),
@@ -657,6 +659,28 @@ def ux_summary(records):
             'note':'No global percentage; UX never compensates objective faults.'}
 
 
+def instructions_hash():
+    """Hash of everything the executor is told besides the screenshot (instructions of both runners, module titles): runs with different wording
+    are not directly comparable (the neutral hint of 2026-10-19 changed run 7 against run 6)."""
+    return canonical_hash({'measurement':MEASUREMENT_INSTRUCTIONS,'inspection':INSPECTION_INSTRUCTIONS,'module_titles':MODULE_TITLES})
+
+
+def effort_rows(records):
+    """One row per measured task: operating effort (actions, scrolls, scrolls after the last typed value, rejected clicks), what became of the save
+    and where an incomplete position comes from. Measurements for the separation of model, suite and BLE causes; not a verdict."""
+    rows=[]
+    for record in records:
+        results={p['position_id']:p for p in record.get('position_results',[])}
+        for item in record.get('positions',[]):
+            effort=item.get('effort')
+            if not effort:continue
+            result=results.get(item.get('position_id'))
+            rows.append({'case':str(record['case_id']).replace('NSN014-',''),'position':item.get('position_id','—'),'kind':item.get('kind','—'),
+                         'status':item.get('status','—'),'origin':cause_source(result.get('result'),result.get('class'),effort['rejected']) if result else '—',
+                         'effort':effort,'save':item.get('save_status','—')})
+    return rows
+
+
 def completion_text(manifest,records):
     def text(value):
         value=str(value).replace('\\','\\\\').replace('\n',' ').replace('\r',' ').replace('`',"'")
@@ -673,7 +697,8 @@ def completion_text(manifest,records):
         f"- Executor: {text(manifest['executor_model'])}; Reviewer: {text(manifest['analyst_model'])}",
         f"- Modellanfragen: {text(manifest.get('model_calls',0))} von höchstens {text(manifest['resource_policy']['hard_model_calls'])}; "
         f"Zeitgrenze {text(manifest['resource_policy']['hard_seconds'])} s; Budgetfreigabe: {text(manifest['budget_approval']['status'])}",
-        f"- Provider-Vorabprüfung: {text(manifest.get('provider_probe',{}).get('status','NOT_PROBED'))}",'']
+        f"- Provider-Vorabprüfung: {text(manifest.get('provider_probe',{}).get('status','NOT_PROBED'))}",
+        f"- Executor-Anweisung und Aufgabenwortlaut (SHA256): {text(manifest.get('executor_instructions_sha256','nicht erfasst'))}; Läufe mit anderem Wortlaut sind nicht direkt vergleichbar",'']
     if manifest.get('final_oracles'):
         lines+=['Abschließende unabhängige Oracles: '+text({key:value.get('status') if isinstance(value,dict) else value
                                                        for key,value in manifest['final_oracles'].items()}),'']
@@ -698,6 +723,25 @@ def completion_text(manifest,records):
         if row['objective_status']!='PASS':
             lines.append('- '+text(row['case_id'])+' ('+text(row['objective_status'])+'): '+
                          text(ATTRIBUTION.get({'INVALID_HARNESS':'INVALID'}.get(row['objective_status'],row['objective_status']),'')))
+    lines+=['','## 3a. Ursachen unvollständiger Positionen und Bedienaufwand','',
+            'Ursprung: MODELL = der Agent hat aufgegeben, nicht gespeichert oder ein Feld nicht übernommen; SUITE = Test-Suite (Guard-Ablehnung, Wortlaut, Harness); '
+            'PROVIDER = Anfrage ausgefallen; VORSTUFE = Voraussetzung fehlt (Modul nicht geöffnet, Feld nicht angeboten, Vorstufe unvollständig); '
+            'BLE-ABWEICHUNG = objektiv belegt. Bedienprobleme von BLE (etwa die Auffindbarkeit der Speicherschaltfläche) stehen nur als unbestätigte '
+            'Reviewer-Beobachtungen in Abschnitt 4. Aktionen, Scrolls, abgelehnte Klicks und Speicherstatus sind Messwerte, kein Urteil.','']
+    rows=effort_rows(records)
+    if rows:
+        lines+=['| Stufe | Position | Modul | Status | Ursprung | Aktionen | Scrolls | davon nach letzter Eingabe | abgelehnte Klicks | Speichern |','|---|---|---|---|---|---|---|---|---|---|']
+        for row in rows:
+            effort=row['effort']
+            lines.append('| '+' | '.join(text(v) for v in (row['case'],row['position'],row['kind'],row['status'],row['origin'],effort['actions'],effort['scrolls'],
+                                                         '—' if effort['scrolls_after_last_entry'] is None else effort['scrolls_after_last_entry'],
+                                                         effort['rejected'],row['save']))+' |')
+        saves={}
+        for row in rows:saves[row['save']]=saves.get(row['save'],0)+1
+        lines+=['',f"Summe: {text(sum(r['effort']['actions'] for r in rows))} Aktionen, {text(sum(r['effort']['scrolls'] for r in rows))} Scrolls, "
+                f"{text(sum(r['effort']['rejected'] for r in rows))} abgelehnte Klicks; Speichern: "+text(', '.join(f'{k} {v}' for k,v in sorted(saves.items()))),'']
+    else:
+        lines+=['- Keine Bedienaufwand-Messung vorhanden.','']
     summary=manifest.get('ux_summary') or ux_summary(records)
     lines+=['','## 4. UX-Befunde nach Kategorie und Schweregrad','',
             'Reviewer-Befunde sind unbestätigte Beobachtungen; sie ändern keinen objektiven Status.','']

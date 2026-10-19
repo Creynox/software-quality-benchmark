@@ -80,6 +80,16 @@ class ScriptedExecutorTests(unittest.TestCase):
         self.assertTrue(all(a['x']>=1190 for a in actions[:6]))  # scrolls over the page margin, never over the input column
         self.assertEqual(len({a['x'] for a in actions[:6]}),6)   # varied, so a page that cannot scroll is not mistaken for a stall
 
+    def test_the_task_in_bles_words_is_translated_back_to_the_internal_module_and_field_names(self):
+        vocabulary=scripted.internal_inputs
+        path=ROOT+'/sieve-analysis'
+        t=task('Siebanalyse',{'Einwaage (g)':'285','Rückstand (g), Sieb 31,5 mm':'12'})
+        fields={'main_input':field(300),'sieve:31.5':field(380)}
+        ex=executor(Page(path,[info(path,fields)]))
+        first=ex(None,prompt(t),b'',None,'executor').data
+        self.assertEqual((first['action'],first['y']),('click',300));self.assertIn('main_input',first['reason'])
+        self.assertEqual(vocabulary('sieve',{'Rückstand (g), Sieb 31,5 mm':'12'}),{'sieve:31.5':'12'})
+
     def test_a_value_is_typed_only_into_the_focused_field_then_tab_then_it_waits_for_blazor(self):
         path=ROOT+'/uf-fine';t=task()
         fields={'Probenmasse feucht':field(300),'Schale + Probe feucht':field(380)}

@@ -569,16 +569,27 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
         records=result.get('records',[])
         manifest.update(case_matrix=case_matrix(records),ux_summary=ux_summary(records))
         manifest['completed_at']=now_iso()
-        card=scorecard_of(manifest,records)
-        manifest['report_spec']={'spec_version':card['spec_version'],'spec_sha256':card['spec_sha256'],'run_result':card['result']['run_result'],'points':card['points']['points'],'max_points':card['points']['max_points']}
-        # Credentials/tokens never enter persisted manifests or reports.
-        (evidence.path/'run.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
-        (evidence.path/'completion-report.md').write_text(completion_text(manifest,records),encoding='utf-8')
-        (evidence.path/'scorecard.json').write_text(json.dumps(card,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-        (evidence.path/'punktebericht.md').write_text('\n'.join(report_spec.render(card))+'\n',encoding='utf-8')
+        write_run_documents(evidence.path,manifest,records)
         index_run(output,evidence.path)
     return {'status':'SUITE_RUN_RECORDED','run_id':manifest['run_id'],'verdict':manifest['verdict'],
             'technical_status':manifest['technical_status'],'path':str(evidence.path)}
+
+
+def write_run_documents(path,manifest,records):
+    """run.json first, then the reports: the points report is derived data and must never keep the manifest of a finished run from being written."""
+    card=None
+    try:
+        card=scorecard_of(manifest,records)
+        manifest['report_spec']={'spec_version':card['spec_version'],'spec_sha256':card['spec_sha256'],'run_result':card['result']['run_result'],
+                                 'points':card['points']['points'],'max_points':card['points']['max_points']}
+    except Exception as error:
+        manifest['report_spec']={'error':type(error).__name__}
+    # Credentials/tokens never enter persisted manifests or reports.
+    (path/'run.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
+    (path/'completion-report.md').write_text(completion_text(manifest,records),encoding='utf-8')
+    if card:
+        (path/'scorecard.json').write_text(json.dumps(card,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+        (path/'punktebericht.md').write_text('\n'.join(report_spec.render(card))+'\n',encoding='utf-8')
 
 
 def finalise_oracles(manifest,result,fixture,dataset,projection,allocation,current):
@@ -713,7 +724,9 @@ def completion_text(manifest,records):
         for char in ('[',']','!','*','_','#','|'):value=value.replace(char,'\\'+char)
         return value.replace('<','&lt;').replace('>','&gt;')
     accounting=manifest.get('accounting',{})
-    lines=punktebericht(manifest,records)+['','---','','# Anhang: Detailbericht (Belege, nicht Teil der Punkte)','','## A0. Lauf','',
+    try:top=punktebericht(manifest,records)
+    except Exception as error:top=['# NSN014 Punktebericht','',f'Der Punktebericht konnte nicht erzeugt werden ({type(error).__name__}); cases.json und run.json sind unverändert.']
+    lines=top+['','---','','# Anhang: Detailbericht (Belege, nicht Teil der Punkte)','','## A0. Lauf','',
         f"- Lauf: {text(manifest['run_id'])}",f"- Gesamtergebnis: {text(manifest['verdict'])}",
         f"- Technischer Status: {text(manifest['technical_status'])}",f"- Funktionaler Status: {text(manifest['functional_status'])}",
         f"- Messstatus: {text(manifest.get('measurement_status','NOT_STARTED'))}",

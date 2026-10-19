@@ -310,6 +310,26 @@ class RegularRunnerTests(unittest.TestCase):
         # The same data always give the same report, byte for byte.
         self.assertEqual(module.completion_text(manifest,records),full)
 
+    def test_the_run_documents_are_written_and_a_failing_points_report_never_keeps_back_the_manifest(self):
+        import tempfile
+        records=[{'case_id':'NSN014-PLAN','persona':'p','result':'PASS','objective_status':'PASS','technical_gate':'PASS','oracle_gate':'PASS','ux_verdict':'PASS'}]
+        manifest={'run_id':'r','verdict':'PARTIAL GO','technical_status':'COMPLETED','functional_status':'INCOMPLETE','scenario_id':'ENZBERG-NSN014','scenario_version':'0.4.1',
+                  'scoring_version':module.SCORING_VERSION,'rubric_version':module.RUBRIC_VERSION,'resource_policy':suite()['resource_policy'],'budget_approval':{'status':'BASE_LIMITS'},
+                  'sqbf_commit':'c','software_version':'b','executor_model':'e','analyst_model':'a','suite_sha256':'s','dataset_sha256':'d'}
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)
+            module.write_run_documents(path,dict(manifest),records)
+            self.assertEqual(sorted(p.name for p in path.iterdir()),['completion-report.md','punktebericht.md','run.json','scorecard.json'])
+            saved=json.loads((path/'run.json').read_text(encoding='utf-8'))
+            self.assertEqual(saved['report_spec']['points'],1);self.assertEqual(saved['report_spec']['max_points'],46);self.assertEqual(saved['report_spec']['spec_version'],'1.0.0')
+            self.assertEqual((path/'punktebericht.md').read_text(encoding='utf-8'),'\n'.join(report_spec.render(json.loads((path/'scorecard.json').read_text(encoding='utf-8'))))+'\n')
+        with tempfile.TemporaryDirectory() as tmp, patch.object(module,'scorecard_of',side_effect=RuntimeError('boom')):
+            path=Path(tmp)
+            module.write_run_documents(path,dict(manifest),records)
+            self.assertEqual(sorted(p.name for p in path.iterdir()),['completion-report.md','run.json'],'no scorecard, but the manifest and the detail report exist')
+            self.assertEqual(json.loads((path/'run.json').read_text(encoding='utf-8'))['report_spec'],{'error':'RuntimeError'})
+            self.assertIn('konnte nicht erzeugt werden (RuntimeError)',(path/'completion-report.md').read_text(encoding='utf-8'))
+
     def test_cli_default_is_model_free_and_requires_explicit_execute_flag(self):
         s=suite()
         with patch.object(module,'load_inputs',return_value=(s,{},fixture(),{},{})), \

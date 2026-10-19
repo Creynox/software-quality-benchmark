@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "RUN_6_DONE_ADJUSTMENTS_DONE_DRY_RUNS_COMPLETED_NEW_FIXTURE_READY_NEW_APPROVAL_REQUIRED",
+    "status": "RUN_7_PARTIAL_GO_GUARD_EXPANSION_DECISION_OPEN_NEW_FIXTURE_AND_APPROVAL_REQUIRED",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -141,7 +141,7 @@
     },
     "live_run_authorization": {
       "status": "NONE",
-      "detail": "Run 6 (2026-10-19) consumed its approval; a seventh run needs a new explicit PO approval"
+      "detail": "Run 7 (2026-10-19) consumed its approval; an eighth run needs a new explicit PO approval"
     },
     "budget_candidate": {
       "suite": "suites/enzberg-nsn014-v0.4.1.json",
@@ -390,10 +390,73 @@
         ],
         "objective_ble_deviation": false,
         "valid_measurement": "PLAN, RECEIPT, ASSESS, WPK, ANALYSIS, RIGHTS, 9 of 10 reports, sieve P04, shape P09"
+      },
+      {
+        "run_id": "b7a34e94-718b-4745-ad32-747da7b68882",
+        "date": "2026-10-19",
+        "suite": "0.4.1",
+        "sqbf_commit": "b90e155259ec9ad1e52f125e9c3e4dc66827c29f",
+        "fixture": "nsn014-ux-03de8ce854bf",
+        "result": "PARTIAL GO",
+        "classification": "COMPLETED_FUNCTIONALLY_INCOMPLETE (second complete run; first with the neutral hint, BLE wording and measured operating effort)",
+        "executor_instructions_sha256": "d477972d272a5d68e51a9c359248e38618cb9963deefb7bb24bc6db855bd3252",
+        "stages": {
+          "PASS": [
+            "PLAN",
+            "RECEIPT",
+            "SE",
+            "ASSESS",
+            "WPK",
+            "ANALYSIS"
+          ],
+          "INCONCLUSIVE": [
+            "PREPARATION (P07 PASS)",
+            "SIEVE (P06 PASS)",
+            "SHAPE (P05 PASS)",
+            "BOILING (P01 PASS)",
+            "REPORT (6/10 reports PASS)",
+            "RIGHTS (executor blocked)"
+          ]
+        },
+        "model_requests": 784,
+        "requests_by_actor": {
+          "executor": 728,
+          "reviewer": 56
+        },
+        "tokens_known": {
+          "executor": 1732423,
+          "reviewer": 287009,
+          "requests_without_usage": 3
+        },
+        "wall_seconds": 5471,
+        "database_changed": "plan samples (10), test orders, module entries, 6 reports and the sampling_plans audit stamp only; no findings of the side-effect contract",
+        "fixture_lease_consumed": true,
+        "operating_effort": {
+          "visible_actions": 618,
+          "scrolls": 218,
+          "rejected_clicks_measurement_and_report": 37,
+          "rejected_actions_logged_total": 41,
+          "save_status_35_module_tasks": {
+            "SAVED": 8,
+            "NOT_SAVED_AFTER_ENTRY": 7,
+            "NOT_SAVED_PARTIAL_ENTRY": 3,
+            "NOT_REACHED": 11,
+            "NOT_REQUIRED": 6
+          },
+          "modules_fully_entered_but_not_saved": "7 of 15"
+        },
+        "suite_caused_losses": [
+          "SHAPE: module never reached in four positions (anchor, primary button of another module, card clicks rejected)",
+          "allocation tasks: save click rejected (4x)",
+          "boiling: fraction selector rejected (2x)",
+          "about 14 harmless text clicks rejected"
+        ],
+        "objective_ble_deviation": false,
+        "valid_measurement": "PLAN, RECEIPT, ASSESS, WPK, ANALYSIS, 6 of 10 reports, wash P07, sieve P06, shape P05, boiling P01, sand-equivalent P01"
       }
     ],
     "fixture_clone": {
-      "status": "PREPARED_UNUSED_NO_LEASE_NO_BUDGET_APPROVAL (new fixture after run 6; see the PR and Issue #21)",
+      "status": "CONSUMED_BY_RUN_7 (a new fixture is needed for the next run)",
       "created_at": "2026-10-16",
       "fixture_id": "nsn014-ux-b2e3a4b1d45a",
       "source_fixture_id": "nsn014-ux-536fe4e42888",
@@ -552,6 +615,15 @@
       "reviewer_run6": 5,
       "further": 5,
       "status": "all UNCONFIRMED, no issue filed; verify on a scratch clone before any BLE issue"
+    },
+    "pending_po_decision": {
+      "topic": "guard expansion for suite-caused rejections (report section 23.6)",
+      "options": [
+        "a passive text clicks",
+        "b module card click",
+        "c boiling fraction selector",
+        "d save in the allocation task (needs a scratch experiment first)"
+      ]
     }
   }
 }

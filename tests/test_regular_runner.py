@@ -236,20 +236,28 @@ class RegularRunnerTests(unittest.TestCase):
         records=[{'case_id':'NSN014-SIEVE','persona':'laboratory_staff','result':'INCONCLUSIVE','objective_status':'INCONCLUSIVE','technical_gate':'PASS',
                   'oracle_gate':'PASS','ux_verdict':'INCONCLUSIVE',
                   'position_results':[{'position_id':'P01','result':'INCOMPLETE','class':'EXECUTOR_REPORTED_BLOCKED'},{'position_id':'P02','result':'PASS','class':None},
-                                      {'position_id':'P03','result':'INCOMPLETE','class':'APPROVED_FIELDS_NOT_PRESENT_ON_PAGE'}],
-                  'positions':[{'position_id':'P01','kind':'sieve','status':'BLOCKED','effort':effort(7,6,1),'save_status':'NOT_SAVED_AFTER_ENTRY'},
-                               {'position_id':'P02','kind':'sieve','status':'DONE','effort':effort(1,0,0),'save_status':'SAVED'},
-                               {'position_id':'P03','kind':'allocations','status':'BLOCKED','effort':effort(0,None,0),'save_status':'NOT_REQUIRED'}]}]
+                                      {'position_id':'P03','result':'INCOMPLETE','class':'APPROVED_FIELDS_NOT_PRESENT_ON_PAGE'},
+                                      {'position_id':'P04','result':'INCOMPLETE','class':'APPROVED_FIELDS_NOT_PRESENT_ON_PAGE'},
+                                      {'position_id':'P05','result':'INCOMPLETE','class':'EXECUTOR_REPORTED_BLOCKED'}],
+                  'positions':[{'position_id':'P01','kind':'sieve','status':'BLOCKED','effort':effort(7,6,1),'save_status':'NOT_SAVED_AFTER_ENTRY','module_reached':True},
+                               {'position_id':'P02','kind':'sieve','status':'DONE','effort':effort(1,0,0),'save_status':'SAVED','module_reached':True},
+                               {'position_id':'P03','kind':'shape','status':'BLOCKED','effort':effort(0,None,2),'save_status':'NOT_REACHED','module_reached':False},
+                               {'position_id':'P04','kind':'boiling','status':'BLOCKED','effort':effort(3,None,0),'save_status':'NOT_REACHED','module_reached':True},
+                               {'position_id':'P05','kind':'allocations','status':'BLOCKED','effort':effort(0,None,1),'save_status':'NOT_REQUIRED','module_reached':True,
+                                'rejected_actions':[{'error_code':'X','action':'click','target':{'label':'Speichern'}}]}]}]
         manifest={'run_id':'r','verdict':'PARTIAL GO','technical_status':'COMPLETED','functional_status':'INCOMPLETE','scenario_id':'ENZBERG-NSN014',
                   'scenario_version':'0.4.1','scoring_version':module.SCORING_VERSION,'rubric_version':module.RUBRIC_VERSION,'resource_policy':suite()['resource_policy'],
                   'budget_approval':{'status':'BASE_LIMITS'},'sqbf_commit':'c','software_version':'b','executor_model':'e','analyst_model':'a','suite_sha256':'s',
                   'dataset_sha256':'d'}
         text=module.completion_text(manifest,records)
         self.assertIn('## 3a. Ursachen unvollständiger Positionen und Bedienaufwand',text)
-        self.assertIn('| SIEVE | P01 | sieve | BLOCKED | MODELL/SUITE (vorher abgelehnte Aktion) | 20 | 7 | 6 | 1 | NOT\\_SAVED\\_AFTER\\_ENTRY |',text)
-        self.assertIn('| SIEVE | P02 | sieve | DONE | — | 20 | 1 | 0 | 0 | SAVED |',text)
-        self.assertIn('| SIEVE | P03 | allocations | BLOCKED | VORSTUFE | 20 | 0 | — | 0 | NOT\\_REQUIRED |',text)
-        self.assertIn('Summe: 60 Aktionen, 8 Scrolls, 1 abgelehnte Klicks',text)
+        self.assertIn('| SIEVE | P01 | sieve | ja | BLOCKED | MODELL/SUITE (vorher abgelehnte Aktion) | 20 | 7 | 6 | 1 | NOT\\_SAVED\\_AFTER\\_ENTRY |',text)
+        self.assertIn('| SIEVE | P02 | sieve | ja | DONE | — | 20 | 1 | 0 | 0 | SAVED |',text)
+        # A module that was never reached after rejected actions is not a missing prerequisite; a reached module without the field is.
+        self.assertIn('| SIEVE | P03 | shape | nein | BLOCKED | MODELL/SUITE (Modul nicht erreicht, Aktion abgelehnt) | 20 | 0 | — | 2 | NOT\\_REACHED |',text)
+        self.assertIn('| SIEVE | P04 | boiling | ja | BLOCKED | VORSTUFE (Modul geöffnet, Feld nicht angeboten) | 20 | 3 | — | 0 | NOT\\_REACHED |',text)
+        self.assertIn('| SIEVE | P05 | allocations | ja | BLOCKED | SUITE (Speichern-Klick abgelehnt) | 20 | 0 | — | 1 | NOT\\_REQUIRED |',text)
+        self.assertIn('Summe: 100 Aktionen, 11 Scrolls, 4 abgelehnte Klicks',text)
         self.assertIn('NOT\\_SAVED\\_AFTER\\_ENTRY 1',text);self.assertIn('unbestätigte Reviewer-Beobachtungen',text)
         self.assertIn('Keine Bedienaufwand-Messung vorhanden',module.completion_text(manifest,[{'case_id':'NSN014-PLAN','persona':'p','result':'PASS','objective_status':'PASS'}]))
 

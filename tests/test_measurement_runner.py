@@ -358,6 +358,7 @@ class MeasurementRunnerTests(unittest.TestCase):
             result,_,_=self.run_with_states([click,typed,scroll,scroll,done],[state,state,{},{},{}],shown='95')
         self.assertEqual(result['effort'],{'actions':4,'scrolls':2,'clicks':1,'typed':1,'keys':0,'waits':0,'rejected':0,'scrolls_after_last_entry':2})
         self.assertEqual(result['save_status'],'NOT_SAVED_PARTIAL_ENTRY')  # one of the several sand fields only
+        self.assertFalse(result['module_reached'])  # the stand-in page stays on the sample page, never on the module route
 
     def test_save_status_tells_saved_from_not_found_from_prevented(self):
         c={'kind':'wash','fields':{'a':'1','b':'2'}}

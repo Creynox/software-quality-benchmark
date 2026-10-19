@@ -141,6 +141,14 @@ class ReviewerBestEffortTests(unittest.TestCase):
         self.assertEqual(module.cause_source('INCOMPLETE','AGENT_ACTION_REJECTED:MEASUREMENT_ACTION_SCOPE_DENIED'),'SUITE')
         self.assertEqual(module.cause_source('INCOMPLETE','EXECUTOR_REPORTED_BLOCKED',rejected=2),'MODELL/SUITE (vorher abgelehnte Aktion)')
         self.assertEqual(module.cause_source('PASS',None),'—')
+        # Live run b7a34e94: four SHAPE positions had zero visible actions and were filed as a missing prerequisite although the module was never reached.
+        absent='APPROVED_FIELDS_NOT_PRESENT_ON_PAGE'
+        self.assertEqual(module.cause_source('INCOMPLETE',absent,rejected=2,reached=False),'MODELL/SUITE (Modul nicht erreicht, Aktion abgelehnt)')
+        self.assertEqual(module.cause_source('INCOMPLETE',absent,reached=False),'MODELL/SUITE (Modul nicht erreicht)')
+        self.assertEqual(module.cause_source('INCOMPLETE',absent,reached=True),'VORSTUFE (Modul geöffnet, Feld nicht angeboten)')
+        self.assertEqual(module.cause_source('INCOMPLETE',absent),'VORSTUFE')  # unknown: the old class
+        self.assertEqual(module.cause_source('INCOMPLETE','EXECUTOR_REPORTED_BLOCKED',save_rejected=True),'SUITE (Speichern-Klick abgelehnt)')
+        self.assertEqual(module.cause_source('INCOMPLETE','EXECUTOR_REQUEST_FAILED',save_rejected=True),'PROVIDER')
         # A BLE usability problem is never derived from a position.
         self.assertNotIn('BLE-UX',set(module.CAUSE_SOURCES.values()))
 

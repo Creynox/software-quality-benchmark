@@ -181,11 +181,22 @@ CAUSE_SOURCES = {
 }
 
 
-def cause_source(result, cls, rejected=0):
-    """MODELL, SUITE, PROVIDER, VORSTUFE, BLE-ABWEICHUNG or UNKLAR for a position result; a give-up after a rejected action is shared."""
+def cause_source(result, cls, rejected=0, *, reached=None, save_rejected=False):
+    """MODELL, SUITE, PROVIDER, VORSTUFE, BLE-ABWEICHUNG or UNKLAR for a position result; a give-up after a rejected action is shared.
+
+    `reached` (did the executor ever stand on the module page) separates "field not offered" from "module never opened": live run b7a34e94 had
+    four SHAPE positions with zero visible actions that were filed as a missing prerequisite although the module was never reached.
+    `save_rejected` marks an allocation task whose save click the guard prevented (the allocations have no save of their own)."""
     if result == 'PASS' or not cls:
         return '—'
-    base = CAUSE_SOURCES.get(str(cls).split(':')[0], 'UNKLAR')
+    name = str(cls).split(':')[0]
+    base = CAUSE_SOURCES.get(name, 'UNKLAR')
+    if save_rejected and base in ('MODELL', 'VORSTUFE'):
+        return 'SUITE (Speichern-Klick abgelehnt)'
+    if name == 'APPROVED_FIELDS_NOT_PRESENT_ON_PAGE' and reached is False:
+        return 'MODELL/SUITE (Modul nicht erreicht' + (', Aktion abgelehnt)' if rejected else ')')
+    if name == 'APPROVED_FIELDS_NOT_PRESENT_ON_PAGE' and reached is True:
+        return 'VORSTUFE (Modul geöffnet, Feld nicht angeboten)'
     return 'MODELL/SUITE (vorher abgelehnte Aktion)' if base == 'MODELL' and rejected else base
 
 

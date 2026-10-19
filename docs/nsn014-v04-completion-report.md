@@ -14,6 +14,8 @@ Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-
 
 **Nachtrag Lauf 3 (Abschnitt 17):** `413f7abe…`, 16.10.2026: PARTIAL GO, alle zwölf Stufen durchgelaufen, PLAN und WPK PASS, zehn Stufen INCONCLUSIVE durch einen zu engen Guard (Menüeintrag „Prüfbericht“ nicht erkannt, Ablehnung beendet die Aufgabe, Hauptaktion „Testauftrag erzeugen“ nicht erlaubt). 124 Anfragen, 271.478 Tokens, 24 min. Keine Messung erfasst.
 
+**Nachtrag Lauf 7 (Abschnitt 23):** Lauf 7 (b7a34e94, 19.10.2026, mit neutralem Hinweis, BLE-Wortlaut und gemessenem Bedienaufwand) ist `PARTIAL GO / COMPLETED`: sechs Stufen PASS (PLAN, RECEIPT, SE, ASSESS, WPK, ANALYSIS), sechs INCONCLUSIVE, keine FAIL/INVALID/BLOCKED, keine belegte BLE-Abweichung; 784 Anfragen, 5.471 s, rund 2,02 Mio. Tokens. In 7 von 15 vollständig eingegebenen Modulen wurde nicht gespeichert; ein Teil der Lücken sind Ablehnungen des Guards (SHAPE: Modul nie erreicht, Speichern in der Zuteilungsaufgabe, Fraktionsauswahl, harmlose Textklicks). Vorschlag zur Erweiterung des Guards liegt beim PO (Abschnitt 23.6).
+
 **Nachtrag Anpassungen nach Lauf 6 (Abschnitt 22):** Auf Entscheidung des PO: neutraler Hinweis zur Speicherschaltfläche (ohne Position oder Klickpfad), Aufgabenwortlaut in BLEs Bezeichnungen, Messung von Suchaufwand, Scrolls, abgelehnten Klicks und Speicherstatus (Abschnitt 3a des Berichts, Ursprung MODELL/SUITE/PROVIDER/VORSTUFE/BLE-ABWEICHUNG), fünf Reviewer-Auffälligkeiten getrennt als unbestätigte Beobachtungen (`docs/nsn014-ble-observations.md`). 480 Tests OK, Trockenläufe sauber, neue Fixture bereit. Lauf 7 braucht die ausdrückliche Freigabe des PO und ist mit Lauf 6 nicht direkt vergleichbar.
 
 **Nachtrag Lauf 6 (Abschnitt 21):** Lauf 6 (fdea63ef, 19.10.2026) ist `PARTIAL GO / COMPLETED`, der erste vollständige Durchlauf aller zwölf Stufen: sechs Stufen PASS (PLAN, RECEIPT, ASSESS, WPK, ANALYSIS, RIGHTS), sechs INCONCLUSIVE, keine FAIL/INVALID/BLOCKED, keine belegte BLE-Abweichung; neun von zehn Prüfberichten erzeugt und vom Oracle bestätigt. 621 Anfragen, 4.596 s, rund 1,56 Mio. Tokens, ohne Unterbrechung über die Stunden-Marke (automatische Token-Erneuerung bewährt). Die Messstufen blieben überwiegend unvollständig: Speicherschaltfläche nicht gefunden (acht Module), Aufgabenwortlaut in meiner Fachsprache statt BLEs, abgelehnte Beschriftungsklicks.
@@ -908,3 +910,72 @@ In Lauf 6 lehnte der Guard einen Klick auf die Box um die Haupteinwaage („EINW
 - Der Hinweis macht Lauf 7 nicht mit Lauf 6 vergleichbar, und er kann die Vollständigkeit der Eingaben erhöhen. Das ist gewollt, ändert aber, wie die Zahlen zu lesen sind.
 - Ob der Hinweis reicht, zeigt erst ein Lauf. Der Trockenlauf kennt den Weg zu Modulen und zur Speicherschaltfläche.
 - Die Ursprungsspalte ordnet Positionen nach ihrer Klasse zu. `VORSTUFE` und `MODELL` sind dabei oft nicht scharf zu trennen (nicht geöffnetes Modul); der Bericht nennt es deshalb so und urteilt nicht über BLE.
+
+## 23. Lauf 7 (b7a34e94, 19.10.2026): zweiter vollständiger Durchlauf, erstmals mit gemessenem Bedienaufwand
+
+**Bewertung: `PARTIAL GO`, technisch `COMPLETED`. Alle zwölf Stufen liefen durch, sechs bestanden, sechs blieben unentschieden, keine Stufe ist FAIL, INVALID oder BLOCKED. Es gibt keine objektiv belegte BLE-Abweichung und keinen Harness-Fehler.** Der neutrale Hinweis und der BLE-Wortlaut haben die Ergebnisse nur wenig verbessert; der größte Teil der Verluste kommt weiterhin vom Modellverhalten und, jetzt belegbar, von Ablehnungen durch den Guard (Suite). Die Freigabe von Lauf 7 ist verbraucht.
+
+### 23.1 Verlauf
+
+SQBF-Commit `b90e155`, Fixture `nsn014-ux-03de8ce854bf` (verbraucht), 14:52 bis 16:23 UTC, **5.471 s**. **784 Anfragen** (728 Executor, 56 Reviewer), bekannte Tokens 1.732.423 (Executor) und 287.009 (Reviewer), zusammen rund 2,02 Mio. (3 Anfragen ohne Nutzungsangabe). Gespeicherte Anmeldung, kein Browser-Prompt, automatische Token-Erneuerung ohne Störung. Wortlaut-Hash `d477972d…`; **nicht direkt vergleichbar mit Lauf 6** (anderer Hinweis und Wortlaut).
+
+| Stufe | Objektives Ergebnis | Positionen PASS (Lauf 6 zum Vergleich) | Anfragen / Zeit |
+|---|---|---|---|
+| PLAN | **PASS** | – | 39 s |
+| RECEIPT | **PASS** | – | 76 s |
+| PREPARATION | INCONCLUSIVE | 1 von 10, P07 (0) | 1.824 s |
+| SIEVE | INCONCLUSIVE | 1 von 10, P06 (1) | 1.716 s |
+| SHAPE | INCONCLUSIVE | 1 von 5, P05 (1) | 283 s |
+| BOILING | INCONCLUSIVE | 1 von 4, P01 (0) | 388 s |
+| SE | **PASS** | 1 von 1 (0) | 174 s |
+| ASSESS, WPK, ANALYSIS | **PASS** | – | 73 s, 102 s, 45 s |
+| REPORT | INCONCLUSIVE | **6 von 10 Berichten erzeugt, als PDF geladen und vom Oracle bestätigt** (9) | 675 s |
+| RIGHTS | INCONCLUSIVE | Executor meldete `blocked` (Lauf 6: PASS) | 74 s |
+
+Abschluss-Oracles: Empfang PASS, Berechnungen PASS, statisches Gate unverändert, keine Vertragsbefunde. Die Gesamtvergleiche der Messwerte, Zuteilungen und Berichte stehen auf FAIL, weil die meisten freigegebenen Werte nie eingegeben wurden; kein einzelner eingegebener Wert wich ab.
+
+### 23.2 Belastbare Ergebnisse
+
+PLAN, RECEIPT, ASSESS, WPK, ANALYSIS: bestanden. Abschlämmung P07, Siebanalyse P06, Kornform P05, Kochversuch P01 und Sandäquivalent P01: eingegeben, gespeichert, wie freigegeben persistiert. Sechs Prüfberichte (P01, P02, P03, P04, P07, P10): erzeugt, als PDF geladen, gegen den persistierten Stand geprüft (PASS).
+
+### 23.3 Messung der Auffindbarkeit und des Bedienaufwands
+
+Erstmals liegen die Messwerte vor (Abschnitt 3a des Berichts, 618 sichtbare Aktionen, 218 Scrolls, 37 abgelehnte Klicks in Mess- und Berichtsstufen; 41 abgelehnte Aktionen im Ereignisprotokoll insgesamt).
+
+**Speichern, 35 Modulaufgaben:** `SAVED` 8, `NOT_SAVED_AFTER_ENTRY` 7, `NOT_SAVED_PARTIAL_ENTRY` 3, `NOT_REACHED` 11, `NOT_REQUIRED` 6 (Zuteilungen) und 10 Berichtszeilen ohne Speichern. **In 15 Modulen wurden alle Felder eingegeben; in 7 davon (47 %) wurde nicht gespeichert**: Abschlämmung P02, P08; Siebanalyse P01, P02, P03, P07, P10. Das Modell suchte dort nach der letzten Eingabe meist 8 bis 16 Scrolls lang (Median 10; in einem Fall kein Scroll), überwiegend nach unten (0 bis 4 Scrolls nach oben je Position) und meldete „keine Speicherschaltfläche sichtbar“. Der neutrale Hinweis ändert das also kaum. Ob die Schaltfläche beim Hochscrollen erreichbar war, belegt die Messung nicht; sie zeigt nur, dass die Suche erfolglos blieb und fast nur in eine Richtung lief. Das bleibt ein UX-Signal (Reviewer: `UX_IMPROVEMENT` major, mehrfach) und eine Beobachtung (OBS-L6-01, OBS-X-02), kein BLE-Befund.
+
+### 23.4 Wer verursacht die Lücken: Modell, Suite, BLE
+
+Die neue Zuordnung (Spalte „Ursprung“) und das Ereignisprotokoll zeigen:
+
+**Suite (Ablehnungen des Guards, behebbar):**
+1. **SHAPE: vier von fünf Positionen ohne eine einzige sichtbare Aktion.** Das Modell erreichte die Kornform nie: „Zu den Modulen“ (4-mal, führt in BLE weg), „Siebanalyse öffnen“ (3-mal, die auffälligste Aktion der Probenseite, gehört aber zu einem anderen Modul) und Klicks auf Titel oder Fläche der Modulkarte „Kornform“ (3-mal, der Guard kennt nur den Link). Der Bericht führte das als „fehlende Voraussetzung“; es war „Modul nicht erreicht“ (jetzt so ausgewiesen).
+2. **Zuteilungen: Speichern-Klick abgelehnt** (4-mal, u. a. P09, P10). Das Modell hatte alle Entnahmen eingegeben und wollte speichern; der Guard erlaubt in der Zuteilungsaufgabe kein Speichern. Es meldete danach `blocked`. Jetzt als „SUITE (Speichern-Klick abgelehnt)“ ausgewiesen.
+3. **Kochversuch: Auswahl „Fraktion / Entnahme“ abgelehnt** (2-mal, P05 und P10 `blocked`).
+4. **Harmlose Textklicks abgelehnt** (rund 14: Absätze, Überschriften, Beschriftungen wie „1. Vorbehandlung / Feuchte“, „Sieblinie“, „RÜCKSTAND GES.“, „Trockenmasse nach Waschen“), meist der Versuch, ein Feld zu verlassen oder etwas zu lesen (darunter vermutlich ein Startelement, „Sandäquivalent starten“). Nach solchen Ablehnungen gaben mehrere Modelle auf. In RIGHTS gaben „Detailpanel schließen“ und ein Klick auf „NSN 014 10“ den Ausschlag (Lauf 6: PASS).
+5. REPORT: „Siebanalyse öffnen“ 4-mal abgelehnt.
+
+**Modell:** Speichern nicht gefunden (7 Module, s. o.); drei Siebanalysen ohne sichtbaren Fortschritt (P04, P08, P09, vom Stillstandsdetektor beendet); Berichtsaktion nicht gefunden (REPORT P05, P06 nach 14 bzw. 17 Scrolls); eine ungültige Antwort (`RESPONSE_NOT_JSON`, PREPARATION P03, Ursprung PROVIDER).
+
+**BLE:** Kein objektiver Befund. Neue unbestätigte Beobachtungen (nur Reviewer, nicht verifiziert): die Siebanalyse bezeichnet ihre Felder „Rückstand (g)“ und zeigt keine erkennbare Feldgruppe „Entnahmen“ (Reviewer major), die Hinweiskarte „Summe Rückstände > Einwaage“ erschien bei plausiblen Eingaben (BLE-Kandidat minor, nicht etabliert), „Siebanalyse öffnen“ überlagert den Weg zu anderen Modulen. Alle in `docs/nsn014-ble-observations.md` ergänzt.
+
+### 23.5 Nachträgliche Änderung der Auswertung
+
+`module_reached` hält fest, ob der Executor je auf der Modulseite stand; der Bericht zeigt eine Spalte „Modul erreicht“. Der Ursprung unterscheidet damit „Modul nie erreicht“ (MODELL/SUITE) von „Modul geöffnet, Feld nicht angeboten“ (VORSTUFE) und weist Zuteilungsaufgaben mit abgelehntem Speichern als SUITE aus. 480 Tests OK.
+
+### 23.6 Fazit und Entscheidung des PO
+
+Mit neutralem Hinweis und BLE-Wortlaut ist die Zahl entschiedener Messpositionen von 2 auf 5 gestiegen (Lauf 6: SIEVE P04, SHAPE P09; Lauf 7: PREPARATION P07, SIEVE P06, SHAPE P05, BOILING P01, SE P01), bei weniger Berichten (6 statt 9) und einer RIGHTS-Aufgabe, die blockierte. Der Hauptengpass bleibt, dass das Modell die Speicherschaltfläche nicht findet, und neu belegt: ein Teil der Verluste sind Ablehnungen des Guards, die ein Laborant nicht hätte. Vorschlag zur Behebung der Suite-Anteile, **der die Sicherheitsgrenze des Guards erweitert und deshalb die Entscheidung des PO braucht**:
+
+| # | Änderung | Wirkung | Risiko |
+|---|---|---|---|
+| a | Klicks auf rein darstellende Elemente (Text, Überschrift, Absatz, Fläche ohne Zeigercursor, ohne Rolle, ohne klickbaren Vorfahren) durchlassen | Felder verlassen, Texte lesen; keine Aufgabe endet an einem harmlosen Klick | gering: ein Klick auf Text löst in BLE nichts aus; ein verstecktes Klickverhalten ohne Zeigercursor wäre möglich, aber ungewöhnlich |
+| b | Klick auf die Fläche einer Modulkarte, die den erlaubten Modullink enthält, wie ein Klick auf den Link werten | SHAPE (und andere Module) erreichbar, wenn die Karte klickbar ist | gering: Ziel bleibt die erlaubte Modulseite; sonst greift die Seitenprüfung |
+| c | In der Kochversuch-Aufgabe die Auswahl „Fraktion / Entnahme“ erlauben | BOILING P05, P10 | gering: eine Auswahl, kein Speichern; vorher Wirkung auf einer Wegwerfkopie prüfen |
+| d | In der Zuteilungsaufgabe das Speichern des Moduls erlauben | Entnahmen wie ein Laborant bestätigen | **nicht ohne Vorprüfung:** Ob BLE Entnahmen schon beim Verlassen des Feldes speichert (der Trockenlauf deutet darauf hin) und was das Speichern der Siebanalyse in PREPARATION schreibt, ist auf einer Wegwerfkopie zu klären, sonst Verstoß gegen den Seiteneffekt-Vertrag |
+
+### 23.7 Grenzen
+
+- Ein einzelner Lauf je Wortlaut: Die Unterschiede zu Lauf 6 liegen im Rahmen der Streuung des Modells.
+- Die Spalte „Ursprung“ ordnet nach Klasse und Messwerten zu; MODELL und SUITE sind bei Ablehnungen nicht immer scharf zu trennen und werden dann gemeinsam ausgewiesen.
+- Dass die Suche nach „Speichern“ erfolglos blieb, zeigt nicht, dass die Schaltfläche nicht erreichbar war.

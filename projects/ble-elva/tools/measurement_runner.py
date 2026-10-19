@@ -82,7 +82,7 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
     # The test order of a sample is created once, in whichever module visit needs it first.
     images,actions,saved,filled,offered=[],[],({'test_order'} if test_order_done else set()),set(),set();stall=StallDetector();rejected=[];wrongly_typed=[]
     outcome={'position_id':position['position_id'],'kind':kind,'status':'INCONCLUSIVE','technical_gate':'PASS','review':None}
-    page=None
+    page=None;reached=False
     try:
         context.add_init_script(event_guard(contract))
         context.route('**/*',lambda route:route.continue_() if transport_allowed(route.request.url,route.request.method,contract,policy) else route.abort())
@@ -94,6 +94,7 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
         while True:
             budget.remaining()
             if urlsplit(page.url).path=='/login':raise ReadOnlyViolation('SESSION_INVALIDATED')
+            reached=reached or urlsplit(page.url).path==contract['path']
             png=page.screenshot(animations='disabled',timeout=min(5000,budget.remaining()*1000))
             offered|=offered_fields(page,contract)
             images.append(png);evidence.snapshot(png,position['position_id']+'-'+kind);stall.observe(png)
@@ -163,7 +164,7 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
                    fully_entered=set(contract['fields'])<=filled and required_saves(contract)<=saved and not outcome['field_focused_at_end'],
                    fields_offered=len(offered),fields_not_offered=fields_not_offered(contract,offered),
                    offered_entered=offered<=filled and (required_saves(contract)<=saved or not offered))
-    outcome.update(effort=effort_of(actions,rejected),save_status=save_status(contract,outcome,saved,rejected))
+    outcome.update(effort=effort_of(actions,rejected),save_status=save_status(contract,outcome,saved,rejected),module_reached=reached)
     return outcome
 
 

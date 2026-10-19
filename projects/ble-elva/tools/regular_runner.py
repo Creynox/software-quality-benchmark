@@ -675,8 +675,11 @@ def effort_rows(records):
             effort=item.get('effort')
             if not effort:continue
             result=results.get(item.get('position_id'))
+            reached=item.get('module_reached')
+            save_rejected=any(isinstance(r.get('target'),dict) and r['target'].get('label')=='Speichern' for r in item.get('rejected_actions',[]))
             rows.append({'case':str(record['case_id']).replace('NSN014-',''),'position':item.get('position_id','—'),'kind':item.get('kind','—'),
-                         'status':item.get('status','—'),'origin':cause_source(result.get('result'),result.get('class'),effort['rejected']) if result else '—',
+                         'reached':'—' if reached is None else 'ja' if reached else 'nein','status':item.get('status','—'),
+                         'origin':cause_source(result.get('result'),result.get('class'),effort['rejected'],reached=reached,save_rejected=save_rejected) if result else '—',
                          'effort':effort,'save':item.get('save_status','—')})
     return rows
 
@@ -730,10 +733,10 @@ def completion_text(manifest,records):
             'Reviewer-Beobachtungen in Abschnitt 4. Aktionen, Scrolls, abgelehnte Klicks und Speicherstatus sind Messwerte, kein Urteil.','']
     rows=effort_rows(records)
     if rows:
-        lines+=['| Stufe | Position | Modul | Status | Ursprung | Aktionen | Scrolls | davon nach letzter Eingabe | abgelehnte Klicks | Speichern |','|---|---|---|---|---|---|---|---|---|---|']
+        lines+=['| Stufe | Position | Modul | Modul erreicht | Status | Ursprung | Aktionen | Scrolls | davon nach letzter Eingabe | abgelehnte Klicks | Speichern |','|---|---|---|---|---|---|---|---|---|---|---|']
         for row in rows:
             effort=row['effort']
-            lines.append('| '+' | '.join(text(v) for v in (row['case'],row['position'],row['kind'],row['status'],row['origin'],effort['actions'],effort['scrolls'],
+            lines.append('| '+' | '.join(text(v) for v in (row['case'],row['position'],row['kind'],row['reached'],row['status'],row['origin'],effort['actions'],effort['scrolls'],
                                                          '—' if effort['scrolls_after_last_entry'] is None else effort['scrolls_after_last_entry'],
                                                          effort['rejected'],row['save']))+' |')
         saves={}

@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "RUN_5_PARTIAL_GO_KEPT_LOGIN_VERIFIED_NEW_FIXTURE_AND_APPROVAL_REQUIRED",
+    "status": "RUN_6_PARTIAL_GO_FIRST_COMPLETE_RUN_TASK_WORDING_AND_SAVE_HINT_OPEN_NEW_FIXTURE_AND_APPROVAL_REQUIRED",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -141,7 +141,7 @@
     },
     "live_run_authorization": {
       "status": "NONE",
-      "detail": "Run 5 (2026-10-16) consumed its approval; a sixth run needs a new explicit PO approval and a decision on the provider token lifetime (section 20.6)"
+      "detail": "Run 6 (2026-10-19) consumed its approval; a seventh run needs a new explicit PO approval"
     },
     "budget_candidate": {
       "suite": "suites/enzberg-nsn014-v0.4.1.json",
@@ -341,10 +341,59 @@
           "sidebar group toggle rejected in RECEIPT; reviewer failures without exception class"
         ],
         "valid_measurement": "partial: PLAN, RECEIPT, wash P08, sieve P04/P06/P10"
+      },
+      {
+        "run_id": "fdea63ef-23ca-4f15-92c8-f19fc6803c7f",
+        "date": "2026-10-19",
+        "suite": "0.4.1",
+        "sqbf_commit": "018a8ead46e79d54a15b69a43d7cee8148d6ae89",
+        "fixture": "nsn014-ux-49482f8aa98a",
+        "result": "PARTIAL GO",
+        "classification": "COMPLETED_FUNCTIONALLY_INCOMPLETE (first run through all twelve stages)",
+        "stages": {
+          "PASS": [
+            "PLAN",
+            "RECEIPT",
+            "ASSESS",
+            "WPK",
+            "ANALYSIS",
+            "RIGHTS"
+          ],
+          "INCONCLUSIVE": [
+            "PREPARATION (0/10)",
+            "SIEVE (P04 PASS)",
+            "SHAPE (P09 PASS)",
+            "BOILING (0/4)",
+            "SE (0/1)",
+            "REPORT (9/10 reports PASS, P02 not generated)"
+          ]
+        },
+        "model_requests": 621,
+        "requests_by_actor": {
+          "executor": 562,
+          "reviewer": 59
+        },
+        "tokens_known": {
+          "executor": 1271553,
+          "reviewer": 288367,
+          "requests_without_usage": 2
+        },
+        "wall_seconds": 4596,
+        "database_changed": "plan samples (10), test orders, module entries, 9 reports and the sampling_plans audit stamp only; no findings of the side-effect contract",
+        "fixture_lease_consumed": true,
+        "kept_login": "used (no browser prompt); the run passed 3600 s without a stop, the access token was renewed automatically",
+        "causes_of_incomplete_stages": [
+          "save control not found by the executor in eight modules (it sits in the module header and scrolls away)",
+          "task wording used internal names (wash, allocations) instead of BLE labels (Abschlaemmung / Feinanteil, Entnahmen in the Siebanalyse): eight positions",
+          "cascade: shape and boiling need the allocations (Entnahmen) that PREPARATION did not record",
+          "rejected clicks on label areas instead of input fields; \"Zu den Modulen\" six times"
+        ],
+        "objective_ble_deviation": false,
+        "valid_measurement": "PLAN, RECEIPT, ASSESS, WPK, ANALYSIS, RIGHTS, 9 of 10 reports, sieve P04, shape P09"
       }
     ],
     "fixture_clone": {
-      "status": "CONSUMED_BY_RUN_5 (a new fixture is needed for the next run)",
+      "status": "CONSUMED_BY_RUN_6 (a new fixture is needed for the next run)",
       "created_at": "2026-10-16",
       "fixture_id": "nsn014-ux-b2e3a4b1d45a",
       "source_fixture_id": "nsn014-ux-536fe4e42888",

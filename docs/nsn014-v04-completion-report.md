@@ -14,6 +14,8 @@ Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-
 
 **Nachtrag Lauf 3 (Abschnitt 17):** `413f7abe…`, 16.10.2026: PARTIAL GO, alle zwölf Stufen durchgelaufen, PLAN und WPK PASS, zehn Stufen INCONCLUSIVE durch einen zu engen Guard (Menüeintrag „Prüfbericht“ nicht erkannt, Ablehnung beendet die Aufgabe, Hauptaktion „Testauftrag erzeugen“ nicht erlaubt). 124 Anfragen, 271.478 Tokens, 24 min. Keine Messung erfasst.
 
+**Nachtrag Lauf 6 (Abschnitt 21):** Lauf 6 (fdea63ef, 19.10.2026) ist `PARTIAL GO / COMPLETED`, der erste vollständige Durchlauf aller zwölf Stufen: sechs Stufen PASS (PLAN, RECEIPT, ASSESS, WPK, ANALYSIS, RIGHTS), sechs INCONCLUSIVE, keine FAIL/INVALID/BLOCKED, keine belegte BLE-Abweichung; neun von zehn Prüfberichten erzeugt und vom Oracle bestätigt. 621 Anfragen, 4.596 s, rund 1,56 Mio. Tokens, ohne Unterbrechung über die Stunden-Marke (automatische Token-Erneuerung bewährt). Die Messstufen blieben überwiegend unvollständig: Speicherschaltfläche nicht gefunden (acht Module), Aufgabenwortlaut in meiner Fachsprache statt BLEs, abgelehnte Beschriftungsklicks.
+
 **Nachtrag Lauf 5 (Abschnitt 20):** Lauf 5 (6c23f768, 16.10.2026) ist `PARTIAL GO / RESOURCE_STOP`: erstmals objektiv belegte BLE-Ergebnisse (PLAN, RECEIPT, Abschlämmung P08, Siebanalyse P04/P06/P10 PASS), aber nur für fünf von zwölf Stufen. Abbruch nach 3.603 s, weil der Anmeldetoken nach etwa einer Stunde abläuft (HTTP 401); eine Entscheidung zum Token ist offen (Abschnitt 20.6). Das einzige FAIL (P09) war ein Auswertungsfehler (Feld nicht verlassen), mein Anker-Fix aus Abschnitt 19 war falsch (`<base href="/">`); beides behoben. 540 Anfragen, rund 1,37 Mio. Tokens.
 
 **Nachtrag Lauf 4 (Abschnitt 19):** Lauf 4 (083896e6, 16.10.2026) war `NO-GO / INVALID_HARNESS` ohne gültige Messung (PLAN PASS, RECEIPT INCONCLUSIVE, PREPARATION INVALID, 9 Stufen NOT_RUN, 51 Anfragen). Ursache: ein einziger fehlgeschlagener Executor-Request beendete über einen allgemeinen Handler die Suite; dazu zwei fehlende Guard-Freigaben. Behoben und mit Trockenläufen (auch mit eingespielten Providerfehlern) belegt; zusätzlich werden abgeleitete Werte nie mehr BLE angelastet, solange ihre Eingaben fehlen. 441 Tests OK. Der nächste Lauf braucht eine neue Freigabe.
@@ -790,3 +792,63 @@ Der PO wollte nicht je Lauf, Stunde und Agent im Browser bestätigen, sondern **
 - Nur fünf Stufen laufen mit Modell; BOILING, SE, ASSESS, WPK, ANALYSIS, REPORT, RIGHTS und der größte Teil von SHAPE bleiben ungeprüft.
 - Viele Positionen scheiterten am Verhalten des Modells (Aufgeben nach einer Ablehnung, Speichern nicht gefunden); das ist Messgegenstand, aber kein BLE-Befund.
 - Die Reihenfolge PREPARATION vor SIEVE (Abschlämmung vor Hauptprobenmasse) kann Ergebnisse verfälschen; das ist ein Kandidat für eine Anpassung der Suite, nicht von BLE.
+
+## 21. Lauf 6 (fdea63ef, 19.10.2026): erster vollständiger Durchlauf aller zwölf Stufen
+
+**Bewertung: `PARTIAL GO`, technisch `COMPLETED`. Erstmals lief die gesamte Suite durch: sechs Stufen bestanden, sechs blieben unentschieden, keine Stufe ist FAIL, INVALID oder BLOCKED. Es gibt keine objektiv belegte BLE-Abweichung und keinen Harness-Fehler. Die Messstufen sind überwiegend unvollständig, weil der Executor Module nicht fand, nicht speicherte oder aufgab.** Die Freigabe von Lauf 6 ist verbraucht.
+
+### 21.1 Verlauf
+
+SQBF-Commit `018a8ea`, Fixture `nsn014-ux-49482f8aa98a` (verbraucht), 08:57 bis 10:13 UTC, **4.596 s**. **621 Anfragen** (562 Executor, 59 Reviewer), bekannte Tokens 1.271.553 (Executor) und 288.367 (Reviewer), zusammen rund 1,56 Mio. (2 Anfragen ohne Nutzungsangabe). Vorab: Trockenlauf sauber, neue Fixture, Provider-Probe bestanden, Readiness grün. Die Anmeldung kam aus dem gespeicherten Login (kein Browser-Prompt). **Der Lauf überschritt die Stunden-Marke, die Lauf 5 beendet hatte, ohne Unterbrechung:** Der Zugriffstoken wurde automatisch erneuert (Abschnitt 20.6a bewährt).
+
+| Stufe | Objektives Ergebnis | Inhalt | Anfragen / Zeit |
+|---|---|---|---|
+| PLAN | **PASS** | Planproben angelegt, Oracle bestätigt. | 3 / 34 s |
+| RECEIPT | **PASS** | Probenübersicht gelesen, Oracle bestätigt (10 Proben). | 7 / 82 s |
+| PREPARATION | INCONCLUSIVE | 0 von 10 Positionen entschieden (siehe 21.3). | 156 / 1.229 s |
+| SIEVE | INCONCLUSIVE | **P04 PASS**, sonst unvollständig. | 251 / 1.627 s |
+| SHAPE | INCONCLUSIVE | **P09 PASS**, sonst unvollständig. | 27 / 230 s |
+| BOILING | INCONCLUSIVE | 0 von 4 entschieden. | 56 / 372 s |
+| SE | INCONCLUSIVE | 0 von 1 entschieden. | 17 / 112 s |
+| ASSESS | **PASS** | Bewertungsansicht gelesen. | 6 / 66 s |
+| WPK | **PASS** | Plan gegen Fertiggestelltes gelesen. | 5 / 56 s |
+| ANALYSIS | **PASS** | Auswertungsansicht gelesen. | 2 / 39 s |
+| REPORT | INCONCLUSIVE | **Neun von zehn Prüfberichten erzeugt, als PDF geladen und vom Oracle bestätigt (PASS)**, P02 nicht erzeugt. | 82 / 660 s |
+| RIGHTS | **PASS** | Nur lesende Rolle, keine Schreibmöglichkeit. | 9 / 87 s |
+
+Abschluss-Oracles: Empfang PASS (10 Proben), Berechnungen PASS (alle geprüften Werte stimmen), statisches Gate unverändert (nur Audit-Stempel `sampling_plans`), keine Vertragsbefunde. Die Gesamtvergleiche der Messwerte und Zuteilungen sowie der Berichte stehen auf FAIL, weil die meisten freigegebenen Werte nie eingegeben wurden und ein Bericht fehlt; kein einzelner eingegebener Wert wich ab.
+
+### 21.2 Belastbare Ergebnisse
+
+- Planerstellung, Probenübersicht, Bewertungs-, Plan- und Auswertungsansicht und die Rechteprüfung: objektiv bestanden.
+- **Prüfberichte:** neun der zehn Berichte wurden über die BLE-Oberfläche erzeugt, als PDF heruntergeladen und gegen den persistierten Stand geprüft (Berichtsstatus, Beziehungen, Zahlenwerte, PDF-Identität): PASS.
+- Siebanalyse P04 und Kornform P09: eingegeben, gespeichert, wie freigegeben persistiert.
+
+### 21.3 Warum die Messstufen unvollständig blieben
+
+Kein Befund über BLE, sondern über das, was das Modell mit der Aufgabe und der Oberfläche schafft. Die Gründe stehen in den protokollierten Abschlussaussagen und Ablehnungen:
+
+1. **„Speichern“ nicht gefunden (acht Module):** SIEVE P02, P05, P08; PREPARATION Abschlämmung P02, P06, P07; BOILING P01; SE P01. Die Werte standen eingegeben und übernommen da, das Modell fand keine Speicherschaltfläche und meldete `blocked`. Sie liegt im Modulkopf und scrollt mit der Seite weg (schon in Lauf 5 gesehen). Der Reviewer meldet es als UX-Befund (major, mehrfach).
+2. **Aufgabenwortlaut in meiner Fachsprache, nicht in BLEs:** Die Aufgaben nennen „wash“ und „allocations“. In BLE heißt das Modul „Abschlämmung / Feinanteil“, und die Zuteilung sind die „Entnahmen“ innerhalb der Siebanalyse. Modelle meldeten für P01, P03, P04, P05 „kein Wash-Modul“ und für P04, P06, P09, P10 „kein Allocations-Modul“ (acht Positionen). Das sind Aufgaben-Defekte meiner Suite, die als `APPROVED_FIELDS_NOT_PRESENT_ON_PAGE` verbucht wurden, obwohl die Felder in einem nicht geöffneten Modul vorhanden sind.
+3. **Kaskade durch fehlende Zuteilungen:** SHAPE meldete für P01, P05, P06, P10 „keine Prüfportionen, zuerst Entnahmen mit Kornform-Fraktionen anlegen“; BOILING P04 „Fraktion/Entnahme nicht gewählt“. Beides folgt daraus, dass die Entnahmen in PREPARATION nicht erfasst wurden (Punkt 2).
+4. **Abgelehnte Klicks (19):** „Zu den Modulen“ sechsmal (führt in BLE von der Probe weg, siehe Abschnitt 20.3), „Siebanalyse öffnen“ viermal in REPORT, Beschriftungsflächen statt Eingabefeld („EINWAAGE g“, „Einwaage und K-Faktor“, „Einwaage gesamt“) dreimal, Speichern in einer Zuteilungsaufgabe zweimal, Erfassen-Links anderer Module (Teilsiebung, Kochversuch) zweimal, die Auswahl „Fraktion / Entnahme“ einmal, das Benutzermenü einmal. Bei SIEVE P09 und P03 führte das zum Aufgeben („Einwaagefeld nicht anklickbar“).
+5. Zwei Stillstände (PREPARATION P08, SIEVE P06), eine ungültige Antwort (`RESPONSE_NOT_JSON`, SIEVE P10), ein Reviewer-Ausfall: alle auf die Aufgabe begrenzt, kein Suitestopp.
+6. REPORT P02: Das Modell fand die Berichtsaktion nicht („nur Moduleinschätzungen sichtbar“).
+
+### 21.4 Beobachtungen zu BLE (Reviewer, unbestätigt, kein Issue angelegt)
+
+- Kein Speichern-Hinweis und keine Speicheranzeige im Modul (major, mehrfach); „Speichern“ liegt oben im Modulkopf.
+- Siebtabelle: In der Zeile Boden/Pfanne (Teilsiebung) steht ein Strich statt eines Eingabefelds; die beiden Einwaagefelder der Teilsiebung sind abgeschnitten („Einwaage Si…“) ohne Turm A/B und Einheit.
+- ANALYSIS: Bewertungsabdeckung 0 % bei der Meldung „Keine Auffälligkeit“ kann als Entwarnung gelesen werden.
+- WPK: alle zehn Positionen „Teilweise“ ohne Aufschlüsselung.
+- REPORT: Die nächste Aktion der Probenseite ist „Siebanalyse öffnen“; die Berichtsaktion ist nicht auffindbar.
+- RIGHTS (BLE-Kandidat, minor): Die Probe 01 zeigt „Probe 10 von 10“ in der Planleiste, im Plan steht sie als Zeile 1.
+- Reviewer-Zahlen (unbestätigt): UX-Verbesserung major 9 / minor 61, Agentenschwierigkeit major 13 / minor 16, SQBF-Kandidat major 7 / minor 6, BLE-Kandidat major 1 / minor 1, unklar major 9 / info 66.
+
+### 21.5 Fazit und nächste Schritte
+
+Die Steuerung ist jetzt robust genug für einen ganzen Lauf. Die Aussagekraft der Messstufen begrenzen zwei Dinge, die ich beheben kann (Aufgabenwortlaut, Beschriftungsklicks), und eine Entscheidung des PO (Hinweis auf die Speicherschaltfläche, 21.6).
+
+### 21.6 Offene Entscheidung: Speicherschaltfläche
+
+In beiden Läufen (5 und 6) scheiterte rund ein Drittel der Eingaben daran, dass das Modell die Schaltfläche „Speichern“ oben im Modulkopf nicht fand. Das Ergebnis ist ein echtes UX-Signal, verhindert aber, die Datenrichtigkeit zu messen. Optionen: (a) unverändert lassen (UX-Signal bleibt, Messwerte bleiben lückenhaft); (b) neutraler Hinweis in der Anweisung („die Speicherschaltfläche kann außerhalb des sichtbaren Bereichs liegen; die Seite nach oben und unten absuchen“): sagt nicht, wo sie ist, das UX-Signal bleibt im Protokoll sichtbar (Suchaufwand, Reviewer-Befund), die Messwerte werden vollständiger. Empfohlen ist (b).

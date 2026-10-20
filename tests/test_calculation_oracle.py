@@ -84,6 +84,22 @@ class CalculationOracleTests(unittest.TestCase):
         self.assertEqual((result['coverage']['NOT_AVAILABLE'],result['coverage']['NOT_COVERED']),(1,2))
         self.assertIn('WASH_COUPLED_REFERENCE_MASS',[c.get('reason') for c in result['checks']])
 
+    def test_a_missing_persisted_input_leaves_out_that_check_and_never_blocks_the_report_stage(self):
+        # Live run 824fa661: a wash row with the washed weight not entered raised 'Missing value' and blocked all ten reports of the stage.
+        f,basis,receipts,records=scenario();basis['SYNTHETIC-1']['wash'][0]['container_washed_g']=None
+        self.assertNotIn('fine063',module.expected_calculations(basis['SYNTHETIC-1']))
+        result=module.verify_calculations(records,receipts,basis,f)
+        self.assertEqual(result['status'],'PASS',result)
+        self.assertNotIn('fine063',{c['check'] for c in result['checks']});self.assertIn('se_mean',{c['check'] for c in result['checks']})
+        for kind,key in (('sand','sand_height'),('boiling_repetitions','final_g'),('sieves','input_g')):
+            f,basis,receipts,records=scenario();row=basis['SYNTHETIC-1'][kind][0];row[key]=None
+            self.assertEqual(module.verify_calculations(records,receipts,basis,f)['status'],'PASS',kind)
+        f,basis,receipts,records=scenario();basis['SYNTHETIC-1']['boiling_repetitions'].append({'order':2,'initial_g':'100','final_g':None})
+        self.assertEqual(module.expected_calculations(basis['SYNTHETIC-1'])['boiling_loss'],{1:Decimal('0.5')},'complete repetitions are still checked')
+        # Contradictory values still block: only a missing value is an incomplete entry.
+        f,basis,receipts,records=scenario();basis['SYNTHETIC-1']['wash'][0]['container_washed_g']=True
+        self.assertEqual(module.verify_calculations(records,receipts,basis,f)['status'],'BLOCKED_CALCULATION_EVIDENCE')
+
     def test_duplicate_unknown_or_contradictory_evidence_blocks(self):
         f,basis,receipts,records=scenario()
         self.assertEqual(module.verify_calculations(records*2,receipts,basis,f)['status'],'BLOCKED_CALCULATION_EVIDENCE')

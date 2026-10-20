@@ -345,7 +345,11 @@ def main(argv=None) -> int:
                 card=runner.scorecard_of(json.loads((path/'run.json').read_text(encoding='utf-8')),json.loads((path/'cases.json').read_text(encoding='utf-8')))
                 if spec.scorecard_problems(card):raise ValueError('scorecard contract')
                 cards.append(card)
-                for name,content in (('scorecard.json',json.dumps(card,ensure_ascii=False,indent=2)+'\n'),('punktebericht.md','\n'.join(spec.render(card))+'\n')):
+                # A scorecard of another specification version stays as it is; the new one gets versioned names next to it.
+                try:version=json.loads((path/'scorecard.json').read_text(encoding='utf-8')).get('spec_version') if (path/'scorecard.json').exists() else card['spec_version']
+                except Exception:version=None
+                suffix='' if version==card['spec_version'] else '-'+card['spec_version']
+                for name,content in ((f'scorecard{suffix}.json',json.dumps(card,ensure_ascii=False,indent=2)+'\n'),(f'punktebericht{suffix}.md','\n'.join(spec.render(card))+'\n')):
                     target=path/name
                     if target.exists():state='IDENTICAL' if target.read_text(encoding='utf-8')==content else 'DIFFERS'
                     else:

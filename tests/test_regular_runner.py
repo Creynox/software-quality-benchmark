@@ -321,7 +321,7 @@ class RegularRunnerTests(unittest.TestCase):
             module.write_run_documents(path,dict(manifest),records)
             self.assertEqual(sorted(p.name for p in path.iterdir()),['completion-report.md','punktebericht.md','run.json','scorecard.json'])
             saved=json.loads((path/'run.json').read_text(encoding='utf-8'))
-            self.assertEqual(saved['report_spec']['points'],1);self.assertEqual(saved['report_spec']['max_points'],46);self.assertEqual(saved['report_spec']['spec_version'],'1.0.0')
+            self.assertEqual(saved['report_spec']['points'],1);self.assertEqual(saved['report_spec']['max_points'],46);self.assertEqual(saved['report_spec']['spec_version'],report_spec.load_spec()['spec_version'])
             self.assertEqual((path/'punktebericht.md').read_text(encoding='utf-8'),'\n'.join(report_spec.render(json.loads((path/'scorecard.json').read_text(encoding='utf-8'))))+'\n')
         with tempfile.TemporaryDirectory() as tmp, patch.object(module,'scorecard_of',side_effect=RuntimeError('boom')):
             path=Path(tmp)

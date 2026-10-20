@@ -111,8 +111,9 @@ def run_position(browser,fixture,position,probe_id,kind,policy,executor,reviewer
                 if critical:raise
                 name=action.get('action');name=name if isinstance(name,str) and name in ALLOWED_ACTIONS else 'REDACTED'
                 target=describe_target(page,action)
-                evidence.event('action_rejected',position=position['position_id'],module=kind,error_code=code,action=name,target=target)
-                rejected.append({'error_code':code,'action':name,'target':target});stall.record(action)
+                extra={'detail':error.detail} if getattr(error,'detail',None) else {}
+                evidence.event('action_rejected',position=position['position_id'],module=kind,error_code=code,action=name,target=target,**extra)
+                rejected.append({'error_code':code,'action':name,'target':target,**extra});stall.record(action)
                 if len(rejected)>MAX_REJECTIONS_PER_TASK:
                     outcome.update(status='REJECTED',rejected_action_code=code);break
                 # No effect on the page: tell the executor and let it choose another action.

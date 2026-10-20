@@ -1,6 +1,6 @@
 # NSN014 Punktebericht
 
-Spezifikation NSN014-REPORT-SPEC 1.0.0 (SHA256 9adbd93d93c2404965fe27c5525a6a1c835e4b7b8a3e7cfaabb02549a7987f3d). Der Bericht entsteht allein aus gemessenen Ergebnissen, ohne Freitext und ohne Annahmen. Jeder der 46 Prüfpunkte hat genau einen Status: bestanden, nicht bestanden, nicht entschieden, ungültig oder nicht ausgeführt. Nur ein bestandener Prüfpunkt zählt einen Punkt; „nicht entschieden“ ist kein Bestehen.
+Spezifikation NSN014-REPORT-SPEC 1.1.0 (SHA256 7419a3d08b743a0707d20b4f671d7fc1733c38e0ca363256f42443ac77ca9291). Der Bericht entsteht allein aus gemessenen Ergebnissen, ohne Freitext und ohne Annahmen. Jeder der 46 Prüfpunkte hat genau einen Status: bestanden, nicht bestanden, nicht entschieden, ungültig oder nicht ausgeführt. Nur ein bestandener Prüfpunkt zählt einen Punkt; „nicht entschieden“ ist kein Bestehen.
 
 - Lauf: run-1; Suite ENZBERG-NSN014 v0.4.1; Bewertung nsn014-objective-v1; UX-Rubrik nsn014-ux-rubric-v1
 - Executor: exec; Reviewer: rev; SQBF-Commit abc; BLE-Build ble
@@ -24,6 +24,8 @@ Spezifikation NSN014-REPORT-SPEC 1.0.0 (SHA256 9adbd93d93c2404965fe27c5525a6a1c8
 | Stufen ausgeführt | 11 von 12 |
 | Abbruchgrund | Zeitgrenze erreicht |
 | Speicherquote | 100,0 % |
+| Technischer Status | COMPLETED |
+| Kritischer Stopp | — |
 
 ## 2. Ergebnis je Stufe
 
@@ -151,7 +153,7 @@ Der Ursprung ordnet einen Prüfpunkt ohne Bestehen nach aufgezeichneten Fakten e
 
 | Schlüssel | Wert |
 |---|---|
-| spec\_version | 1.0.0 |
+| spec\_version | 1.1.0 |
 | suite\_sha256 | s |
 | dataset\_sha256 | d |
 | reference\_projection\_sha256 | p |
@@ -205,4 +207,4 @@ Reviewer-Antworten: 1; ausgefallene Reviews: 0. Der Reviewer antwortet je Aufgab
 
 Befunde: keine
 
-Prüfsumme der Punktekarte (SHA256): d340abe287a416ec68dec351742c8fea105c8b903d99aeaacf7dcd5ca118c617
+Prüfsumme der Punktekarte (SHA256): ffe8b5161b7c0f08592e68bf543a46512dd4f8d665c810acb68b95f38045e016

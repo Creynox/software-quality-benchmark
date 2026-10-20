@@ -65,9 +65,16 @@ def persisted_basis(input_records):
     return basis
 
 
+class IncompleteInput(ValueError):
+    """A persisted input was never filled in or saved. The dependent check cannot be made; that is an incomplete entry upstream (the position is
+    INCOMPLETE), not contradictory evidence. Live run 824fa661: a wash row with an empty `container_washed_g` blocked the whole report stage."""
+
+
 def _d(value):
-    if value is None or isinstance(value, bool):
-        raise ValueError('Missing value')
+    if value is None:
+        raise IncompleteInput('Missing value')
+    if isinstance(value, bool):
+        raise ValueError('Boolean value')
     number = Decimal(str(value))
     if not number.is_finite():
         raise ValueError('Nonfinite value')
@@ -89,42 +96,65 @@ def _percent(part, total):
 def expected_calculations(measurements):
     """Method values from raw inputs; keys absent where no inputs exist."""
     out = {}
-    sand = measurements.get('sand') or []
-    if len(sand) == 2:
-        a = _percent(sand[0]['sand_height'], sand[0]['suspension_height'])
-        b = _percent(sand[1]['sand_height'], sand[1]['suspension_height'])
-        out.update(se_a=a, se_b=b, se_mean=(a + b) / 2)
+
+    def part(build):
+        # A kind whose persisted inputs are incomplete gets no expectation; contradictory values (non-finite, non-positive masses) still raise.
+        try:
+            build()
+        except IncompleteInput:
+            pass
+
+    def sand_index():
+        sand = measurements.get('sand') or []
+        if len(sand) == 2:
+            a = _percent(sand[0]['sand_height'], sand[0]['suspension_height'])
+            b = _percent(sand[1]['sand_height'], sand[1]['suspension_height'])
+            out.update(se_a=a, se_b=b, se_mean=(a + b) / 2)
+
+    def boiling():
+        losses = {}
+        for r in measurements.get('boiling_repetitions') or []:
+            try:
+                losses[int(r['order'])] = _percent(_d(r['initial_g']) - _d(r['final_g']), r['initial_g'])
+            except IncompleteInput:
+                continue
+        if losses:
+            out['boiling_loss'] = losses
+
+    def wash():
+        rows = measurements.get('wash') or []
+        if len(rows) == 1:
+            row = rows[0]
+            dry = _d(row['container_dry_g']) - _d(row['container_g'])
+            washed = _d(row['container_washed_g']) - _d(row['container_g'])
+            if dry > 0:
+                out['fine063'] = (dry - washed) / dry * Decimal(100)
+
+    def sieve():
+        sieves = measurements.get('sieves') or []
+        if len(sieves) == 1:
+            row = sieves[0]
+            simple = (not measurements.get('partial_series') and row.get('split_mm') is None
+                      and not any(p.get('partial') for p in row.get('points', [])))
+            if simple:
+                total = _d(row['input_g']); cumulative = Decimal(0); passing = {}; steps = 0
+                if total <= 0:
+                    raise ValueError('Nonpositive sieve input mass')
+                for point in sorted(row['points'], key=lambda p: _d(p['sieve_mm']), reverse=True):
+                    if point.get('retained_g') is None:
+                        continue
+                    cumulative += _d(point['retained_g']); steps += 1
+                    value = max(Decimal(0), Decimal(100) - cumulative / total * Decimal(100))
+                    passing[_sieve_key(point['sieve_mm'])] = (value, SIEVE_STEP_TOLERANCE * steps + STORED_TOLERANCE)
+                out['sieve_passing'] = passing
+            else:
+                out['sieve_passing'] = None  # partial/split method: NOT_COVERED
+
+    part(sand_index)
     if measurements.get('shape'):
         out['shape_index'] = None  # sieve-line weighted: NOT_COVERED
-    repetitions = measurements.get('boiling_repetitions') or []
-    if repetitions:
-        out['boiling_loss'] = {int(r['order']): _percent(_d(r['initial_g']) - _d(r['final_g']), r['initial_g'])
-                               for r in repetitions}
-    wash = measurements.get('wash') or []
-    if len(wash) == 1:
-        row = wash[0]
-        dry = _d(row['container_dry_g']) - _d(row['container_g'])
-        washed = _d(row['container_washed_g']) - _d(row['container_g'])
-        if dry > 0:
-            out['fine063'] = (dry - washed) / dry * Decimal(100)
-    sieves = measurements.get('sieves') or []
-    if len(sieves) == 1:
-        row = sieves[0]
-        simple = (not measurements.get('partial_series') and row.get('split_mm') is None
-                  and not any(p.get('partial') for p in row.get('points', [])))
-        if simple:
-            total = _d(row['input_g']); cumulative = Decimal(0); passing = {}; steps = 0
-            if total <= 0:
-                raise ValueError('Nonpositive sieve input mass')
-            for point in sorted(row['points'], key=lambda p: _d(p['sieve_mm']), reverse=True):
-                if point.get('retained_g') is None:
-                    continue
-                cumulative += _d(point['retained_g']); steps += 1
-                value = max(Decimal(0), Decimal(100) - cumulative / total * Decimal(100))
-                passing[_sieve_key(point['sieve_mm'])] = (value, SIEVE_STEP_TOLERANCE * steps + STORED_TOLERANCE)
-            out['sieve_passing'] = passing
-        else:
-            out['sieve_passing'] = None  # partial/split method: NOT_COVERED
+    for build in (boiling, wash, sieve):
+        part(build)
     return out
 
 

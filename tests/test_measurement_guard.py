@@ -246,6 +246,21 @@ class MeasurementGuardTests(unittest.TestCase):
         module.check_action(page,{'action':'click'},c,set())
         with self.assertRaises(ReadOnlyViolation):module.check_action(page,{'action':'click'},c,{'module'})
 
+    def test_a_refused_entry_names_the_rule_but_never_the_typed_value(self):
+        c=self.contract('wash');page=MagicMock();page.url=c['origin']+c['path']
+        page.evaluate.return_value={'focused':'Probenmasse feucht','target':{'kind':'field'}}
+        with self.assertRaises(ReadOnlyViolation) as caught:module.check_action(page,{'action':'type','text':'999'},c,set())
+        self.assertEqual(caught.exception.detail,{'reason':'TEXT_DIFFERS_FROM_APPROVED_VALUE','focused_field':'Probenmasse feucht','typed_chars':3})
+        self.assertNotIn('999',str(caught.exception.detail))
+        page.evaluate.return_value={'focused':None,'target':{'kind':'field'}}
+        with self.assertRaises(ReadOnlyViolation) as caught:module.check_action(page,{'action':'type','text':'200'},c,set())
+        self.assertEqual(caught.exception.detail['reason'],'NO_APPROVED_FIELD_FOCUSED')
+        page.evaluate.return_value={'focused':'Kommentar','target':{'kind':'field'}}
+        with self.assertRaises(ReadOnlyViolation) as caught:module.check_action(page,{'action':'type','text':'200'},c,set())
+        self.assertEqual(caught.exception.detail['reason'],'NO_APPROVED_FIELD_FOCUSED')
+        with self.assertRaises(ReadOnlyViolation) as caught:module.check_action(page,{'action':'key','key':'Enter'},c,set())
+        self.assertFalse(hasattr(caught.exception,'detail'))
+
     def test_typed_numbers_must_use_the_decimal_comma_because_a_point_is_a_thousands_separator(self):
         # BLE parses de-DE: "1.250" is read as 1250, so a point would corrupt the value silently (dry run 15.10.2026).
         c=self.contract('boiling');page=MagicMock();page.url=c['origin']+c['path']

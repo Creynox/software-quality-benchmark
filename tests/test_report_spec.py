@@ -9,10 +9,11 @@ from sqbf.cli import main
 
 module = importlib.import_module('projects.ble-elva.tools.report_spec')
 runner = importlib.import_module('projects.ble-elva.tools.regular_runner')
-GOLDEN = Path(__file__).parent / 'golden' / 'nsn014-punktebericht-1.0.0.md'
+GOLDEN = Path(__file__).parent / 'golden' / ('nsn014-punktebericht-%s.md' % module.load_spec()['spec_version'])
 
 # The definition may only change together with a new version: an edit of the specification file without a new entry here fails.
-PINNED_SPEC_SHA256 = {'1.0.0': '9adbd93d93c2404965fe27c5525a6a1c835e4b7b8a3e7cfaabb02549a7987f3d'}
+PINNED_SPEC_SHA256 = {'1.0.0': '9adbd93d93c2404965fe27c5525a6a1c835e4b7b8a3e7cfaabb02549a7987f3d',
+                      '1.1.0': '7419a3d08b743a0707d20b4f671d7fc1733c38e0ca363256f42443ac77ca9291'}
 
 
 def manifest(**extra):
@@ -122,6 +123,22 @@ class ReportSpecTests(unittest.TestCase):
         self.assertEqual(card['points']['points'], 2)
         self.assertEqual(sum(card['counts'][s] for s in module.load_spec()['status_order']), 46)
         self.assertEqual(sum(card['origins'].values()), 46 - card['counts']['PASSED'])
+
+    def test_a_blocked_stage_names_its_reason_as_critical_stop_and_a_suite_oracle_fault_is_attributed_to_the_suite(self):
+        # Live run 824fa661: the report stage was blocked by the calculation oracle (REPORT_ORACLE_UNAVAILABLE), RIGHTS was not run.
+        records = every_stage('INCONCLUSIVE', 'INCOMPLETE')
+        records[10] = {'case_id': 'NSN014-REPORT', 'result': 'BLOCKED', 'reason': 'REPORT_ORACLE_UNAVAILABLE'}
+        records[11] = {'case_id': 'NSN014-RIGHTS', 'result': 'NOT_RUN', 'reason': 'UPSTREAM_CRITICAL_STOP', 'upstream_reason': 'REPORT_ORACLE_UNAVAILABLE'}
+        card = build(manifest(technical_status='BLOCKED'), records)
+        self.assertEqual(card['run']['critical_stop'], 'NSN014-REPORT: REPORT_ORACLE_UNAVAILABLE')
+        report_checks = [c for c in card['checks'] if c['stage'] == 'NSN014-REPORT']
+        self.assertEqual({(c['status'], c['origin'], c['detail']) for c in report_checks}, {('NOT_DECIDED', 'SUITE', 'REPORT_ORACLE_UNAVAILABLE')})
+        self.assertEqual(card['origins']['SUITE'], 10)
+        self.assertEqual(card['result']['run_result'], 'ABGEBROCHEN')
+        text = '\n'.join(module.render(card))
+        self.assertIn('| Technischer Status | BLOCKED |', text);self.assertIn('| Kritischer Stopp | NSN014-REPORT: REPORT\\_ORACLE\\_UNAVAILABLE |', text)
+        self.assertIsNone(build()['run']['critical_stop'])
+        self.assertIn('| Kritischer Stopp | — |', '\n'.join(module.render(build())))
 
     def test_the_run_result_follows_the_fixed_order(self):
         invalid_and_failed = every_stage()
@@ -259,6 +276,21 @@ class ReportSpecTests(unittest.TestCase):
             self.assertEqual(main(['suite-score', '--run', str(run)]), 2, 'a differing existing file is reported, not overwritten')
             self.assertEqual((run / 'punktebericht.md').read_text(encoding='utf-8'), 'edited')
             self.assertEqual(main(['suite-score', '--run', str(Path(tmp) / 'missing')]), 2)
+
+    def test_the_cli_keeps_a_scorecard_of_another_version_and_writes_versioned_files_next_to_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / 'run'
+            run.mkdir()
+            (run / 'run.json').write_text(json.dumps(manifest()), encoding='utf-8')
+            (run / 'cases.json').write_text(json.dumps(every_stage('INCONCLUSIVE', 'INCOMPLETE')), encoding='utf-8')
+            (run / 'scorecard.json').write_text(json.dumps({'spec_version': '0.9.0'}), encoding='utf-8')
+            (run / 'punktebericht.md').write_text('older version', encoding='utf-8')
+            version = module.load_spec()['spec_version']
+            self.assertEqual(main(['suite-score', '--run', str(run)]), 0)
+            self.assertEqual((run / 'punktebericht.md').read_text(encoding='utf-8'), 'older version')
+            self.assertEqual(json.loads((run / f'scorecard-{version}.json').read_text(encoding='utf-8'))['spec_version'], version)
+            self.assertTrue((run / f'punktebericht-{version}.md').read_text(encoding='utf-8').startswith('# NSN014 Punktebericht'))
+            self.assertEqual(main(['suite-score', '--run', str(run)]), 0, 'the versioned files are identical when scored again')
 
 
 if __name__ == '__main__':

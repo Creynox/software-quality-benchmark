@@ -255,7 +255,7 @@ def run_reports(browser,fixture,projection,case,policy,executor,reviewer,budget,
     calculations=verify_calculations(collect_report_calculations(fixture),receipts,basis,fixture)
     if oracle['status'] not in ('PASS','FAIL') or calculations['status'] not in ('PASS','FAIL'):
         return {'result':'BLOCKED','technical_gate':'BLOCKED','reason':'REPORT_ORACLE_UNAVAILABLE','oracle':oracle,
-                'calculations':calculations}
+                'calculations':calculations,'positions':outcomes,'downloads':downloads}
     details={d['position_id']:d for d in oracle['positions']}
     mismatched=set(calculations['mismatched_positions'])
     position_results=[]

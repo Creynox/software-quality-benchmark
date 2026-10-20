@@ -217,7 +217,12 @@ return {target:classify(Number.isFinite(x)&&Number.isFinite(y)?document.elementF
         return state
     if kind=='key' and action.get('key') in ('ControlOrMeta+A','Backspace','Delete','Tab','Escape') and (focused or action['key']=='Escape'):
         return state
-    raise ReadOnlyViolation('MEASUREMENT_ACTION_SCOPE_DENIED')
+    denied = ReadOnlyViolation('MEASUREMENT_ACTION_SCOPE_DENIED')
+    if kind == 'type':
+        # Evidence for the report: which rule refused the entry (never the typed text). Live run 824fa661 had three refused entries without a reason.
+        denied.detail = {'reason': 'NO_APPROVED_FIELD_FOCUSED' if focused not in contract['fields'] else 'TEXT_DIFFERS_FROM_APPROVED_VALUE',
+                         'focused_field': focused, 'typed_chars': len(action.get('text') or '')}
+    raise denied
 
 
 def transport_allowed(url,method,contract,policy):

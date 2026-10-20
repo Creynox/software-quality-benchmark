@@ -163,6 +163,16 @@ def _checks(spec, records, rows):
     return checks, stage_results, findings
 
 
+def _critical_stop(spec, records):
+    """The first stage (in stage order) that ended BLOCKED or INVALID, with its recorded reason; None if there is none."""
+    by_stage = {r.get('case_id'): r for r in records if r.get('case_id') in spec['stage_order']}
+    for stage in spec['stage_order']:
+        record = by_stage.get(stage)
+        if record and record.get('result') in ('BLOCKED', 'INVALID', 'INVALID_HARNESS'):
+            return '%s: %s' % (stage, record.get('reason') or record.get('stop_reason') or record.get('error_code') or 'KEIN_GRUND_AUFGEZEICHNET')
+    return None
+
+
 def _reviewer(records, reviews):
     errors = sum(1 for record in records for item in [record] + list(record.get('positions', [])) if item.get('review_error'))
     verdicts = {v: 0 for v in REVIEW_VERDICTS}
@@ -270,7 +280,7 @@ def build_scorecard(manifest, records, rows, reviews, *, spec=None):
                 'measurement_status': manifest.get('measurement_status'), 'verdict': manifest.get('verdict'), 'stop_reason': manifest.get('stop_reason'),
                 'executor_model': manifest.get('executor_model'), 'reviewer_model': manifest.get('analyst_model'),
                 'sqbf_commit': manifest.get('sqbf_commit'), 'software_version': manifest.get('software_version'),
-                'started_at': manifest.get('started_at'), 'completed_at': manifest.get('completed_at')},
+                'started_at': manifest.get('started_at'), 'completed_at': manifest.get('completed_at'), 'critical_stop': _critical_stop(spec, records)},
         'result': run_result(spec, manifest, counts, stage_results, findings),
         'points': {'points': points, 'max_points': counts['catalogue_checks']},
         'counts': counts,
@@ -350,7 +360,9 @@ def render(scorecard, spec=None):
         [[status[s], counts[s]] for s in spec['status_order']] +
         [['Stufen ausgeführt', f"{stages_run} von {len(scorecard['stages'])}"],
          ['Abbruchgrund', spec['stop_labels'].get(stop, stop) if stop else None],
-         ['Speicherquote', _num(rates['save_rate_percent'], ' %')]]) + ['']
+         ['Speicherquote', _num(rates['save_rate_percent'], ' %')],
+         ['Technischer Status', run['technical_status']],
+         ['Kritischer Stopp', run['critical_stop']]]) + ['']
     lines += [f"## 2. {titles['2']}", '']
     lines += _table(cols['stages'], [[s['stage'], s['label'], s['stage_result'], f"{s['points']} von {s['checks']}"] + [s['counts'][k] for k in spec['status_order']]
                                      for s in scorecard['stages']] +

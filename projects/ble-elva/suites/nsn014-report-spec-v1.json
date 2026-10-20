@@ -1,6 +1,6 @@
 {
   "spec_id": "NSN014-REPORT-SPEC",
-  "spec_version": "1.0.0",
+  "spec_version": "1.1.0",
   "decided_by": "PO, 2026-10-19: one fixed, versioned definition of the evaluation report; a points system of numbers and facts (passed / not passed); no free-text judgement and no assumption in any number",
   "applies_to": {
     "suite_id": "ENZBERG-NSN014",
@@ -8,7 +8,7 @@
   },
   "version_policy": {
     "MAJOR": "the check catalogue, a point rule, a status rule, an origin rule or a formula changes: numbers of different MAJOR versions are not comparable",
-    "MINOR": "a field, a table row or a section is added at the end; existing fields, positions and numbers stay unchanged",
+    "MINOR": "a field, a table row or a section is added at the end, or a recorded reason code gets an origin where it was UNKLAR before; no check changes its status or its points, existing fields, positions and numbers stay unchanged",
     "PATCH": "wording, labels or formatting change; no number changes"
   },
   "changelog": [
@@ -16,6 +16,11 @@
       "version": "1.0.0",
       "date": "2026-10-19",
       "change": "first fixed definition: 46 checks, one point per passed check, nine fixed sections, scorecard.json schema, comparison rule"
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-10-20",
+      "change": "MINOR: origin SUITE for the recorded stage reason REPORT_ORACLE_UNAVAILABLE (was UNKLAR; live run 824fa661); run.critical_stop in the scorecard; two rows at the end of section 1 (technischer Status, kritischer Stopp); suite-score writes versioned files when a folder holds a scorecard of another version. No status and no point changes."
     }
   ],
   "stage_order": [
@@ -163,7 +168,8 @@
   },
   "stage_reason_origin": {
     "EXECUTOR_UNAVAILABLE_AFTER_REPEATED_FAILURES": "PROVIDER",
-    "PROVIDER_AUTHORIZATION_EXPIRED": "PROVIDER"
+    "PROVIDER_AUTHORIZATION_EXPIRED": "PROVIDER",
+    "REPORT_ORACLE_UNAVAILABLE": "SUITE"
   },
   "stop_labels": {
     "PROVIDER_AUTHORIZATION_EXPIRED": "Anmeldung beim Provider abgelaufen",
@@ -392,5 +398,6 @@
       "Läufe werden nur verglichen, wenn Abschnitt 7 gleich ist (suite-score --compare-with); sonst steht das Ergebnis des Vergleichs „nicht vergleichbar“ mit den abweichenden Schlüsseln.",
       "Struktur, Reihenfolge, Spalten und Wortlaut des Berichts ändern sich nur durch eine neue Version dieser Spezifikation (MAJOR, MINOR, PATCH) mit Eintrag im Änderungsverlauf; ein Agent ergänzt oder ändert sie nicht von sich aus."
     ]
-  }
+  },
+  "critical_stop_rule": "the first stage in stage order whose record has the result BLOCKED or INVALID, shown as \"STAGE: recorded reason\" (reason, stop reason or error code of the record); none if no stage has such a result"
 }

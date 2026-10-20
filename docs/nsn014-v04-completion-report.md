@@ -14,6 +14,8 @@ Die Ursachen sind behoben bzw. dokumentiert, ein Folgelauf braucht eine neue PO-
 
 **Nachtrag Lauf 3 (Abschnitt 17):** `413f7abe…`, 16.10.2026: PARTIAL GO, alle zwölf Stufen durchgelaufen, PLAN und WPK PASS, zehn Stufen INCONCLUSIVE durch einen zu engen Guard (Menüeintrag „Prüfbericht“ nicht erkannt, Ablehnung beendet die Aufgabe, Hauptaktion „Testauftrag erzeugen“ nicht erlaubt). 124 Anfragen, 271.478 Tokens, 24 min. Keine Messung erfasst.
 
+**Nachtrag Lauf 8 (Abschnitt 26):** Lauf 8 (824fa661, 19./20.10.2026) ist `PARTIAL GO / BLOCKED`: 13 von 46 Punkten, keine belegte BLE-Abweichung, elf Stufen liefen. Die Berichtsstufe wurde durch einen Fehler der Berechnungs-Oracle blockiert (halb gespeicherte Abschlämmzeile), RIGHTS lief deshalb nicht; behoben, Auswertung auf Version 1.1.0 angehoben, 505 Tests OK. Die Guard-Erweiterung senkte die abgelehnten Aktionen von 37 auf 13; das Speichern bleibt der Hauptverlust.
+
 **Nachtrag Auswertung mit Punkten (Abschnitt 25):** Auf Entscheidung des PO gibt es künftig immer eine feste, versionierte Auswertung mit einem Punktesystem (bestanden / nicht bestanden, 46 Prüfpunkte, nur Zahlen und Fakten, neun feste Abschnitte, Regeln auch für den Sol-Agenten); `scorecard.json` und `punktebericht.md` je Lauf, Nachbewertung der Läufe 5 bis 7 (6, 17 und 16 Punkte), `suite-score`, 500 Tests OK. Die Kurzfassung aus Abschnitt 23 ist dadurch ersetzt.
 
 **Nachtrag Guard-Erweiterung (Abschnitt 24):** Auf Entscheidung des PO („a, b, c umsetzen, d vorab prüfen“): Klicks auf rein darstellende Elemente (ohne interaktives Element und ohne Zeigercursor), Fraktionsauswahl im Kochversuch, Speichern einmal in der Zuteilungsaufgabe, „Detailpanel schließen“. Experimente auf einer Wegwerfkopie: Kartentitel nicht klickbar (b ist ein Fall von a), Fraktionsauswahl schreibt nichts, Entnahmen werden beim Verlassen des Feldes gespeichert und „Speichern“ ändert dabei nur `workspace_sampling_info`. An zwölf echten Seiten geprüft, 486 Tests OK, Trockenläufe sauber. Neu: `guard_rules_sha256` im Manifest.
@@ -1056,3 +1058,78 @@ Lauf 6 und Lauf 7 sind nach Abschnitt 7 des Berichts nicht vergleichbar (anderer
 - Die Punkte zeigen, wie viel die Suite objektiv entscheiden konnte und wie viel davon bestanden ist. Bei den Läufen 6 und 7 begrenzen Modell und Suite die Punkte, nicht belegte BLE-Fehler (Abschnitt 3 des Berichts).
 - Die UX-Rubrik des Reviewers bleibt eine Skala von 0 bis 5 mit Freitext-Befunden. Eine Checkliste mit festen Ja/Nein-Fragen wäre ein neues Review-Schema (neue Rubrikversion) und braucht die Entscheidung des PO.
 - Lauf 8 ist nicht gestartet; er braucht eine neue ausdrückliche Freigabe des PO.
+
+## 26. Lauf 8 (824fa661, 19./20.10.2026): erster Lauf nach der Guard-Erweiterung, Berichtsstufe durch einen Fehler der Berechnungs-Oracle blockiert
+
+**Freigabe:** Der PO hat Lauf 8 am 20.10.2026 ausdrücklich freigegeben („ja starte mit lauf 8“): genau ein Lauf, Commit `c599e3e`, Fixture `nsn014-ux-c2bae6d14af9`, Suite v0.4.1, Executor gpt-6-luna, Reviewer gpt-6.1-sol, höchstens 1.500 Anfragen und 10.800 s, kein Retry. Vorbereitung: Der Datenbank-Container der Fixture war bei einem Docker-Neustart regulär beendet worden und wurde wieder gestartet (Zustand gegen den vorbereiteten Stand geprüft: unverändert), alle vier BLE-Sitzungen waren ohne neuen Login gültig, Provider-Probe `648e2882` bestanden, Readiness `READY_FOR_SINGLE_SUITE_RUN`, 501 Tests OK. Die zwei Trockenläufe wurden **nicht** wiederholt: seit den letzten sauberen Läufen (Stand `6afbb8a`) hatten sich nur die Berichtserzeugung und das CLI geändert, nicht der Ausführungspfad (Diff geprüft).
+
+### 26.1 Verlauf
+
+- Start 23:19:47 UTC, Ende 00:49:51 UTC (5.404 s; Controllerzeit 5.348 s, davon 4.656 s Modellwartezeit). 886 Anfragen (830 Executor, 56 Reviewer), rund 2,33 Mio. Tokens (eine Anfrage ohne Angabe). Die gespeicherte Anmeldung genügte, kein Browser.
+- `PARTIAL GO`, technischer Status `BLOCKED`: Elf von zwölf Stufen liefen. Die Stufe REPORT endete `BLOCKED` mit `REPORT_ORACLE_UNAVAILABLE`, die Stufe RIGHTS wurde deshalb nicht ausgeführt (`UPSTREAM_CRITICAL_STOP`). Keine Stufe FAIL, keine ungültig, keine belegte BLE-Abweichung.
+
+### 26.2 Ergebnis nach der festen Auswertung (Spezifikation 1.1.0, `punktebericht-1.1.0.md`)
+
+| Kennzahl | Wert |
+|---|---|
+| Ergebnis des Laufs | abgebrochen |
+| Punkte | 13 von 46 (28,3 %) |
+| bestanden / nicht bestanden / nicht entschieden / ungültig / nicht ausgeführt | 13 / 0 / 32 / 0 / 1 |
+| bestanden (Stufen) | PLAN, RECEIPT, SE, ASSESS, WPK, ANALYSIS |
+| bestanden (Positionen) | PREPARATION P09, P10; SIEVE P06, P07; SHAPE P05, P09; BOILING P01 |
+| Ursprung der 33 offenen Prüfpunkte | Modell 14, Modell/Suite 5, Suite 10 (alle Berichtsstufe), Provider 1, Vorstufe 2, nicht ausgeführt 1 |
+| Speichern | gespeichert 5, alles eingegeben aber nicht gespeichert 11, nur teilweise eingegeben 9, Modul nicht erreicht 4 (Quote 31,3 %) |
+| Bedienaufwand (35 Aufgaben) | 693 Aktionen, 209 Scrolls (davon 188 nach der letzten Eingabe), 13 abgelehnte Aktionen, Modul erreicht in 33 von 35 |
+
+### 26.3 Der Fehler der Berechnungs-Oracle (Suite-Fehler, kein BLE-Befund)
+
+Die Berichtsstufe hatte acht Berichte erzeugt (P01–P05, P07, P09, P10; P06 und P08 nicht). Der Report-Oracle bestätigte für P02–P05, P07, P09 und P10 das PDF, für P01 fehlte es. Danach prüft die Stufe die Berechnungen nach. Für P05 und P07 steht in den persistierten Abschlämmdaten eine Zeile, in der Gefäß, Trocken- und Feuchtgewicht stehen, das gewaschene Gewicht (`container_washed_g`) aber leer ist. `expected_calculations` warf dafür `Missing value`; die Oracle machte daraus `INCOMPLETE_OR_CONTRADICTORY_CALCULATION_EVIDENCE`, die Stufe wurde `BLOCKED`, und der kritische Stopp übersprang RIGHTS. Dadurch gingen die zehn Berichts-Prüfpunkte verloren; in Lauf 7 waren sechs davon bestanden.
+
+Das widerspricht dem eigenen Grundsatz „fehlender abgeleiteter Wert ist unvollständig, nie blockiert“ (Abschnitt 19.3). In Lauf 6 und 7 wurde die Oracle nicht blockiert. Ob die Guard-Erweiterung solche teilweise gespeicherten Zeilen begünstigt (ein Feld wird durch Klick auf Text verlassen, BLE speichert beim Verlassen; Abschnitt 24.5), ist nicht belegt.
+
+Behoben (Commit `6f9885c`): Ein fehlender persistierter Eingabewert lässt nur die davon abhängige Prüfung aus (`IncompleteInput`, Kochversuch je Wiederholung); widersprüchliche Werte (nicht endlich, nicht positiv, Wahrheitswert) blockieren weiterhin. Die korrigierte Oracle gegen den echten Endzustand von Lauf 8 (lesend): `PASS`, 6 Treffer, 0 Abweichungen, 4 nicht abgedeckt. In den acht erzeugten Berichten steckt also keine Rechenabweichung. Die blockierte Stufe behält jetzt ihre Positionen und Downloads. **Lauf 8 lässt sich für die Berichtsstufe nicht nachträglich auswerten**, weil der blockierte Stufendatensatz die Einzelergebnisse nicht enthielt; die zehn Prüfpunkte bleiben „nicht entschieden“ mit Ursprung Suite.
+
+### 26.4 Wirkung der Guard-Erweiterung (Lauf 7 gegen Lauf 8, nicht direkt vergleichbar)
+
+Der Executor-Wortlaut ist gleich (`d477972d…`), die Klickregeln unterscheiden sich (`guard_rules_sha256` in Lauf 8, nicht erfasst in Lauf 7). Ein Vergleich nach der Regel der Spezifikation ist deshalb nicht zulässig; beschreibend:
+
+Gleiche Basis sind die 35 Messaufgaben (Vorbereitung, Siebanalyse, Kornform, Kochversuch, Sandäquivalent); die Berichtsaufgaben fehlen in Lauf 8 (Stufe blockiert).
+
+| | Lauf 7 | Lauf 8 |
+|---|---|---|
+| abgelehnte Aktionen (35 Messaufgaben) | 33 | 13 |
+| Aktionen / Scrolls nach der letzten Eingabe (35 Messaufgaben) | 561 / 161 | 693 / 188 |
+| Prüfpunkte Ursprung Modell/Suite | 13 | 5 |
+| Prüfpunkte Ursprung Suite (ohne Berichts-Oracle) | 2 | 0 |
+| bestandene Messpositionen (Vorbereitung, Siebanalyse, Kornform, Kochversuch) | 4 | 7 |
+| Speichern: gespeichert / alles eingegeben, nicht gespeichert / teilweise eingegeben / Modul nicht erreicht | 8 / 7 / 3 / 11 | 5 / 11 / 9 / 4 |
+| Speicherquote | 53,3 % (8 von 15) | 31,3 % (5 von 16) |
+| Punkte | 16 | 13 (Berichtsstufe verloren) |
+
+Die abgelehnten Aktionen sanken von 33 auf 13, die bestandenen Messpositionen stiegen von 4 auf 7, Aufgaben mit nicht erreichtem Modul sanken von 11 auf 4. Die Speicherquote sank von 53,3 % auf 31,3 %.
+
+### 26.5 Warum Positionen offen blieben
+
+- **Speichern nicht gefunden (Modell):** In 11 Aufgaben waren alle Werte eingegeben, aber nicht gespeichert; die Executor-Aussagen lauten fast gleich („kein Speichern-Steuerelement sichtbar“, nach bis zu 16 Scrollversuchen nach der letzten Eingabe). Weitere 9 Aufgaben blieben teilweise eingegeben. Insgesamt wurden nach der letzten Eingabe 188-mal gescrollt. Ob die Schaltfläche schwer zu finden ist, ist die Frage der unbestätigten Beobachtung OBS-X-02.
+- **Abgelehnte Aktionen (14 im Protokoll):** „Zu den Modulen“ 4× (verlässt die Probenseite, zu Recht), „Siebanalyse öffnen“ bzw. „Öffnen →“ 4× in Aufgaben, die nicht die Siebanalyse sind, Eingaben 3× (Abschlämmung P02 und P07, Kornform P01 8 mm), „Bemerkung“ 1×, Sandäquivalent außerhalb des Fensters 1×, Analytik „Plan NSN 014 öffnen“ 1×.
+- **Abgelehnte Eingaben:** Sie sind nach der Regel erklärbar (der getippte Text muss dem freigegebenen Wert des fokussierten Feldes in deutscher Schreibweise entsprechen), der Grund wurde aber nicht protokolliert. Kornform P01: Die vier Fraktionen 31,5 / 22,4 / 16 / 11,2 mm wurden eingegeben, die fünfte (8 mm) abgelehnt; ob der getippte Text dem freigegebenen Wert dieses Feldes entsprach, ist aus den Protokollen nicht ersichtlich. **Neu:** Ein abgelehnter Eintrag hält jetzt die Regel fest (`NO_APPROVED_FIELD_FOCUSED` oder `TEXT_DIFFERS_FROM_APPROVED_VALUE`, Feldname, Anzahl Zeichen, nie den Text).
+- **Provider (1):** Siebanalyse P05, eine Executor-Anfrage fiel aus.
+- **Vorstufe (2):** Kornform P06 (Modul „Nicht gestartet“, Formular nicht geöffnet) und Vorbereitung P06 (Entnahmefelder 16 / 22,4 mm nicht sichtbar).
+
+### 26.6 Beobachtungen zu BLE (Reviewer, unbestätigt, kein Issue angelegt)
+
+Siehe `docs/nsn014-ble-observations.md`, Abschnitt C: OBS-L8-01 (Meldung „Siebanalyse gespeichert“ zugleich mit „Entnahme konnte nicht automatisch gespeichert werden“) und OBS-L8-02 (Kochversuch als „Optional“ bezeichnet, in der Freigabeerklärung aber unter „Pflichtmodule“). Beide sind Beobachtungen des Reviewers und kein Testergebnis.
+
+### 26.7 Änderungen nach dem Lauf
+
+Berechnungs-Oracle (26.3), Diagnose abgelehnter Eingaben (26.5), Berichtsdefinition **1.1.0** (MINOR: Ursprung Suite für `REPORT_ORACLE_UNAVAILABLE`, kritischer Stopp und technischer Status in Abschnitt 1, versionierte Dateien beim Nachbewerten). Es ändert sich kein Status und kein Punkt. Der Lauf-Ordner enthält `punktebericht.md` (Version 1.0.0, zur Laufzeit erzeugt) und `punktebericht-1.1.0.md` (nachbewertet).
+
+### 26.8 Prüfung
+
+**505 Tests OK** (vorher 501): neue Tests für fehlende Eingaben in der Oracle (Abschlämmung, Sand, Kochversuch je Wiederholung, Siebanalyse; widersprüchliche Werte blockieren weiter), den Grund abgelehnter Eingaben, den kritischen Stopp im Bericht, die Herkunft Suite und die versionierten Dateien.
+
+### 26.9 Grenzen und offene Entscheidungen
+
+- Der Lauf ist verbraucht (Fixture und Freigabe). Ein weiterer Lauf braucht eine neue Fixture und eine neue ausdrückliche Freigabe des PO. Weil sich die Oracle geändert hat, sind vorher wieder ein sauberer und ein fehlerinjizierter Trockenlauf nötig.
+- Das Speichern bleibt der größte Einzelverlust: 24 von 29 Aufgaben mit Speicherpflicht (ohne die 6 Zuteilungsaufgaben) blieben ungespeichert: 11 trotz vollständiger Eingabe, 9 bei teilweiser Eingabe, 4 ohne erreichtes Modul. Warum, ist mit Lauf 8 nicht entschieden (Frage der unbestätigten Beobachtung OBS-X-02); eine modellfreie Prüfung auf einer Wegwerfkopie wäre möglich.
+- Der Grund der drei abgelehnten Eingaben ist nicht aufgezeichnet; die neue Diagnose hält ihn im nächsten Lauf fest.

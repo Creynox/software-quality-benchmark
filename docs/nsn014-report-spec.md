@@ -5,7 +5,7 @@ Entscheidung des PO vom 19.10.2026: Ein Benchmark-Lauf wird immer mit einem **Pu
 ob ein Lauf gut oder schlecht war. Der Auswertungsbericht hat immer **dieselbe feste Definition**; sie ändert sich nur durch eine **neue Version**
 (Erweiterung oder Feinanpassung).
 
-Maschinenlesbare Definition: `projects/ble-elva/suites/nsn014-report-spec-v1.json` (Version 1.0.0). Umsetzung: `projects/ble-elva/tools/report_spec.py`.
+Maschinenlesbare Definition: `projects/ble-elva/suites/nsn014-report-spec-v1.json` (Version 1.1.0). Umsetzung: `projects/ble-elva/tools/report_spec.py`.
 
 ## Was herauskommt
 
@@ -18,7 +18,7 @@ Jeder Lauf-Ordner enthält neben dem ausführlichen `completion-report.md`:
 
 ## Prüfpunkte und Punkte
 
-Der Katalog hat in Version 1.0.0 **46 Prüfpunkte** und ist fest: ein Prüfpunkt je Stufe für die sechs Einzelstufen (PLAN, RECEIPT, ASSESS, WPK, ANALYSIS,
+Der Katalog hat seit Version 1.0.0 **46 Prüfpunkte** und ist fest: ein Prüfpunkt je Stufe für die sechs Einzelstufen (PLAN, RECEIPT, ASSESS, WPK, ANALYSIS,
 RIGHTS) und einer je Position für die Messstufen und den Bericht (PREPARATION 10, SIEVE 10, SHAPE 5, BOILING 4, SE 1, REPORT 10). Jeder Prüfpunkt hat
 genau einen Status:
 
@@ -41,7 +41,7 @@ Provider, Vorstufe, unklar) ordnet das nach aufgezeichneten Fakten ein; er ist k
 - **Ergebnis des Laufs** in fester Reihenfolge: *ungültig* (ein Prüfpunkt ungültig oder technischer Status INVALID), *nicht bestanden* (mindestens ein
   Prüfpunkt oder eine Stufe durchgefallen), *abgebrochen* (Abbruchgrund, Ressourcen- oder Blockadestopp oder ein Prüfpunkt nicht ausgeführt), *bestanden*
   (alle 46 bestanden, Verdict GO, Konsistenzprüfung ohne Befund), sonst *unvollständig*. **Lauf bestanden: ja** gibt es nur bei *bestanden*.
-- Zielwerte (etwa „mindestens 80 % Punkte“) sind in Version 1.0.0 **nicht festgelegt**; das ist eine Entscheidung des PO und eine neue Version.
+- Zielwerte (etwa „mindestens 80 % Punkte“) sind bisher (Version 1.1.0) **nicht festgelegt**; das ist eine Entscheidung des PO und eine neue Version.
 
 ## Aufbau des Berichts (Abschnitte 1 bis 9)
 
@@ -75,8 +75,11 @@ Executor-Anweisung, Klickregeln der Guards, Review-Schema, Modelle, Viewport und
 | Änderung | Version | Folge |
 |---|---|---|
 | Katalog, Punktregel, Statusregel, Ursprungsregel oder Formel | MAJOR | Zahlen verschiedener MAJOR-Versionen sind nicht vergleichbar |
-| neues Feld, neue Zeile oder neuer Abschnitt **am Ende** | MINOR | bestehende Felder und Zahlen bleiben unverändert |
+| neues Feld, neue Zeile oder neuer Abschnitt **am Ende**; ein aufgezeichneter Grund bekommt einen Ursprung, der vorher „unklar“ war | MINOR | bestehende Felder, Status und Punkte bleiben unverändert |
 | Wortlaut, Beschriftung, Formatierung | PATCH | keine Zahl ändert sich |
+
+Änderungsverlauf: **1.0.0** (19.10.2026) erste feste Definition. **1.1.0** (20.10.2026, MINOR): Ursprung „Suite“ für den Stufengrund `REPORT_ORACLE_UNAVAILABLE` (vorher „unklar“;
+Lauf 8), „Technischer Status“ und „Kritischer Stopp“ als letzte Zeilen von Abschnitt 1; kein Status und kein Punkt ändert sich.
 
 Jede Änderung braucht: neue Versionsnummer und Eintrag im Änderungsverlauf der Spezifikation, neuen gepinnten Hash und neue Golden-Datei im Test
 (`tests/test_report_spec.py`, `tests/golden/`). Ohne das schlagen die Tests fehl: Die Definition kann sich nicht unbemerkt ändern. Eine MAJOR-Änderung
@@ -89,18 +92,21 @@ liegt als neue Datei `nsn014-report-spec-v2.json` neben der alten.
 & $python -m sqbf.cli suite-score --run <Lauf A> --compare-with <Lauf B>
 ```
 
-Neue Läufe schreiben beide Dateien selbst. `suite-score` bewertet gespeicherte Läufe nach, legt die Dateien nur neu an und überschreibt nie (eine abweichende
-bestehende Datei wird gemeldet).
+Neue Läufe schreiben beide Dateien selbst (`scorecard.json`, `punktebericht.md`, in der Version zur Laufzeit). `suite-score` bewertet gespeicherte Läufe nach und legt die Dateien nur neu an, überschreibt
+nie (eine abweichende bestehende Datei wird gemeldet). Liegt im Ordner schon eine Punktekarte einer anderen Version, bleibt sie unverändert, und die neue entsteht daneben als
+`scorecard-<Version>.json` und `punktebericht-<Version>.md`.
 
-## Nachbewertung der Läufe 5 bis 7 (Spezifikation 1.0.0, nur aus den gespeicherten Daten)
+## Nachbewertung der Läufe 5 bis 8 (Spezifikation 1.1.0, nur aus den gespeicherten Daten)
 
 | Lauf | Ergebnis | Punkte | in Prozent | bestanden / nicht bestanden / nicht entschieden / ungültig / nicht ausgeführt |
 |---|---|---|---|---|
 | 5 (6c23f768) | nicht bestanden | 6 von 46 | 13,0 % | 6 / 1 / 20 / 0 / 19 |
 | 6 (fdea63ef) | unvollständig | 17 von 46 | 37,0 % | 17 / 0 / 29 / 0 / 0 |
 | 7 (b7a34e94) | unvollständig | 16 von 46 | 34,8 % | 16 / 0 / 30 / 0 / 0 |
+| 8 (824fa661) | abgebrochen | 13 von 46 | 28,3 % | 13 / 0 / 32 / 0 / 1 |
 
-Lauf 6 und Lauf 7 sind **nicht vergleichbar** (anderer Executor-Wortlaut); die 17 gegen 16 Punkte sagen daher nichts über BLE. Die Läufe 5 bis 7 haben nicht alle
+Lauf 6 und Lauf 7 sind **nicht vergleichbar** (anderer Executor-Wortlaut), Lauf 7 und Lauf 8 ebenfalls nicht (andere Klickregeln, in Lauf 7 nicht erfasst); die Punktunterschiede sagen daher nichts über BLE.
+Lauf 8 verlor die zehn Berichts-Prüfpunkte und RIGHTS durch einen Fehler der Berechnungs-Oracle (Ursprung „Suite“, siehe Abschnitt 26 des Abschlussberichts). Die Läufe 5 bis 8 haben nicht alle
 Messwerte (Lauf 5 und 6 ohne Bedienmessung, Lauf 5 bis 7 ohne `guard_rules_sha256`, Lauf 7 ohne „Modul erreicht“); was nicht gemessen wurde, steht als „—“ im Bericht, nie als 0.
 
 ## Grenzen

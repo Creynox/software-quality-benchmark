@@ -38,7 +38,7 @@
     "repair": "2f269f1867155efd6130c888778b50f0c9f9b389"
   },
   "regular_suite_setup": {
-    "status": "RUN_7_DONE_GUARD_EXPANDED_DRY_RUNS_COMPLETED_NEW_FIXTURE_READY_NEW_APPROVAL_REQUIRED",
+    "status": "RUN_8_DONE_ORACLE_FAULT_FIXED_NEW_FIXTURE_AND_DRY_RUNS_AND_NEW_APPROVAL_REQUIRED",
     "active_candidate": "suites/enzberg-nsn014-v0.4.json",
     "reference_plan": "NSN 014",
     "sampling_date": "2026-05-08",
@@ -453,6 +453,84 @@
         ],
         "objective_ble_deviation": false,
         "valid_measurement": "PLAN, RECEIPT, ASSESS, WPK, ANALYSIS, 6 of 10 reports, wash P07, sieve P06, shape P05, boiling P01, sand-equivalent P01"
+      },
+      {
+        "run_id": "824fa661-1d50-4d87-9ee1-1259a6103207",
+        "date": "2026-10-20",
+        "suite": "0.4.1",
+        "sqbf_commit": "c599e3eb03e215213740f1f63eebe17f31dc5b6e",
+        "fixture": "nsn014-ux-c2bae6d14af9",
+        "result": "PARTIAL GO",
+        "classification": "BLOCKED_REPORT_STAGE_ORACLE_FAULT (first run after the guard expansion; points report specification 1.0.0 at run time)",
+        "executor_instructions_sha256": "d477972d272a5d68e51a9c359248e38618cb9963deefb7bb24bc6db855bd3252",
+        "guard_rules_sha256": "0e8bd81b7b745ed256cef9430b1362795d2e3ab050d0159a63d188e73424ccd4",
+        "points": {
+          "points": 13,
+          "max_points": 46,
+          "run_result": "ABGEBROCHEN (1.1.0 re-scored)",
+          "counts": {
+            "PASSED": 13,
+            "FAILED": 0,
+            "NOT_DECIDED": 32,
+            "INVALID": 0,
+            "NOT_RUN": 1
+          }
+        },
+        "stages": {
+          "PASS": [
+            "PLAN",
+            "RECEIPT",
+            "SE",
+            "ASSESS",
+            "WPK",
+            "ANALYSIS"
+          ],
+          "INCONCLUSIVE": [
+            "PREPARATION (P09, P10 PASS)",
+            "SIEVE (P06, P07 PASS)",
+            "SHAPE (P05, P09 PASS)",
+            "BOILING (P01 PASS)"
+          ],
+          "BLOCKED": [
+            "REPORT (REPORT_ORACLE_UNAVAILABLE: calculation oracle raised on a wash row with an empty washed weight)"
+          ],
+          "NOT_RUN": [
+            "RIGHTS (UPSTREAM_CRITICAL_STOP)"
+          ]
+        },
+        "model_requests": 886,
+        "requests_by_actor": {
+          "executor": 830,
+          "reviewer": 56
+        },
+        "tokens_known": 2333120,
+        "wall_seconds": 5348,
+        "fixture_lease_consumed": true,
+        "operating_effort": {
+          "visible_actions": 693,
+          "scrolls": 209,
+          "scrolls_after_last_entry": 188,
+          "rejected_actions": 13,
+          "save_status_35_module_tasks": {
+            "SAVED": 5,
+            "NOT_REQUIRED": 6,
+            "NOT_SAVED_AFTER_ENTRY": 11,
+            "NOT_SAVED_PARTIAL_ENTRY": 9,
+            "NOT_REACHED": 4
+          },
+          "modules_reached": "33 of 35"
+        },
+        "origins_of_open_checks": {
+          "MODELL": 14,
+          "MODELL/SUITE": 5,
+          "SUITE": 10,
+          "PROVIDER": 1,
+          "VORSTUFE": 2,
+          "NICHT_AUSGEFUEHRT": 1
+        },
+        "fixes_after_run": "calculation oracle: a missing persisted input leaves out the dependent check (IncompleteInput), contradictory values still block; refused typed entries record the rule; blocked report stage keeps positions and downloads; report spec 1.1.0 (commit 6f9885c)",
+        "objective_ble_deviation": false,
+        "valid_measurement": "PLAN, RECEIPT, ASSESS, WPK, ANALYSIS, SE P01, PREPARATION P09/P10, SIEVE P06/P07, SHAPE P05/P09, BOILING P01"
       }
     ],
     "fixture_clone": {
@@ -628,7 +706,7 @@
     "report_spec": {
       "decision": "PO 2026-10-19: always a points system with passed / not passed from numbers and facts; one fixed evaluation report definition, versioned, no free-text judgement",
       "definition": "projects/ble-elva/suites/nsn014-report-spec-v1.json",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "docs/nsn014-report-spec.md",
       "implementation": "projects/ble-elva/tools/report_spec.py",
       "catalogue_checks": 46,
@@ -638,8 +716,9 @@
       ],
       "rescoring": "python -m sqbf.cli suite-score --run <run folder> [--compare-with <run folder>] (model-free, never overwrites)",
       "reviewer": "observation layer only; counted in section 8; rubric nsn014-ux-rubric-v1 unchanged",
-      "change_rule": "new version with changelog entry, new pinned hash and golden file; MAJOR for catalogue/point/status/origin/formula, MINOR for additions at the end, PATCH for wording",
-      "targets": "none defined in 1.0.0 (PO decision and new version)"
+      "change_rule": "new version with changelog entry, new pinned hash and golden file; MAJOR for catalogue/point/status/formula, MINOR for additions at the end or an origin for a reason that was UNKLAR, PATCH for wording",
+      "targets": "none defined in 1.0.0 (PO decision and new version)",
+      "files_per_run": "scorecard.json + punktebericht.md; suite-score writes scorecard-<version>.json + punktebericht-<version>.md next to a scorecard of another version"
     }
   }
 }

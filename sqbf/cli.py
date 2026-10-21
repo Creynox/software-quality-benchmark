@@ -215,6 +215,13 @@ def main(argv=None) -> int:
     probe.add_argument('--executor-model',default='gpt-6-luna')
     probe.add_argument('--reviewer-model',default='gpt-6.1-sol')
     probe.add_argument('--execute',action='store_true',help='Fresh subscription OAuth and exactly two requests, no retry')
+    nsn=sub.add_parser('nsn014',help='NSN014 run dossier (Lauf-Akte): one fixed procedure from A to Z; `status` shows the next command',allow_abbrev=False)
+    nsn.add_argument('action',choices=['status','dry-run','dry-run-faults','rehearse','fixture','probe','approve','run','report','overview'])
+    nsn.add_argument('--name',help='Name of the dossier, e.g. lauf-09')
+    nsn.add_argument('--statement',help='approve only: the wording of the explicit PO approval for exactly one run')
+    nsn.add_argument('--model',help='rehearse only: Claude model of the rehearsal executor (default from the configuration)')
+    nsn.add_argument('--run-dir',help='report only: run folder whose bericht.html is rendered again')
+    nsn.add_argument('--config',help='Local configuration (default %%LOCALAPPDATA%%/SQBF/nsn014-pipeline.json)')
     score=sub.add_parser('suite-score',help='Model-free evaluation of a recorded NSN014 run by the fixed report specification; writes scorecard.json and punktebericht.md next to the run, never overwrites',allow_abbrev=False)
     score.add_argument('--run',required=True,help='Run folder with run.json and cases.json')
     score.add_argument('--compare-with',help='Second run folder; prints the fixed comparison of both scorecards')
@@ -335,6 +342,42 @@ def main(argv=None) -> int:
             return 2
         print(json.dumps(report,indent=2))
         return 0 if report['status'] in ('PROBE_PLAN_ONLY','PROBE_RECORDED') and report.get('verdict','PROBE_PASS')=='PROBE_PASS' else 2
+    if args.command=='nsn014':
+        from importlib import import_module
+        pipeline=import_module('projects.ble-elva.tools.pipeline')
+        try:
+            config=pipeline.load_config(args.config)
+            if args.action=='status':
+                print(pipeline.render_status(pipeline.status(config,args.name)))
+                return 0
+            if args.action in ('report','overview'):
+                html_tool=import_module('projects.ble-elva.tools.report_html')
+                written=[]
+                if args.action=='report':
+                    if not args.run_dir:raise pipeline.PipelineError('RUN_DIR_REQUIRED','--run-dir <Lauf-Ordner>')
+                    folder=Path(args.run_dir);card=html_tool.newest_scorecard(folder)
+                    if card is None:raise pipeline.PipelineError('NO_SCORECARD','zuerst `suite-score --run`')
+                    written.append(html_tool.write_report(folder,card,history_roots=(folder.parent,)))
+                written.append(html_tool.write_overview(config['runs_root'],config['dossiers_root']))
+                print('\n'.join(str(p) for p in written))
+                return 0
+            if not args.name:raise pipeline.PipelineError('NAME_REQUIRED','--name <Lauf-Akte>, z. B. lauf-09')
+            dossier=pipeline.Dossier(config,args.name)
+            key={'dry-run':'dry_run_clean','dry-run-faults':'dry_run_faults','rehearse':'rehearsal','fixture':'fixture','probe':'probe',
+                 'approve':'approval','run':'run'}[args.action]
+            if key=='dry_run_clean':entry=pipeline.dry_run(config,dossier)
+            elif key=='dry_run_faults':entry=pipeline.dry_run(config,dossier,faults=True)
+            elif key=='rehearsal':entry=pipeline.dry_run(config,dossier,rehearsal_model=args.model or config['rehearsal_model'])
+            elif key=='fixture':entry=pipeline.fixture(config,dossier)
+            elif key=='probe':entry=pipeline.probe(config,dossier)
+            elif key=='approval':entry=pipeline.approve(config,dossier,args.statement)
+            else:entry=pipeline.run(config,dossier)
+        except pipeline.PipelineError as error:
+            print('BLOCKED_NSN014: '+error.code+(' – '+error.hint if error.hint else ''))
+            return 2
+        print(json.dumps(entry,indent=2,ensure_ascii=False,default=str))
+        print(pipeline.render_status(pipeline.status(config,args.name)))
+        return 0 if entry.get('status')==pipeline.DONE[key] else 2
     if args.command=='suite-score':
         from importlib import import_module
         runner=import_module('projects.ble-elva.tools.regular_runner');spec=import_module('projects.ble-elva.tools.report_spec')
@@ -356,6 +399,10 @@ def main(argv=None) -> int:
                         with open(target,'x',encoding='utf-8',newline='') as handle:handle.write(content)
                         state='CREATED'
                     files[str(target)]=state
+                # bericht.html is a view of the scorecard (with the open decisions of today) and is refreshed every time.
+                html_tool=import_module('projects.ble-elva.tools.report_html')
+                files[str(html_tool.write_report(path,card,history_roots=(path.parent,)))]='WRITTEN'
+                if card['run'].get('kind','BENCHMARK')=='BENCHMARK':files[str(html_tool.write_overview(path.parent))]='WRITTEN'
             report={'status':'SCORED','spec_version':cards[0]['spec_version'],'files':files,
                     'runs':[{'run_id':c['run']['run_id'],'result':c['result']['run_result'],'points':c['points']['points'],'max_points':c['points']['max_points'],
                              'points_percent':c['rates']['points_percent']} for c in cards]}

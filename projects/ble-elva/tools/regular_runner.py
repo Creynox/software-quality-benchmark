@@ -23,7 +23,7 @@ from sqbf.suites import suite_check, canonical_hash, aggregate, validate_suite, 
 from sqbf.no_write_oracle import snapshot
 from sqbf.oracle import verify_docker_identity
 from sqbf.scope_check import verify_runtime
-from . import report_spec, stage_effects
+from . import report_html, report_spec, stage_effects
 from .allocation_oracle import collect_allocations, verify_allocations
 from .calculation_oracle import collect_report_calculations, persisted_basis, verify_calculations, expected_calculations
 from .measurement_guard import make_contract
@@ -52,6 +52,9 @@ MUTABLE_TABLES={'samples','lims_sample','ble_reports','sqbf_measurement_inputs_v
 REPOSITORY=Path(__file__).resolve().parents[3]
 SOURCE_PATHS=('sqbf','projects')
 OBJECTIVE_STATUS={'INVALID':'INVALID_HARNESS'}
+# A stage blocked only because its Oracle could not evaluate what the stage did (after the stage-effect gate passed) leaves the fixture as it is:
+# the following stages still run (live run 824fa661 lost the read-only RIGHTS stage to the report Oracle). The stage itself stays BLOCKED.
+EVALUATION_ONLY_BLOCKS={'REPORT_ORACLE_UNAVAILABLE'}
 
 
 def objective_status(result):
@@ -413,7 +416,8 @@ def execute_cases(suite,fixture,budget,stage,*,write=lambda records,accounting:N
             else:record=stage(case)
             if not _valid_reviewers(record):record={'result':'INVALID','technical_gate':'INVALID','reason':'REVIEW_SCHEMA_OR_SCORE_INVALID'}
             record=dict(record,case_id=case['case_id'],persona=case['persona'])
-            if (record.get('technical_gate') in ('BLOCKED','INVALID') or record['result']=='INVALID'
+            evaluation_only=record.get('technical_gate')=='BLOCKED' and record.get('reason') in EVALUATION_ONLY_BLOCKS
+            if (record.get('technical_gate') in ('BLOCKED','INVALID') and not evaluation_only or record['result']=='INVALID'
                     or record.get('stop_reason') or record.get('critical_stop')):
                 stopped=record.get('stop_reason') or record.get('reason') or record['result']
         except ResourceStop:
@@ -575,8 +579,10 @@ def run_suite(suite,dataset,fixture,projection,allocation,output,executor_id,rev
             'technical_status':manifest['technical_status'],'path':str(evidence.path)}
 
 
-def write_run_documents(path,manifest,records):
-    """run.json first, then the reports: the points report is derived data and must never keep the manifest of a finished run from being written."""
+def write_run_documents(path,manifest,records,*,history_roots=None,gates=None):
+    """run.json first, then the reports: the points report is derived data and must never keep the manifest of a finished run from being written.
+    bericht.html (for humans) compares with the newest earlier run of the same kind below `history_roots` (default: the folder's parent); a
+    benchmark run also refreshes uebersicht.html in its parent folder."""
     card=None
     try:
         card=scorecard_of(manifest,records)
@@ -590,6 +596,12 @@ def write_run_documents(path,manifest,records):
     if card:
         (path/'scorecard.json').write_text(json.dumps(card,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
         (path/'punktebericht.md').write_text('\n'.join(report_spec.render(card))+'\n',encoding='utf-8')
+        try:
+            report_html.write_report(path,card,history_roots=tuple(history_roots) if history_roots else (path.parent,),gates=gates)
+            if card['run'].get('kind','BENCHMARK')=='BENCHMARK':report_html.write_overview(path.parent)
+        except Exception as error:
+            manifest['report_html']={'error':type(error).__name__}
+            (path/'run.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
 
 
 def finalise_oracles(manifest,result,fixture,dataset,projection,allocation,current):

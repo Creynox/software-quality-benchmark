@@ -280,7 +280,7 @@ def build_scorecard(manifest, records, rows, reviews, *, spec=None):
                 'measurement_status': manifest.get('measurement_status'), 'verdict': manifest.get('verdict'), 'stop_reason': manifest.get('stop_reason'),
                 'executor_model': manifest.get('executor_model'), 'reviewer_model': manifest.get('analyst_model'),
                 'sqbf_commit': manifest.get('sqbf_commit'), 'software_version': manifest.get('software_version'),
-                'started_at': manifest.get('started_at'), 'completed_at': manifest.get('completed_at'), 'critical_stop': _critical_stop(spec, records)},
+                'started_at': manifest.get('started_at'), 'completed_at': manifest.get('completed_at'), 'critical_stop': _critical_stop(spec, records), 'kind': manifest.get('run_kind', 'BENCHMARK')},
         'result': run_result(spec, manifest, counts, stage_results, findings),
         'points': {'points': points, 'max_points': counts['catalogue_checks']},
         'counts': counts,
@@ -362,7 +362,8 @@ def render(scorecard, spec=None):
          ['Abbruchgrund', spec['stop_labels'].get(stop, stop) if stop else None],
          ['Speicherquote', _num(rates['save_rate_percent'], ' %')],
          ['Technischer Status', run['technical_status']],
-         ['Kritischer Stopp', run['critical_stop']]]) + ['']
+         ['Kritischer Stopp', run['critical_stop']],
+         ['Art des Laufs', spec['run_kinds'].get(run.get('kind', 'BENCHMARK'), run.get('kind'))]]) + ['']
     lines += [f"## 2. {titles['2']}", '']
     lines += _table(cols['stages'], [[s['stage'], s['label'], s['stage_result'], f"{s['points']} von {s['checks']}"] + [s['counts'][k] for k in spec['status_order']]
                                      for s in scorecard['stages']] +
@@ -391,6 +392,8 @@ def render(scorecard, spec=None):
     lines += _table(cols['reviewer_verdicts'], [[v, n] for v, n in rv['verdicts'].items()]) + ['']
     lines += _table(cols['reviewer_scores'], [[name, s['n'], s['min'], s['mean'], s['max']] for name, s in rv['scores'].items()]) + ['']
     lines += _table(cols['reviewer_findings'], [[category] + [counts_[s] for s in SEVERITIES] for category, counts_ in rv['findings'].items()]) + ['']
+    if run.get('kind', 'BENCHMARK') != 'BENCHMARK':
+        lines += [_md(spec['notes']['no_reviewer']), '']
     lines += [f"## 9. {titles['9']}", '']
     lines += _table(cols['consistency'], [[rule, scorecard['consistency']['counts'][rule]] for rule in spec['consistency_rules']])
     lines += ['', 'Befunde: ' + (_md('; '.join(f"{f['rule']} {f['item']}" for f in scorecard['consistency']['findings'])) if scorecard['consistency']['findings'] else 'keine'), '']
@@ -402,7 +405,9 @@ def render(scorecard, spec=None):
 
 def compare(a, b):
     """Fixed comparison of two scorecards: comparable only if all comparability values are equal; the numbers are given in any case."""
-    differing = [key for key in a['comparability'] if a['comparability'][key] != b['comparability'].get(key)]
+    # Not recorded is not equal: a run without a value cannot prove the same conditions (runs 5 and 6 had no instruction hash).
+    differing = [key for key in a['comparability'] if a['comparability'][key] is None or b['comparability'].get(key) is None
+                 or a['comparability'][key] != b['comparability'].get(key)]
     changed = [{'id': x['id'], 'a': x['status'], 'b': y['status']} for x, y in zip(a['checks'], b['checks']) if x['status'] != y['status']]
     return {'comparable': not differing, 'differing_keys': differing, 'run_a': a['run']['run_id'], 'run_b': b['run']['run_id'],
             'points_a': a['points']['points'], 'points_b': b['points']['points'], 'delta_points': b['points']['points'] - a['points']['points'],

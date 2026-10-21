@@ -1,6 +1,6 @@
 {
   "spec_id": "NSN014-REPORT-SPEC",
-  "spec_version": "1.1.0",
+  "spec_version": "1.2.0",
   "decided_by": "PO, 2026-10-19: one fixed, versioned definition of the evaluation report; a points system of numbers and facts (passed / not passed); no free-text judgement and no assumption in any number",
   "applies_to": {
     "suite_id": "ENZBERG-NSN014",
@@ -21,6 +21,11 @@
       "version": "1.1.0",
       "date": "2026-10-20",
       "change": "MINOR: origin SUITE for the recorded stage reason REPORT_ORACLE_UNAVAILABLE (was UNKLAR; live run 824fa661); run.critical_stop in the scorecard; two rows at the end of section 1 (technischer Status, kritischer Stopp); suite-score writes versioned files when a folder holds a scorecard of another version. No status and no point changes."
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-10-21",
+      "change": "MINOR: run.kind (BENCHMARK, REHEARSAL, DRY_RUN) with a row at the end of section 1 and a note at the end of section 8 for runs without reviewer; the human-readable HTML report (bericht.html) and the overview of all runs (uebersicht.html) with fixed sections, texts and rules. No status and no point changes. A comparability value that was not recorded makes two runs not comparable (not recorded is not equal); the comparison group of such a run is \"unvollständig\"."
     }
   ],
   "stage_order": [
@@ -362,7 +367,8 @@
     "intro": "Der Bericht entsteht allein aus gemessenen Ergebnissen, ohne Freitext und ohne Annahmen. Jeder der {max_points} Prüfpunkte hat genau einen Status: bestanden, nicht bestanden, nicht entschieden, ungültig oder nicht ausgeführt. Nur ein bestandener Prüfpunkt zählt einen Punkt; „nicht entschieden“ ist kein Bestehen.",
     "origin": "Der Ursprung ordnet einen Prüfpunkt ohne Bestehen nach aufgezeichneten Fakten ein; er ist kein Urteil über BLE. Ein BLE-Fehler ist ausschließlich ein Prüfpunkt „nicht bestanden“ (Ursprung BLE-ABWEICHUNG, fachlich zu bestätigen). Bedienbeobachtungen des Reviewers stehen unbestätigt in Abschnitt 8.",
     "comparability": "Zwei Läufe sind nur vergleichbar, wenn alle Werte dieser Tabelle gleich sind; sonst unterscheiden sich die Messbedingungen, nicht nur die Ergebnisse.",
-    "reviewer": "Der Reviewer antwortet je Aufgabe im festen JSON-Schema (Urteil, vier Werte von 0 bis 5, Befunde). Seine Antworten sind unbestätigte Beobachtungen: Sie werden hier nur gezählt und ändern weder einen Prüfpunkt noch einen Punkt noch das Ergebnis des Laufs. Der Wortlaut der Befunde steht im Anhang A4."
+    "reviewer": "Der Reviewer antwortet je Aufgabe im festen JSON-Schema (Urteil, vier Werte von 0 bis 5, Befunde). Seine Antworten sind unbestätigte Beobachtungen: Sie werden hier nur gezählt und ändern weder einen Prüfpunkt noch einen Punkt noch das Ergebnis des Laufs. Der Wortlaut der Befunde steht im Anhang A4.",
+    "no_reviewer": "In diesem Lauf gab es keinen Reviewer: Die gezählten Antworten sind neutrale Platzhalter und keine Beobachtungen."
   },
   "operating_labels": {
     "actions": "Aktionen",
@@ -399,5 +405,184 @@
       "Struktur, Reihenfolge, Spalten und Wortlaut des Berichts ändern sich nur durch eine neue Version dieser Spezifikation (MAJOR, MINOR, PATCH) mit Eintrag im Änderungsverlauf; ein Agent ergänzt oder ändert sie nicht von sich aus."
     ]
   },
-  "critical_stop_rule": "the first stage in stage order whose record has the result BLOCKED or INVALID, shown as \"STAGE: recorded reason\" (reason, stop reason or error code of the record); none if no stage has such a result"
+  "critical_stop_rule": "the first stage in stage order whose record has the result BLOCKED or INVALID, shown as \"STAGE: recorded reason\" (reason, stop reason or error code of the record); none if no stage has such a result",
+  "run_kinds": {
+    "BENCHMARK": "Benchmark-Lauf",
+    "REHEARSAL": "Probelauf mit Claude-Executor (kein Benchmark-Ergebnis)",
+    "DRY_RUN": "Trockenlauf mit skriptiertem Executor (kein Benchmark-Ergebnis)"
+  },
+  "html": {
+    "brand": "ELVA / BLE SOFTWARE · SQBF-BENCHMARK",
+    "title": "Benchmark-Bericht NSN014",
+    "overview_title": "Benchmark-Übersicht NSN014",
+    "sections": [
+      "status",
+      "stages",
+      "changes",
+      "open_points",
+      "operating",
+      "decisions",
+      "checklist",
+      "next_steps",
+      "links"
+    ],
+    "section_titles": {
+      "stages": "Ergebnis je Stufe",
+      "stages_hint": "ein Segment je Prüfpunkt",
+      "changes": "Veränderungen seit dem letzten Lauf",
+      "open_points": "Offene Prüfpunkte nach Ursache",
+      "operating": "Bedienung und Aufwand",
+      "decisions": "Entscheidungen erforderlich",
+      "checklist": "Lauf-Checkliste",
+      "next_steps": "Was als Nächstes?"
+    },
+    "result_sentences": {
+      "BESTANDEN": "Alle {max_points} Prüfpunkte bestanden.",
+      "NICHT_BESTANDEN": "{failed} Prüfpunkt(e) nicht bestanden: objektive Abweichung, fachlich zu bestätigen.",
+      "ABGEBROCHEN": "{stages_run} von {stages} Stufen liefen. {stop}",
+      "UNVOLLSTAENDIG": "Alle {stages} Stufen liefen, {open} Prüfpunkte blieben ohne objektives Ergebnis.",
+      "UNGUELTIG": "Die Messung ist ungültig ({invalid} Prüfpunkte); das sagt nichts über BLE."
+    },
+    "deviation_sentence": "Belegte BLE-Abweichungen: {failed}.",
+    "stop_sentence": "Kritischer Stopp: {stage} ({reason}).",
+    "stage_states": {
+      "PASSED": "bestanden",
+      "PARTLY": "teilweise",
+      "OPEN": "offen",
+      "FAILED": "nicht bestanden",
+      "NOT_RUN": "nicht ausgeführt",
+      "INVALID": "ungültig"
+    },
+    "stage_line": "{passed} von {checks} bestanden",
+    "origin_short": {
+      "MODELL": "Modell",
+      "MODELL/SUITE": "Modell/Suite",
+      "SUITE": "Suite",
+      "PROVIDER": "Provider",
+      "VORSTUFE": "Vorstufe",
+      "UNKLAR": "unklar",
+      "NICHT_AUSGEFUEHRT": "nicht ausgeführt",
+      "UNGUELTIG": "ungültig",
+      "BLE-ABWEICHUNG": "BLE"
+    },
+    "origin_priority": [
+      "BLE-ABWEICHUNG",
+      "UNGUELTIG",
+      "SUITE",
+      "PROVIDER",
+      "NICHT_AUSGEFUEHRT",
+      "VORSTUFE",
+      "MODELL/SUITE",
+      "MODELL",
+      "UNKLAR"
+    ],
+    "legend": "Ein Segment ist ein Prüfpunkt: grün bestanden, rot nicht bestanden, gelb nicht entschieden, grau nicht ausgeführt, dunkelgrau ungültig.",
+    "changes_columns": [
+      "Neu bestanden",
+      "Nicht mehr bestanden"
+    ],
+    "changes_none_previous": "Kein früherer Lauf dieser Art zum Vergleich.",
+    "changes_comparable": "Vergleich mit {run}: vergleichbar (gleiche Messbedingungen).",
+    "changes_not_comparable": "Vergleich mit {run}: nicht direkt vergleichbar, abweichend: {keys}.",
+    "open_none": "Alle Prüfpunkte bestanden.",
+    "operating": [
+      "Speicherquote",
+      "Ungespeichert trotz vollständiger Eingabe",
+      "Abgelehnte Aktionen",
+      "Scrolls nach der letzten Eingabe",
+      "Modellanfragen",
+      "Laufzeit",
+      "Tokens (bekannte Summe)",
+      "Reviewer-Befunde critical/major"
+    ],
+    "no_reviewer": "kein Reviewer",
+    "decisions_none": "Keine offenen Entscheidungen.",
+    "decisions_next": "Nächster Schritt: ",
+    "checklist": {
+      "all_stages_run": [
+        "Alle Stufen ausgeführt",
+        "{stages_run} von {stages} Stufen"
+      ],
+      "no_invalid": [
+        "Keine ungültige Messung",
+        "{count} ungültig"
+      ],
+      "no_suite_fault": [
+        "Keine Suite-Fehler",
+        "{count} mit Ursache Suite"
+      ],
+      "no_provider_fault": [
+        "Kein Provider-Ausfall",
+        "{count} mit Ursache Provider"
+      ],
+      "consistent": [
+        "Konsistenzprüfung ohne Befund",
+        "{findings}"
+      ],
+      "reviewer_complete": [
+        "Reviewer ohne Ausfall",
+        "{reviews}"
+      ],
+      "comparable": [
+        "Vergleichbar mit dem Vorlauf",
+        "{comparison}"
+      ],
+      "dry_runs": [
+        "Trockenläufe vor dem Lauf bestanden",
+        "{dry_runs}"
+      ],
+      "run_passed": [
+        "Lauf bestanden",
+        "{points} von {max_points} Punkten"
+      ]
+    },
+    "checklist_summary": "{done} von {total} erfüllt",
+    "next_steps": {
+      "failed": "Abweichung fachlich bestätigen: {checks}.",
+      "suite": "Suite-Fehler beheben: {stage} – {detail} ({count}).",
+      "invalid": "Ungültige Messung klären: {stages}.",
+      "provider": "Provider-Ausfälle prüfen: {count}.",
+      "not_run": "Nicht ausgeführte Stufen: {stages}.",
+      "unsaved": "Speichern klären: {tasks} mit vollständiger Eingabe ohne Speichern.",
+      "consistency": "Konsistenzbefunde klären: {findings}.",
+      "next_benchmark": "Nächster Benchmark-Lauf: neue Fixture, Trockenläufe, Provider-Probe und ausdrückliche Freigabe des PO.",
+      "rehearsal": "Befunde des Probelaufs vor dem nächsten Benchmark-Lauf auswerten."
+    },
+    "next_steps_limit": 6,
+    "links": {
+      "details": "Ausführlichen Bericht öffnen",
+      "points": "Punktebericht",
+      "scorecard": "Punktekarte (JSON)",
+      "overview": "Übersicht aller Läufe"
+    },
+    "footer": "Datenbasis: Punktekarte des Laufs (scorecard.json), Spezifikation {spec}. Nur lokale Daten: keine Zugangsdaten, keine Screenshots, keine Modelltexte.",
+    "overview_columns": [
+      "Datum",
+      "Lauf",
+      "Art",
+      "Ergebnis",
+      "Punkte",
+      "Vergleichsgruppe"
+    ],
+    "words": {
+      "check": [
+        "Prüfpunkt",
+        "Prüfpunkte"
+      ],
+      "task": [
+        "Aufgabe",
+        "Aufgaben"
+      ],
+      "finding": [
+        "Befund",
+        "Befunde"
+      ],
+      "review": [
+        "ausgefallenes Review",
+        "ausgefallene Reviews"
+      ]
+    }
+  },
+  "comparability_group_rule": "first 8 hex characters of the canonical SHA256 of the comparability values without spec_version; \"unvollständig\" if a value is not recorded; equal groups are comparable",
+  "comparability_rule": "two runs are comparable only if every comparability value is recorded (not null) in both and equal"
 }

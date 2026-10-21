@@ -1,5 +1,7 @@
 # BLE/ELVA – lokales SQBF-Profil
 
+**NSN014-Benchmark: [Startseite](START.md)** – Ablauf von A bis Z, Berichte, Regeln.
+
 ## Aktueller Stand
 
 CORE-SMOKE-01 ist tatsächlich ausgeführt und unabhängig abgenommen: Run
@@ -28,7 +30,10 @@ ausdrückliche PO-Ausführungsfreigabe. Siehe [Abschlussbericht](../../docs/nsn0
 
 Nur der separat autorisierte tool-lose `chatgpt_plan` ist für CLI-Läufe freigegeben.
 Historische OpenAI-/Anthropic-Key-Adapter bleiben im CLI gesperrt. Kein API-Key,
-PAYG, Abo-Tokenexport, GitHub Actions oder automatischer Merge.
+PAYG, Abo-Tokenexport, GitHub Actions oder automatischer Merge. Einzige Ausnahme
+(PO-Entscheidung 21.10.2026): Probeläufe auf Wegwerfkopien dürfen ein Claude-Modell
+über die lokale Claude-Code-Anmeldung als Executor nutzen (`nsn014 rehearse`, ohne
+Werkzeuge); sie sind nie ein Benchmark-Ergebnis.
 
 ## Lokale Abnahme
 

@@ -186,6 +186,32 @@ class DryRunToolTests(unittest.TestCase):
         clean=dry.summarize([records[0]],{'final_oracles':{}},[])
         self.assertEqual(clean['status'],'DRY_RUN_COMPLETED')
 
+    def test_in_a_rehearsal_rejections_are_measurements_and_only_harness_stops_are_findings(self):
+        records=[{'case_id':'NSN014-RECEIPT','result':'PASS','rejected_actions':[{'error_code':'X','action':'click','target':{'label':'Zu den Modulen'}}]}]
+        report=dry.summarize(records,{'final_oracles':{},'model_calls':12},[],kind='REHEARSAL')
+        self.assertEqual((report['status'],report['kind'],report['model_calls'],report['rejected_actions']),('REHEARSAL_COMPLETED','REHEARSAL',12,1))
+        self.assertEqual(report['guard_coverage_gaps'],[])
+        stopped=dry.summarize(records+[{'case_id':'NSN014-SIEVE','result':'INVALID'}],{'final_oracles':{}},[],kind='REHEARSAL')
+        self.assertEqual(stopped['status'],'REHEARSAL_FOUND_HARNESS_STOPS')
+
+    def test_dry_runs_and_rehearsals_get_the_manifest_of_a_live_run_labelled_with_their_kind(self):
+        import importlib as il
+        rr=il.import_module('projects.ble-elva.tools.regular_runner')
+        suite=json.loads(Path('projects/ble-elva/suites/enzberg-nsn014-v0.4.1.json').read_text(encoding='utf-8'))
+        f=owned_fixture();f['suite_copy'].update(runtime={'assembly':'1.0+abc','sha256':'x'},prepared_state_sha256='p')
+        records=[{'case_id':c['case_id'],'result':'PASS','technical_gate':'PASS','oracle_gate':'PASS','evidence_verified':True} for c in suite['cases']]
+        accounting={'model_calls':7,'stop_reason':None}
+        manifest=dry.run_manifest('REHEARSAL','r1',suite,{'d':1},f,{'p':1},{'a':1},records,accounting,executor_model='claude-haiku-5-5',
+                                  source={'commit':'c'*40,'clean':True},scoped_baseline={},contract_sha256='h',browser_version='1',started_at='2026-10-21T10:00:00Z')
+        self.assertEqual((manifest['run_kind'],manifest['executor_model'],manifest['model_calls'],manifest['verdict'],manifest['technical_status']),
+                         ('REHEARSAL','claude-haiku-5-5',7,'GO','COMPLETED'))
+        self.assertEqual(manifest['executor_instructions_sha256'],rr.instructions_hash());self.assertEqual(manifest['guard_rules_sha256'],rr.guard_rules_hash())
+        self.assertEqual(manifest['budget_approval'],{'status':'NOT_REQUIRED_REHEARSAL'})
+        records[3]=dict(records[3],result='BLOCKED',technical_gate='BLOCKED')
+        stopped=dry.run_manifest('DRY_RUN','r2',suite,{},f,{},{},records,{'model_calls':0,'stop_reason':'SUITE_TIME_CEILING'},executor_model='scripted',
+                                 source={'commit':'c','clean':True},scoped_baseline={},contract_sha256='h',browser_version='1',started_at='t')
+        self.assertEqual((stopped['technical_status'],stopped['stop_reason']),('RESOURCE_STOP','SUITE_TIME_CEILING'))
+
 
 if __name__=='__main__':
     unittest.main()

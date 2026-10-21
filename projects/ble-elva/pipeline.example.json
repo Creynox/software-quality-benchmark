@@ -1,0 +1,17 @@
+{
+  "_comment": "Template of the local NSN014 pipeline configuration. Copy to %LOCALAPPDATA%/SQBF/nsn014-pipeline.json and fill in the private paths there; never commit the filled-in file (the repository is public).",
+  "suite": "projects/ble-elva/suites/enzberg-nsn014-v0.4.1.json",
+  "dataset": "<private folder>/dataset-ux-source-v1.json",
+  "projection": "<private folder>/reference-projection-ux-v1.json",
+  "allocations": "<private folder>/allocation-reference-v1.json",
+  "golden_source": "<private folder>/<stopped golden fixture manifest>.json",
+  "golden_tree_sha256": "<byte-tree checksum recorded when the golden source was stopped>",
+  "controller_credentials": "<private folder>/controller-credentials.dpapi.json",
+  "fixtures_root": "<folder that holds the sqbf-nsn014-* fixture folders>",
+  "dossiers_root": "<private folder for run dossiers>",
+  "runs_root": "<private folder of the run evidence, e.g. sqbf-regular-runs>",
+  "probes_root": "<private folder of the provider probes>",
+  "executor_model": "gpt-6-luna",
+  "reviewer_model": "gpt-6.1-sol",
+  "rehearsal_model": "claude-haiku-5-5"
+}

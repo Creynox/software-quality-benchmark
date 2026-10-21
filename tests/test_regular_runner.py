@@ -69,6 +69,21 @@ class RegularRunnerTests(unittest.TestCase):
             self.assertEqual(aggregate(s,records)['measurement_status'],'INVALID' if record['result']=='INVALID' else 'INCOMPLETE')
         self.assertEqual(records[0]['objective_status'],'INVALID_HARNESS')
 
+    def test_a_stage_blocked_only_by_its_oracle_evaluation_does_not_stop_the_following_stages(self):
+        # Live run 824fa661: the report Oracle could not evaluate a half-saved entry; the read-only RIGHTS stage was skipped for nothing.
+        s=suite()
+        stage=MagicMock(side_effect=lambda case:{'result':'BLOCKED','technical_gate':'BLOCKED','reason':'REPORT_ORACLE_UNAVAILABLE'}
+                        if case['case_id']=='NSN014-REPORT' else verdict())
+        records=self.run_cases(stage,s)
+        self.assertEqual(stage.call_count,12)
+        report=[r for r in records if r['case_id']=='NSN014-REPORT'][0]
+        self.assertEqual((report['result'],report['reason']),('BLOCKED','REPORT_ORACLE_UNAVAILABLE'),'the stage itself stays blocked')
+        self.assertFalse(any(r['result']=='NOT_RUN' for r in records))
+        stage=MagicMock(side_effect=lambda case:{'result':'BLOCKED','technical_gate':'BLOCKED','reason':'WRONG_REPORT_SAMPLE'}
+                        if case['case_id']=='NSN014-REPORT' else verdict())
+        records=self.run_cases(stage,s)
+        self.assertEqual([r['result'] for r in records if r['case_id']=='NSN014-RIGHTS'],['NOT_RUN'],'any other block still stops')
+
     def test_integrity_fault_with_critical_stop_ends_suite_after_recording_the_fail(self):
         s=suite();corrupt=dict(verdict('FAIL'),critical_stop=True,reason='PLAN_SAMPLE_INTEGRITY_FAILED')
         stage=MagicMock(return_value=corrupt);records=self.run_cases(stage,s)
@@ -317,14 +332,21 @@ class RegularRunnerTests(unittest.TestCase):
                   'scoring_version':module.SCORING_VERSION,'rubric_version':module.RUBRIC_VERSION,'resource_policy':suite()['resource_policy'],'budget_approval':{'status':'BASE_LIMITS'},
                   'sqbf_commit':'c','software_version':'b','executor_model':'e','analyst_model':'a','suite_sha256':'s','dataset_sha256':'d'}
         with tempfile.TemporaryDirectory() as tmp:
-            path=Path(tmp)
+            path=Path(tmp)/'run';path.mkdir()
             module.write_run_documents(path,dict(manifest),records)
-            self.assertEqual(sorted(p.name for p in path.iterdir()),['completion-report.md','punktebericht.md','run.json','scorecard.json'])
+            self.assertEqual(sorted(p.name for p in path.iterdir()),['bericht.html','completion-report.md','punktebericht.md','run.json','scorecard.json'])
+            self.assertTrue((Path(tmp)/'uebersicht.html').is_file(),'a benchmark run refreshes the overview of its folder')
             saved=json.loads((path/'run.json').read_text(encoding='utf-8'))
             self.assertEqual(saved['report_spec']['points'],1);self.assertEqual(saved['report_spec']['max_points'],46);self.assertEqual(saved['report_spec']['spec_version'],report_spec.load_spec()['spec_version'])
             self.assertEqual((path/'punktebericht.md').read_text(encoding='utf-8'),'\n'.join(report_spec.render(json.loads((path/'scorecard.json').read_text(encoding='utf-8'))))+'\n')
+            self.assertIn('Benchmark-Bericht NSN014',(path/'bericht.html').read_text(encoding='utf-8'))
+        with tempfile.TemporaryDirectory() as tmp, patch.object(module.report_html,'write_report',side_effect=RuntimeError('html')):
+            path=Path(tmp)/'run';path.mkdir()
+            module.write_run_documents(path,dict(manifest),records)
+            self.assertEqual(json.loads((path/'run.json').read_text(encoding='utf-8'))['report_html'],{'error':'RuntimeError'},'a failing HTML report is recorded, never fatal')
+            self.assertTrue((path/'scorecard.json').is_file())
         with tempfile.TemporaryDirectory() as tmp, patch.object(module,'scorecard_of',side_effect=RuntimeError('boom')):
-            path=Path(tmp)
+            path=Path(tmp)/'run';path.mkdir()
             module.write_run_documents(path,dict(manifest),records)
             self.assertEqual(sorted(p.name for p in path.iterdir()),['completion-report.md','run.json'],'no scorecard, but the manifest and the detail report exist')
             self.assertEqual(json.loads((path/'run.json').read_text(encoding='utf-8'))['report_spec'],{'error':'RuntimeError'})

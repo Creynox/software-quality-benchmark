@@ -13,7 +13,8 @@ GOLDEN = Path(__file__).parent / 'golden' / ('nsn014-punktebericht-%s.md' % modu
 
 # The definition may only change together with a new version: an edit of the specification file without a new entry here fails.
 PINNED_SPEC_SHA256 = {'1.0.0': '9adbd93d93c2404965fe27c5525a6a1c835e4b7b8a3e7cfaabb02549a7987f3d',
-                      '1.1.0': '7419a3d08b743a0707d20b4f671d7fc1733c38e0ca363256f42443ac77ca9291'}
+                      '1.1.0': '7419a3d08b743a0707d20b4f671d7fc1733c38e0ca363256f42443ac77ca9291',
+                      '1.2.0': 'b1496795f0022867198426769e0a9112c303b364e6d6780c30fb7f88280d5a4e'}
 
 
 def manifest(**extra):
@@ -258,6 +259,11 @@ class ReportSpecTests(unittest.TestCase):
         self.assertEqual(result['checks_changed'], [{'id': 'NSN014-PREPARATION/P01', 'a': 'NOT_DECIDED', 'b': 'PASSED'}])
         other = build(manifest(run_id='run-3', executor_instructions_sha256='other'), better)
         result = module.compare(first, other)
+        self.assertFalse(result['comparable']);self.assertEqual(result['differing_keys'], ['executor_instructions_sha256'])
+        # Not recorded is not equal: two runs without an instruction hash cannot prove the same wording (runs 5 and 6).
+        unknown_a = build(manifest(run_id='run-5', executor_instructions_sha256=None))
+        unknown_b = build(manifest(run_id='run-6', executor_instructions_sha256=None))
+        result = module.compare(unknown_a, unknown_b)
         self.assertFalse(result['comparable']);self.assertEqual(result['differing_keys'], ['executor_instructions_sha256'])
 
     def test_the_cli_scores_a_recorded_run_without_a_model_and_never_overwrites(self):

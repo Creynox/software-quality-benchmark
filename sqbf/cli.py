@@ -218,6 +218,7 @@ def main(argv=None) -> int:
     nsn=sub.add_parser('nsn014',help='NSN014 run dossier (Lauf-Akte): one fixed procedure from A to Z; `status` shows the next command',allow_abbrev=False)
     nsn.add_argument('action',choices=['status','prepare','dry-run','dry-run-faults','rehearse','fixture','probe','approve','run','report','overview'])
     nsn.add_argument('--rehearse',action='store_true',help='prepare only: add the rehearsal with the Claude executor after the dry runs')
+    nsn.add_argument('--detach',action='store_true',help='Start the step on its own (Windows: WMI), detached from this session; the log is written into the dossier')
     nsn.add_argument('--name',help='Name of the dossier, e.g. lauf-09')
     nsn.add_argument('--statement',help='approve only: the wording of the explicit PO approval for exactly one run')
     nsn.add_argument('--model',help='rehearse only: Claude model of the rehearsal executor (default from the configuration)')
@@ -364,6 +365,17 @@ def main(argv=None) -> int:
                 return 0
             if not args.name:raise pipeline.PipelineError('NAME_REQUIRED','--name <Lauf-Akte>, z. B. lauf-09')
             dossier=pipeline.Dossier(config,args.name)
+            if args.detach:
+                if args.action not in ('prepare','dry-run','dry-run-faults','rehearse','fixture','run'):
+                    raise pipeline.PipelineError('DETACH_NOT_FOR_THIS_STEP',args.action)
+                dossier.save()
+                forwarded=([args.action,'--name',args.name]+(['--rehearse'] if args.rehearse else [])+(['--model',args.model] if args.model else [])
+                           +(['--config',args.config] if args.config else []))
+                log=dossier.path/(args.action+'-'+pipeline.now().replace(':','').replace('+0000','Z')+'.log')
+                pid=pipeline.detach(forwarded,log,Path.cwd())
+                print(f'Gestartet: {args.action} für {args.name}, PID {pid}, Protokoll {log}')
+                print(f'Stand jederzeit: python -m sqbf.cli nsn014 status --name {args.name}')
+                return 0
             if args.action=='prepare':
                 results=pipeline.prepare(config,dossier,rehearse=args.rehearse)
                 print(json.dumps(results,indent=2,ensure_ascii=False,default=str))

@@ -143,6 +143,43 @@ class PipelineTests(unittest.TestCase):
                 dossier.start('dry_run_clean', alive=lambda pid: True)
             self.assertEqual(caught.exception.code, 'STEP_ALREADY_RUNNING')
 
+    def test_a_repeated_step_gets_new_folders_and_a_clone_error_keeps_its_phase_and_reason(self):
+        fixture_clone = importlib.import_module('projects.ble-elva.tools.fixture_clone')
+        with tempfile.TemporaryDirectory() as tmp:
+            machine = Machine(tmp)
+            dossier = module.Dossier(machine.config, 'lauf-09')
+            self.assertEqual(module.attempt_folder(dossier, 'scratch-clean'), 'scratch-clean')
+            (dossier.path / 'scratch-clean').mkdir(parents=True)
+            self.assertEqual(module.attempt_folder(dossier, 'scratch-clean'), 'scratch-clean-2')
+            (dossier.path / 'scratch-clean-2').mkdir()
+            self.assertEqual(module.attempt_folder(dossier, 'scratch-clean'), 'scratch-clean-3')
+            with patch.object(module, 'clone_with_sessions', side_effect=fixture_clone.CloneError('preflight', 'OUTPUT_EXISTS')):
+                entry = module.dry_run(machine.config, dossier)
+            self.assertEqual((entry['status'], entry['error'], entry['error_detail']), ('FAILED', 'CloneError', 'preflight:OUTPUT_EXISTS'))
+
+    def test_a_long_step_is_started_on_its_own_with_only_the_variables_it_needs(self):
+        environ = {'LOCALAPPDATA': 'C:\\Users\\u\\AppData\\Local', 'SQBF_CLAUDE_CLI': 'C:\\c\\claude.exe'}
+        which = {'docker': 'C:\\Program Files\\Docker\\bin\\docker.exe', 'git': 'C:\\Program Files\\Git\\cmd\\git.exe'}.get
+        command = module.detached_command(['prepare', '--name', 'lauf-09', '--rehearse'], 'D:\\d\\lauf-09\\prepare.log', python='D:\\v\\python.exe',
+                                          environ=environ, which=which)
+        self.assertTrue(command.startswith('cmd.exe /c "set PYTHONIOENCODING=utf-8&& set SQBF_NSN014_CONFIG=C:\\Users\\u\\AppData\\Local\\SQBF\\nsn014-pipeline.json'))
+        self.assertIn('set SQBF_CLAUDE_CLI=C:\\c\\claude.exe', command)
+        self.assertIn('set PATH=C:\\Program Files\\Docker\\bin;C:\\Program Files\\Git\\cmd;%PATH%', command)
+        self.assertTrue(command.endswith('D:\\v\\python.exe -u -m sqbf.cli prepare --name lauf-09 --rehearse > D:\\d\\lauf-09\\prepare.log 2>&1"'))
+        for unsafe in (['run', '--name', 'a&b'], ['run', '--name', 'a b']):
+            with self.assertRaises(module.PipelineError):
+                module.detached_command(unsafe, 'D:\\l.log', python='D:\\p.exe', environ=environ, which=which)
+        seen = {}
+
+        def run(args, **kwargs):
+            seen['args'] = args
+            return Done('\n4242\n')
+        self.assertEqual(module.detach(['run', '--name', 'lauf-09'], 'D:\\l.log', 'D:\\repo', run=run, python='D:\\p.exe', environ=environ, which=which), 4242)
+        self.assertEqual(seen['args'][:4], ['powershell', '-NoProfile', '-NonInteractive', '-Command'])
+        self.assertIn('Win32_Process', seen['args'][4]);self.assertIn("CurrentDirectory='D:\\repo'", seen['args'][4])
+        with self.assertRaises(module.PipelineError):
+            module.detach(['run'], 'D:\\l.log', 'D:\\repo', run=lambda *a, **k: Done('', 3), python='D:\\p.exe', environ=environ, which=which)
+
     def test_a_stray_own_container_on_55434_without_its_web_is_stopped_before_the_clone(self):
         with tempfile.TemporaryDirectory() as tmp:
             machine = Machine(tmp)

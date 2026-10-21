@@ -273,6 +273,26 @@ def _inputs(config, fixture_path):
     return regular_runner.load_inputs(config['suite'], config['dataset'], str(fixture_path), config['projection'], config['allocations'])
 
 
+def attempt_folder(dossier, base):
+    """A new folder per attempt: a repeated step never reuses (or fails on) the folders of an earlier, failed or aborted attempt."""
+    if not (dossier.path / base).exists():
+        return base
+    number = 2
+    while (dossier.path / f'{base}-{number}').exists():
+        number += 1
+    return f'{base}-{number}'
+
+
+def _error_fields(error):
+    fields = {'error': getattr(error, 'code', None) or type(error).__name__}
+    phase, reason = getattr(error, 'phase', None), getattr(error, 'reason', None)
+    if phase or reason:
+        fields['error_detail'] = f'{phase}:{reason}'
+    if getattr(error, 'hint', None):
+        fields['hint'] = error.hint
+    return fields
+
+
 def clone_with_sessions(config, dossier, folder_name, purpose, *, clone=None, sessions=None, run=subprocess.run):
     """New clone from the stopped golden source (the port holder is stopped and kept), then the four persona sessions. Returns the sessions manifest."""
     from . import fixture_clone, suite_sessions
@@ -293,7 +313,7 @@ def clone_with_sessions(config, dossier, folder_name, purpose, *, clone=None, se
                     raise PipelineError('STRAY_CONTAINER_NOT_STOPPED', name)
                 dossier.data.setdefault('history', []).append({'event': 'stray_container_stopped', 'container': name, 'at': now()})
                 dossier.save()
-    output = dossier.path / folder_name
+    output = dossier.path / attempt_folder(dossier, folder_name)
     seed = session_seed(config) or (Path(state['occupant']) if state['occupant'] else None)
     manifest = clone(config['golden_source'], config['controller_credentials'], str(output), source_stopped=True,
                      expected_tree_sha256=config['golden_tree_sha256'], occupant_path=state['occupant'], purpose=purpose,
@@ -317,12 +337,10 @@ def dry_run(config, dossier, *, faults=False, rehearsal_model=None, clone=None, 
         if rehearsal_model:
             from .claude_executor import ClaudeCliExecutor
             executor = (executor_factory or ClaudeCliExecutor)(rehearsal_model)
-        folder = dossier.path / {'dry_run_clean': 'dry-run-clean', 'dry_run_faults': 'dry-run-faults', 'rehearsal': 'rehearsal'}[key]
+        folder = dossier.path / attempt_folder(dossier, {'dry_run_clean': 'dry-run-clean', 'dry_run_faults': 'dry-run-faults', 'rehearsal': 'rehearsal'}[key])
         report = (run_dry or dry.run_dry)(*inputs, str(folder), faults=DEFAULT_FAULTS if faults else None, executor=executor)
-    except PipelineError as error:
-        return dossier.record(key, 'FAILED', error=error.code, hint=error.hint)
     except Exception as error:
-        return dossier.record(key, 'FAILED', error=type(error).__name__)
+        return dossier.record(key, 'FAILED', **_error_fields(error))
     if rehearsal_model:
         status = 'RECORDED' if report['status'] == 'REHEARSAL_COMPLETED' else 'FAILED'
     else:
@@ -354,10 +372,8 @@ def fixture(config, dossier, *, clone=None, sessions=None, ready=None):
     try:
         prepared = clone_with_sessions(config, dossier, 'fixture', 'fixture', clone=clone, sessions=sessions)
         report = (ready or regular_runner.check_ready)(*_inputs(config, prepared), executor_id=config['executor_model'], reviewer_id=config['reviewer_model'])
-    except PipelineError as error:
-        return dossier.record('fixture', 'FAILED', error=error.code, hint=error.hint)
     except Exception as error:
-        return dossier.record('fixture', 'FAILED', error=type(error).__name__)
+        return dossier.record('fixture', 'FAILED', **_error_fields(error))
     # Before the approval the readiness can only end with "every other gate passed, the PO's budget decision is outstanding".
     ready_now = ready_without_approval(report)
     return dossier.record('fixture', 'READY' if ready_now else 'FAILED', fixture=str(prepared), readiness=report.get('status'),
@@ -445,6 +461,48 @@ def run(config, dossier, *, ready=None, run_suite=None, write_report=None):
         except Exception as error:
             entry = dossier.record('run', 'RECORDED', report_html_error=type(error).__name__)
     return entry
+
+
+def detached_command(arguments, log_path, *, python=None, environ=None, which=None):
+    """The command line that runs `python -m sqbf.cli <arguments>` on its own, writing to `log_path`.
+
+    Long steps (prepare, rehearse, run) take one to three hours. Started inside an agent session they die with it: the dry run of dossier
+    lauf-09 was terminated after ten minutes by the session's command timeout. A process created through WMI belongs to no session process tree.
+    Only the variables the steps need are passed on (the new process starts with the user's default environment)."""
+    import shutil
+    import sys
+    environ = os.environ if environ is None else environ
+    which = which or shutil.which
+    python = python or sys.executable
+    for value in [python, str(log_path)] + list(arguments):
+        if any(ch in str(value) for ch in '"&|<>^%') or ' ' in str(value):
+            raise PipelineError('DETACH_UNSAFE_ARGUMENT', str(value))
+    tools = [str(Path(path).parent) for path in (which('docker'), which('git')) if path]
+    sets = ['PYTHONIOENCODING=utf-8', 'SQBF_NSN014_CONFIG=' + str(config_path(environ))]
+    for key in ('SQBF_CLAUDE_CLI',):
+        if environ.get(key):
+            sets.append(f'{key}={environ[key]}')
+    if not environ.get('SQBF_CLAUDE_CLI'):
+        try:
+            from .claude_executor import cli_path
+            sets.append('SQBF_CLAUDE_CLI=' + cli_path(environ))
+        except Exception:
+            pass
+    sets.append('PATH=' + ';'.join(dict.fromkeys(tools)) + ';%PATH%')
+    prefix = '&& '.join('set ' + item for item in sets)
+    return f'cmd.exe /c "{prefix}&& {python} -u -m sqbf.cli {" ".join(arguments)} > {log_path} 2>&1"'
+
+
+def detach(arguments, log_path, cwd, *, run=subprocess.run, **options):
+    """Starts the command through WMI (Windows) and returns the PID of the started cmd.exe."""
+    command = detached_command(arguments, log_path, **options)
+    script = ("$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine='" + command.replace("'", "''")
+              + "'; CurrentDirectory='" + str(cwd).replace("'", "''") + "'}; if ($r.ReturnValue -ne 0) { exit 3 }; $r.ProcessId")
+    done = _run(['powershell', '-NoProfile', '-NonInteractive', '-Command', script], run, timeout=60)
+    pid = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ''
+    if done.returncode != 0 or not pid.isdigit():
+        raise PipelineError('DETACH_FAILED', f'returncode {done.returncode}')
+    return int(pid)
 
 
 def status(config, name=None, *, run=subprocess.run):

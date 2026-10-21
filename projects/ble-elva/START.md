@@ -23,9 +23,8 @@ Lauf-Akte fest; `status` zeigt jederzeit die Checkliste und den nächsten Befehl
 Ein fehlgeschlagener Schritt wird wiederholt (er legt eine neue Kopie an). Ein abgebrochener Schritt (Prozess beendet) wird beim
 nächsten Start als `ABORTED` vermerkt und neu begonnen. Eine Freigabe gilt für genau einen Lauf.
 
-Lange Schritte (`prepare`, `rehearse`, `run`: eine bis drei Stunden) startet ein Agent losgelöst von seiner Sitzung, damit ein Ende der
-Sitzung den Lauf nicht mitnimmt, z. B. in PowerShell:
-`Invoke-CimMethod Win32_Process -MethodName Create -Arguments @{CommandLine='cmd /c "<python> -u -m sqbf.cli nsn014 prepare --name lauf-09 > <Datei> 2>&1"'; CurrentDirectory='<Repository>'}`.
+Lange Schritte (`prepare`, `rehearse`, `run`: eine bis drei Stunden) startet ein Agent mit `--detach` losgelöst von seiner Sitzung,
+damit deren Zeitgrenze den Lauf nicht mitnimmt (das Protokoll liegt in der Lauf-Akte; `status` zeigt den Fortschritt).
 
 ## Ergebnisse lesen
 

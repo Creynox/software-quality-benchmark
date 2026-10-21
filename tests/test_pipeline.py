@@ -180,6 +180,21 @@ class PipelineTests(unittest.TestCase):
         with self.assertRaises(module.PipelineError):
             module.detach(['run'], 'D:\\l.log', 'D:\\repo', run=lambda *a, **k: Done('', 3), python='D:\\p.exe', environ=environ, which=which)
 
+    def test_the_cli_forwards_the_complete_command_to_the_detached_process(self):
+        # The first detached start of lauf-09 forwarded "prepare" without "nsn014" and ended at once.
+        with tempfile.TemporaryDirectory() as tmp:
+            machine = Machine(tmp)
+            config = Path(tmp) / 'config.json'
+            config.write_text(json.dumps(machine.config), encoding='utf-8')
+            with patch.object(module, 'detach', return_value=4242) as detach, redirect_stdout(StringIO()) as out:
+                self.assertEqual(main(['nsn014', 'prepare', '--name', 'lauf-09', '--rehearse', '--detach', '--config', str(config)]), 0)
+            forwarded = detach.call_args[0][0]
+            self.assertEqual(forwarded, ['nsn014', 'prepare', '--name', 'lauf-09', '--rehearse', '--config', str(config)])
+            self.assertIn('PID 4242', out.getvalue())
+            with redirect_stdout(StringIO()) as out:
+                self.assertEqual(main(['nsn014', 'approve', '--name', 'lauf-09', '--detach', '--config', str(config)]), 2)
+            self.assertIn('DETACH_NOT_FOR_THIS_STEP', out.getvalue())
+
     def test_a_stray_own_container_on_55434_without_its_web_is_stopped_before_the_clone(self):
         with tempfile.TemporaryDirectory() as tmp:
             machine = Machine(tmp)

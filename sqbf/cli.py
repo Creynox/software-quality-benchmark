@@ -369,7 +369,7 @@ def main(argv=None) -> int:
                 if args.action not in ('prepare','dry-run','dry-run-faults','rehearse','fixture','run'):
                     raise pipeline.PipelineError('DETACH_NOT_FOR_THIS_STEP',args.action)
                 dossier.save()
-                forwarded=([args.action,'--name',args.name]+(['--rehearse'] if args.rehearse else [])+(['--model',args.model] if args.model else [])
+                forwarded=(['nsn014',args.action,'--name',args.name]+(['--rehearse'] if args.rehearse else [])+(['--model',args.model] if args.model else [])
                            +(['--config',args.config] if args.config else []))
                 log=dossier.path/(args.action+'-'+pipeline.now().replace(':','').replace('+0000','Z')+'.log')
                 pid=pipeline.detach(forwarded,log,Path.cwd())

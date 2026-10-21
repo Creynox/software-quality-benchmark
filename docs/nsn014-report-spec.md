@@ -5,14 +5,20 @@ Entscheidung des PO vom 19.10.2026: Ein Benchmark-Lauf wird immer mit einem **Pu
 ob ein Lauf gut oder schlecht war. Der Auswertungsbericht hat immer **dieselbe feste Definition**; sie ändert sich nur durch eine **neue Version**
 (Erweiterung oder Feinanpassung).
 
-Maschinenlesbare Definition: `projects/ble-elva/suites/nsn014-report-spec-v1.json` (Version 1.1.0). Umsetzung: `projects/ble-elva/tools/report_spec.py`.
+Maschinenlesbare Definition: `projects/ble-elva/suites/nsn014-report-spec-v1.json` (Version 1.2.0). Umsetzung: `projects/ble-elva/tools/report_spec.py`
+und `report_html.py`.
 
 ## Was herauskommt
 
 Jeder Lauf-Ordner enthält neben dem ausführlichen `completion-report.md`:
 
+- **`bericht.html`**: der Bericht für Menschen, aufgebaut wie der Daily-Bericht des PO (Status, ein Balkensegment je Prüfpunkt, Veränderungen zum
+  Vorlauf, offene Prüfpunkte nach Ursache, Kennzahlen, offene Entscheidungen, Checkliste, nächste Schritte). E-Mail-tauglich, nur aus der Punktekarte.
+- **`uebersicht.html`** (im Ordner aller Läufe): alle Läufe mit Ergebnis, Punkten und Vergleichsgruppe.
 - **`punktebericht.md`**: der Bericht in der festen Form (neun Abschnitte, immer in dieser Reihenfolge, immer dieselben Tabellen und Sätze).
 - **`scorecard.json`**: dieselben Zahlen maschinenlesbar (Schlüssel und Reihenfolge fest). Aus dieser Datei entsteht der Bericht; ein Agent liest sie, statt Text zu deuten.
+
+Trocken- und Probeläufe (Art `DRY_RUN`, `REHEARSAL`) erzeugen dieselben Dateien, gekennzeichnet; sie sind nie Benchmark-Ergebnisse.
 
 `completion-report.md` beginnt mit dem Punktebericht und enthält dahinter als Anhang A0 bis A9 den bisherigen Detailbericht (Belege, Reviewer-Befunde im Wortlaut).
 
@@ -69,6 +75,7 @@ Für jeden Agenten, der einen Lauf liest, zusammenfasst oder kommentiert (auch d
 
 Zwei Läufe sind nur vergleichbar, wenn alle Werte in Abschnitt 7 gleich sind: Spezifikationsversion, Suite, Datensatz, Referenz- und Zuteilungsprojektion,
 Executor-Anweisung, Klickregeln der Guards, Review-Schema, Modelle, Viewport und Browser. Sonst unterscheiden sich die Messbedingungen, nicht nur die Ergebnisse.
+Ein Wert, der in einem Lauf nicht erfasst wurde, gilt nicht als gleich (seit 1.2.0): Solche Läufe sind nicht vergleichbar, ihre Vergleichsgruppe heißt „unvollständig“.
 
 ## Versionierung
 
@@ -79,7 +86,8 @@ Executor-Anweisung, Klickregeln der Guards, Review-Schema, Modelle, Viewport und
 | Wortlaut, Beschriftung, Formatierung | PATCH | keine Zahl ändert sich |
 
 Änderungsverlauf: **1.0.0** (19.10.2026) erste feste Definition. **1.1.0** (20.10.2026, MINOR): Ursprung „Suite“ für den Stufengrund `REPORT_ORACLE_UNAVAILABLE` (vorher „unklar“;
-Lauf 8), „Technischer Status“ und „Kritischer Stopp“ als letzte Zeilen von Abschnitt 1; kein Status und kein Punkt ändert sich.
+Lauf 8), „Technischer Status“ und „Kritischer Stopp“ als letzte Zeilen von Abschnitt 1; kein Status und kein Punkt ändert sich. **1.2.0** (21.10.2026, MINOR):
+Art des Laufs (Benchmark, Probelauf, Trockenlauf), HTML-Bericht und Übersicht mit festen Texten und Regeln, „nicht erfasst ist nicht gleich“ beim Vergleich.
 
 Jede Änderung braucht: neue Versionsnummer und Eintrag im Änderungsverlauf der Spezifikation, neuen gepinnten Hash und neue Golden-Datei im Test
 (`tests/test_report_spec.py`, `tests/golden/`). Ohne das schlagen die Tests fehl: Die Definition kann sich nicht unbemerkt ändern. Eine MAJOR-Änderung
@@ -96,7 +104,7 @@ Neue Läufe schreiben beide Dateien selbst (`scorecard.json`, `punktebericht.md`
 nie (eine abweichende bestehende Datei wird gemeldet). Liegt im Ordner schon eine Punktekarte einer anderen Version, bleibt sie unverändert, und die neue entsteht daneben als
 `scorecard-<Version>.json` und `punktebericht-<Version>.md`.
 
-## Nachbewertung der Läufe 5 bis 8 (Spezifikation 1.1.0, nur aus den gespeicherten Daten)
+## Nachbewertung der Läufe 5 bis 8 (Spezifikation 1.2.0, nur aus den gespeicherten Daten; Punkte unverändert seit 1.0.0)
 
 | Lauf | Ergebnis | Punkte | in Prozent | bestanden / nicht bestanden / nicht entschieden / ungültig / nicht ausgeführt |
 |---|---|---|---|---|

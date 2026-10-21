@@ -96,10 +96,16 @@ class Dossier:
         self.save()
         return entry
 
-    def start(self, key):
-        if self.step(key).get('status') == 'RUNNING' and not self.step(key).get('finished_at'):
-            raise PipelineError('STEP_ALREADY_RUNNING', key)
-        self.data['steps'][key] = {'status': 'RUNNING', 'started_at': now()}
+    def start(self, key, *, alive=None):
+        """Marks the step RUNNING with the PID of this process. A step left RUNNING by a process that no longer lives (it was killed, live
+        dossier lauf-09 on 2026-10-21) is kept as ABORTED in the history and may start again; a living one is never started twice."""
+        alive = alive or process_alive
+        entry = self.step(key)
+        if entry.get('status') == 'RUNNING' and not entry.get('finished_at'):
+            if entry.get('pid') and alive(entry['pid']):
+                raise PipelineError('STEP_ALREADY_RUNNING', f"{key} (PID {entry['pid']})")
+            self.data.setdefault('history', []).append(dict(entry, step=key, status='ABORTED', noticed_at=now()))
+        self.data['steps'][key] = {'status': 'RUNNING', 'started_at': now(), 'pid': os.getpid()}
         self.save()
 
     def next_step(self):
@@ -123,6 +129,28 @@ def checklist(dossier):
 
 
 # ---- facts about the machine ----------------------------------------------------------------------------------------------------------------
+
+def process_alive(pid):
+    """True if a process with this PID is still running (Windows: OpenProcess and GetExitCodeProcess; never a signal that could stop it)."""
+    if os.name != 'nt':
+        try:
+            os.kill(int(pid), 0)
+            return True
+        except OSError:
+            return False
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    handle = kernel.OpenProcess(0x1000, False, int(pid))  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return False
+    try:
+        code = wintypes.DWORD()
+        return bool(kernel.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259  # STILL_ACTIVE
+    finally:
+        kernel.CloseHandle(handle)
+
 
 def _run(args, run=subprocess.run, timeout=60):
     return run(args, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=timeout)
@@ -255,6 +283,16 @@ def clone_with_sessions(config, dossier, folder_name, purpose, *, clone=None, se
     state = ports_state(config, run)
     if state['web_pid'] and not state['occupant']:
         raise PipelineError('PORT_5082_HELD_BY_UNKNOWN_PROCESS', f"PID {state['web_pid']}: kein Manifest beschreibt diesen Prozess; zuerst prüfen und beenden")
+    if not state['web_pid']:
+        # One of our own clone containers can be left holding 55434 after its web died: stop (never remove) it, then clone without occupant.
+        containers = running_containers(run)
+        for name in state['containers']:
+            if '55434' in containers.get(name, ''):
+                done = _run(['docker', 'stop', '-t', '120', name], run, timeout=180)
+                if done.returncode != 0:
+                    raise PipelineError('STRAY_CONTAINER_NOT_STOPPED', name)
+                dossier.data.setdefault('history', []).append({'event': 'stray_container_stopped', 'container': name, 'at': now()})
+                dossier.save()
     output = dossier.path / folder_name
     seed = session_seed(config) or (Path(state['occupant']) if state['occupant'] else None)
     manifest = clone(config['golden_source'], config['controller_credentials'], str(output), source_stopped=True,
@@ -291,6 +329,23 @@ def dry_run(config, dossier, *, faults=False, rehearsal_model=None, clone=None, 
         status = 'PASSED' if report['status'] == 'DRY_RUN_COMPLETED' else 'FAILED'
     return dossier.record(key, status, folder=str(folder), fixture=str(prepared), report_status=report['status'], points=report.get('points'),
                           harness_stops=report.get('harness_stops'), rejected_actions=report.get('rejected_actions'), executor=report.get('executor'))
+
+
+def prepare(config, dossier, *, rehearse=False, step=None):
+    """The preparation in one go: dry run, dry run with faults and (optional) the rehearsal. Passed steps are kept, the first failed step ends it."""
+    step = step or dry_run
+    plan = [('dry_run_clean', {}), ('dry_run_faults', {'faults': True})]
+    if rehearse:
+        plan.append(('rehearsal', {'rehearsal_model': config['rehearsal_model']}))
+    results = {}
+    for key, options in plan:
+        if dossier.done(key):
+            results[key] = dossier.step(key)
+            continue
+        results[key] = step(config, dossier, **options)
+        if results[key]['status'] != DONE[key]:
+            break
+    return results
 
 
 def fixture(config, dossier, *, clone=None, sessions=None, ready=None):

@@ -11,6 +11,7 @@ Lauf-Akte fest; `status` zeigt jederzeit die Checkliste und den nächsten Befehl
 | Schritt | Was passiert | Modell |
 |---|---|---|
 | `status` | Lage: Docker, wer die Ports hält, neueste Sitzungen, Provider-Probe, nächster Schritt | – |
+| `prepare [--rehearse]` | die beiden Trockenläufe (und der Probelauf) in einem Ablauf; bestandene Schritte bleiben bestehen | wie die Einzelschritte |
 | `dry-run` | Wegwerfkopie und skriptierter Trockenlauf mit allen echten Prüfungen | keins |
 | `dry-run-faults` | dasselbe mit drei eingespielten Provider-Fehlern | keins |
 | `rehearse` (optional) | Probelauf mit Claude Haiku 5.5 als Executor; zeigt, wo Aufgaben für ein Modell schwer sind | Claude, über die lokale Claude-Code-Anmeldung |
@@ -19,7 +20,12 @@ Lauf-Akte fest; `status` zeigt jederzeit die Checkliste und den nächsten Befehl
 | `approve --statement "…"` | **nur mit ausdrücklicher Freigabe des PO**: genau ein Lauf, an Commit, Fixture und Budget gebunden | – |
 | `run` | Readiness und genau ein Lauf, kein Retry, danach die Berichte | ChatGPT-Plan |
 
-Ein fehlgeschlagener Schritt wird wiederholt (er legt eine neue Kopie an). Eine Freigabe gilt für genau einen Lauf.
+Ein fehlgeschlagener Schritt wird wiederholt (er legt eine neue Kopie an). Ein abgebrochener Schritt (Prozess beendet) wird beim
+nächsten Start als `ABORTED` vermerkt und neu begonnen. Eine Freigabe gilt für genau einen Lauf.
+
+Lange Schritte (`prepare`, `rehearse`, `run`: eine bis drei Stunden) startet ein Agent losgelöst von seiner Sitzung, damit ein Ende der
+Sitzung den Lauf nicht mitnimmt, z. B. in PowerShell:
+`Invoke-CimMethod Win32_Process -MethodName Create -Arguments @{CommandLine='cmd /c "<python> -u -m sqbf.cli nsn014 prepare --name lauf-09 > <Datei> 2>&1"'; CurrentDirectory='<Repository>'}`.
 
 ## Ergebnisse lesen
 

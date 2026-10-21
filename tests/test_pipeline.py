@@ -129,6 +129,59 @@ class PipelineTests(unittest.TestCase):
                 with self.assertRaises(module.PipelineError):
                     module.Dossier(machine.config, bad)
 
+    def test_a_step_left_running_by_a_dead_process_is_noted_as_aborted_and_may_start_again(self):
+        # Dossier lauf-09 (2026-10-21): the process was killed mid-run and left the step RUNNING without a finish.
+        self.assertTrue(module.process_alive(os.getpid()))
+        with tempfile.TemporaryDirectory() as tmp:
+            machine = Machine(tmp)
+            dossier = module.Dossier(machine.config, 'lauf-09')
+            dossier.data['steps']['dry_run_clean'] = {'status': 'RUNNING', 'started_at': 't', 'pid': 424242}
+            dossier.start('dry_run_clean', alive=lambda pid: False)
+            self.assertEqual(dossier.step('dry_run_clean')['pid'], os.getpid())
+            self.assertEqual((dossier.data['history'][0]['status'], dossier.data['history'][0]['pid']), ('ABORTED', 424242))
+            with self.assertRaises(module.PipelineError) as caught:
+                dossier.start('dry_run_clean', alive=lambda pid: True)
+            self.assertEqual(caught.exception.code, 'STEP_ALREADY_RUNNING')
+
+    def test_a_stray_own_container_on_55434_without_its_web_is_stopped_before_the_clone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            machine = Machine(tmp)
+            stopped, seen = [], {}
+
+            def run(args, **kwargs):
+                if args[:2] == ['docker', 'stop']:
+                    stopped.append(args[-1])
+                    return Done('')
+                return fake_run(containers='sqbf-nsn014-left\t127.0.0.1:55434->5432/tcp\nother-db\t127.0.0.1:5433->5432/tcp', netstat='')(args, **kwargs)
+
+            def clone(source, credentials, output, **kwargs):
+                seen.update(kwargs)
+                Path(output).mkdir(parents=True)
+                return Path(output) / 'fixture-clone.json'
+            dossier = module.Dossier(machine.config, 'lauf-09')
+            module.clone_with_sessions(machine.config, dossier, 'scratch-clean', 'scratch', clone=clone,
+                                       sessions=lambda *a: {'status': 'SESSIONS_VERIFIED'}, run=run)
+            self.assertEqual(stopped, ['sqbf-nsn014-left'], 'only our own container, never another database')
+            self.assertIsNone(seen['occupant_path'])
+            self.assertEqual(dossier.data['history'][0]['event'], 'stray_container_stopped')
+
+    def test_prepare_runs_the_dry_runs_and_the_rehearsal_in_order_keeps_passed_steps_and_stops_at_a_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            machine = Machine(tmp)
+            dossier = module.Dossier(machine.config, 'lauf-09')
+            calls = []
+
+            def step(config, dossier_, **options):
+                key = 'rehearsal' if options.get('rehearsal_model') else 'dry_run_faults' if options.get('faults') else 'dry_run_clean'
+                calls.append(key)
+                return dossier_.record(key, 'FAILED' if key == 'dry_run_faults' and len(calls) == 2 else module.DONE[key])
+            first = module.prepare(machine.config, dossier, rehearse=True, step=step)
+            self.assertEqual(calls, ['dry_run_clean', 'dry_run_faults'], 'a failed step ends the preparation')
+            self.assertEqual(first['dry_run_faults']['status'], 'FAILED')
+            second = module.prepare(machine.config, dossier, rehearse=True, step=step)
+            self.assertEqual(calls, ['dry_run_clean', 'dry_run_faults', 'dry_run_faults', 'rehearsal'], 'a passed step is not repeated')
+            self.assertEqual({k: v['status'] for k, v in second.items()}, {'dry_run_clean': 'PASSED', 'dry_run_faults': 'PASSED', 'rehearsal': 'RECORDED'})
+
     def test_a_clone_stops_the_recorded_holder_and_seeds_the_newest_sessions(self):
         with tempfile.TemporaryDirectory() as tmp:
             machine = Machine(tmp)

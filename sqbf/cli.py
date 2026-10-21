@@ -216,7 +216,8 @@ def main(argv=None) -> int:
     probe.add_argument('--reviewer-model',default='gpt-6.1-sol')
     probe.add_argument('--execute',action='store_true',help='Fresh subscription OAuth and exactly two requests, no retry')
     nsn=sub.add_parser('nsn014',help='NSN014 run dossier (Lauf-Akte): one fixed procedure from A to Z; `status` shows the next command',allow_abbrev=False)
-    nsn.add_argument('action',choices=['status','dry-run','dry-run-faults','rehearse','fixture','probe','approve','run','report','overview'])
+    nsn.add_argument('action',choices=['status','prepare','dry-run','dry-run-faults','rehearse','fixture','probe','approve','run','report','overview'])
+    nsn.add_argument('--rehearse',action='store_true',help='prepare only: add the rehearsal with the Claude executor after the dry runs')
     nsn.add_argument('--name',help='Name of the dossier, e.g. lauf-09')
     nsn.add_argument('--statement',help='approve only: the wording of the explicit PO approval for exactly one run')
     nsn.add_argument('--model',help='rehearse only: Claude model of the rehearsal executor (default from the configuration)')
@@ -363,6 +364,11 @@ def main(argv=None) -> int:
                 return 0
             if not args.name:raise pipeline.PipelineError('NAME_REQUIRED','--name <Lauf-Akte>, z. B. lauf-09')
             dossier=pipeline.Dossier(config,args.name)
+            if args.action=='prepare':
+                results=pipeline.prepare(config,dossier,rehearse=args.rehearse)
+                print(json.dumps(results,indent=2,ensure_ascii=False,default=str))
+                print(pipeline.render_status(pipeline.status(config,args.name)))
+                return 0 if all(entry.get('status')==pipeline.DONE[key] for key,entry in results.items()) else 2
             key={'dry-run':'dry_run_clean','dry-run-faults':'dry_run_faults','rehearse':'rehearsal','fixture':'fixture','probe':'probe',
                  'approve':'approval','run':'run'}[args.action]
             if key=='dry_run_clean':entry=pipeline.dry_run(config,dossier)

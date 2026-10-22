@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from test_report_spec import build, effort, every_stage, manifest, review
+from test_report_spec import accounting_with_sieve_task, build, criteria_records, effort, every_stage, manifest, review
 
 module = importlib.import_module('projects.ble-elva.tools.report_html')
 spec_module = importlib.import_module('projects.ble-elva.tools.report_spec')
@@ -51,14 +51,93 @@ class ReportHtmlTests(unittest.TestCase):
         self.assertEqual(segments.count(module.STATUS_COLORS['PASSED']), card['counts']['PASSED'])
         self.assertEqual(segments.count(module.STATUS_COLORS['NOT_RUN']), card['counts']['NOT_RUN'])
 
-    def test_open_checks_are_grouped_by_cause_in_the_fixed_priority(self):
+    def test_open_checks_are_grouped_by_cause_in_the_fixed_priority_and_explained(self):
         card = run8_like()
         text = module.render_report(card, decisions=[])
         suite, provider, model = text.index('>Suite<'), text.index('>Provider<'), text.index('>Modell<')
         self.assertLess(suite, provider);self.assertLess(provider, model)
-        self.assertIn('10 Prüfpunkte · Prüfberichte erzeugen', text)
-        self.assertIn('1 Prüfpunkt · Siebanalyse erfassen', text)
+        self.assertIn('10 Prüfpunkte · Nachrechnung der Suite fehlgeschlagen', text)
+        self.assertIn('1 Prüfpunkt · Modellanfrage ausgefallen', text)
+        self.assertIn('href="#stufe-sieve" style="color:#1f7a6d;">Siebanalyse erfassen P05</a>', text, 'each place links to its details')
+        spec = spec_module.load_spec()
+        info = spec['html']['causes']['REPORT_ORACLE_UNAVAILABLE']
+        for part in ('meaning', 'if_kept', 'benefit'):
+            self.assertIn(module._e(info[part]), text)
+        self.assertIn('Code: REPORT_ORACLE_UNAVAILABLE', text)
         self.assertIn('Keine offenen Entscheidungen.', text)
+
+    def test_every_recorded_cause_has_a_plain_text(self):
+        spec = spec_module.load_spec()
+        causes = spec['html']['causes']
+        sources = importlib.import_module('projects.ble-elva.tools.stage_support').CAUSE_SOURCES
+        for cls, origin in sources.items():
+            self.assertTrue(cls in causes or f'{origin}:{cls}' in causes, cls)
+        for reason in spec['stage_reason_origin']:
+            self.assertIn(reason, causes)
+        for origin in spec['origin_order']:
+            self.assertEqual(set(causes[origin]), {'name', 'meaning', 'if_kept', 'benefit'})
+        self.assertEqual(module.cause_key(spec, 'MODELL/SUITE', 'EXECUTOR_REPORTED_BLOCKED'), 'MODELL/SUITE:EXECUTOR_REPORTED_BLOCKED')
+        self.assertEqual(module.cause_key(spec, 'MODELL', 'EXECUTOR_REPORTED_BLOCKED'), 'MODELL:EXECUTOR_REPORTED_BLOCKED')
+        self.assertEqual(module.cause_key(spec, 'SUITE', 'AGENT_ACTION_REJECTED:MEASUREMENT_ACTION_SCOPE_DENIED'), 'AGENT_ACTION_REJECTED')
+        self.assertEqual(module.cause_key(spec, 'NICHT_AUSGEFUEHRT', 'NO_RECORD'), 'NICHT_AUSGEFUEHRT')
+        self.assertEqual(module.cause_key(spec, 'UNKLAR', None), 'UNKLAR')
+
+    def test_the_most_important_points_follow_fixed_rules_critical_first(self):
+        spec = spec_module.load_spec()
+        items = module.summary_items(spec, run8_like())
+        self.assertEqual([level for level, _ in items], ['critical', 'critical', 'critical', 'important', 'important', 'good', 'good'])
+        self.assertTrue(items[0][1].startswith('10 Prüfpunkte an der Test-Suite gescheitert (Prüfberichte erzeugen P01'))
+        self.assertIn(('critical', '1 Prüfpunkt nicht ausgeführt (Rechte der Werksleitung prüfen).'), items)
+        self.assertIn(('important', 'Größte Lücke: 28 Prüfpunkte, Modell hat aufgegeben (Modell).'), items)
+        self.assertIn(('good', 'Keine BLE-Abweichung belegt: alle 3 entschiedenen Prüfpunkte bestanden.'), items)
+        rehearsal = build(manifest(run_kind='REHEARSAL'), every_stage('INCONCLUSIVE', 'INCOMPLETE'))
+        self.assertEqual(module.summary_items(spec, rehearsal)[-1], ('note', spec['html']['summary']['kind_note']['REHEARSAL']))
+        passed = module.summary_items(spec, build(manifest(verdict='GO')))
+        self.assertEqual([level for level, _ in passed], ['good', 'good'])
+
+    def test_details_list_the_criteria_of_every_check_per_stage(self):
+        spec = spec_module.load_spec()
+        card = build(manifest(accounting=accounting_with_sieve_task()), criteria_records())
+        text = module.render_report(card, decisions=[])
+        for stage in spec['stage_order']:
+            name = module.anchor(stage)
+            self.assertEqual(text.count(f'id="{name}"'), 1, name)
+            self.assertIn(f'href="#{name}"', text, 'the bar of the stage links to its details')
+            self.assertIn(module._e(spec['html']['details']['tests'][stage]), text)
+        sieve = {label: (state, value) for state, label, value in module.stage_criteria(spec, card, card['stages'][3])}
+        labels = spec['html']['details']['criteria']
+        self.assertEqual(sieve[labels['entered']], (False, '1 von 2 · offen: P02 (2 von 4)'), 'a passed check counts as fulfilled')
+        self.assertEqual(sieve[labels['values']][1], '9 von 10 · abweichend: P02 · ' + spec['html']['details']['mismatch_note'])
+        self.assertEqual(sieve[labels['saved']], (False, '1 von 2 · offen: P02 (nur teilweise eingegeben, nicht gespeichert)'))
+        self.assertEqual(sieve[labels['time']], ('warn', 'Ist 12 Min. · Marke 10 Min. · über der Marke'))
+        self.assertIn('Eingabe „Rückstand 2 mm“ (kein freigegebenes Feld im Fokus)', module.html.unescape(text))
+        self.assertEqual(module.stage_fazit(spec, card, card['stages'][3]),
+                         'Fazit: 9 von 10 bestanden; offen P02, Modell hat aufgegeben. Keine BLE-Abweichung. Zeit über der Marke.')
+        self.assertEqual(module.stage_fazit(spec, card, card['stages'][0]), 'Fazit: bestanden. Keine BLE-Abweichung.')
+        receipt = {label: (state, value) for state, label, value in module.stage_criteria(spec, card, card['stages'][1])}
+        self.assertEqual(receipt[labels['finished']], (False, '0 von 1 · als blockiert gemeldet'))
+        self.assertEqual(receipt[labels['values']], (True, '1 von 1'))
+        self.assertIn(module._e(spec['html']['details']['marks_note']), text)
+
+    def test_decisions_show_question_options_recommendation_and_answer_in_priority_order(self):
+        rich = [{'id': 'D-9', 'status': 'OPEN', 'priority': 2, 'title': 'Später', 'question': 'Frage später?', 'options': [{'label': 'X', 'effect': 'Folge X'}],
+                 'recommendation': 'X', 'answer': 'X sagen'},
+                {'id': 'D-8', 'status': 'OPEN', 'priority': 1, 'title': 'Jetzt', 'question': 'Frage jetzt?', 'context': 'Weil es eilt',
+                 'options': [{'label': 'A', 'effect': 'Folge A'}, {'label': 'B', 'effect': 'Folge B'}], 'recommendation': 'A nehmen', 'answer': 'A sagen'},
+                {'id': 'D-7', 'status': 'DECIDED', 'title': 'Schon-entschieden-D7', 'decision': 'x'}]
+        text = module.render_report(run8_like(), decisions=rich)
+        self.assertLess(text.index('Frage jetzt?'), text.index('Frage später?'))
+        for part in ('Hintergrund: Weil es eilt', 'Folge A', 'Folge B', 'A nehmen', 'So antwortest du: A sagen', '>jetzt<', '>später<'):
+            self.assertIn(part, text)
+        self.assertNotIn('Folge X', text, 'a later decision shows its options without their effect')
+        self.assertNotIn('Schon-entschieden-D7', text)
+        legacy = module.render_report(run8_like(), decisions=DECISIONS)
+        self.assertIn('font-weight:700;">jetzt</span>', legacy);self.assertIn('Nächster Schritt: PO entscheidet', legacy)
+
+    def test_the_glossary_explains_the_terms_of_the_report(self):
+        text = module.render_report(run8_like(), decisions=[])
+        for term, explanation in spec_module.load_spec()['html']['glossary']:
+            self.assertIn(module._e(term), text);self.assertIn(module._e(explanation), text)
 
     def test_next_steps_and_checklist_follow_fixed_rules(self):
         card = run8_like()

@@ -1,6 +1,6 @@
 {
   "spec_id": "NSN014-REPORT-SPEC",
-  "spec_version": "1.2.0",
+  "spec_version": "1.3.0",
   "decided_by": "PO, 2026-10-19: one fixed, versioned definition of the evaluation report; a points system of numbers and facts (passed / not passed); no free-text judgement and no assumption in any number",
   "applies_to": {
     "suite_id": "ENZBERG-NSN014",
@@ -26,6 +26,11 @@
       "version": "1.2.0",
       "date": "2026-10-21",
       "change": "MINOR: run.kind (BENCHMARK, REHEARSAL, DRY_RUN) with a row at the end of section 1 and a note at the end of section 8 for runs without reviewer; the human-readable HTML report (bericht.html) and the overview of all runs (uebersicht.html) with fixed sections, texts and rules. No status and no point changes. A comparability value that was not recorded makes two runs not comparable (not recorded is not equal); the comparison group of such a run is \"unvollständig\"."
+    },
+    {
+      "version": "1.3.0",
+      "date": "2026-10-22",
+      "change": "MINOR (PO feedback on the HTML report 2026-10-22): `criteria` at the end of every check entry (recorded tasks with how they ended, module reached, values entered, save status, rejected actions with target label, effort; whether the independent Oracle found the values right) and `time` at the end of every stage entry (seconds and actions from the run accounting with the observation marks of the suite). The HTML report gets the sections summary (critical, important and good points), plain-language causes with consequence and benefit grouped by cause, the criteria of every check per stage at the end, a glossary, and decisions with question, options, recommendation and answer. No status and no point changes; an observation mark is shown, never scored."
     }
   ],
   "stage_order": [
@@ -406,6 +411,13 @@
     ]
   },
   "critical_stop_rule": "the first stage in stage order whose record has the result BLOCKED or INVALID, shown as \"STAGE: recorded reason\" (reason, stop reason or error code of the record); none if no stage has such a result",
+  "criteria_rules": {
+    "applies_to": "`criteria` of every check and `time` of every stage in the scorecard; recorded facts and numbers only, never part of the points or the result",
+    "tasks": "one entry per recorded task of the check (a measurement position can have several tasks, e.g. wash and allocations): kind, finished (recorded task status), reached (module page reached), entered ([approved values the field shows after typing, required values]), saved (save status), actions, scrolls, scrolls_after_last_entry, rejected (code, action, target label and reason of every rejected action; never a typed text); a single-task stage is its own task; a check without a recorded task has none",
+    "values": "MATCH when the check is PASSED; otherwise the independent Oracle of the stage: MISMATCH when it lists the check with a deviation (mismatch, missing, failed report) or a single-task Oracle failed, MATCH when it checked without a deviation, null when the stage has no Oracle. A MISMATCH of a check that is not FAILED is an incomplete entry, never a BLE deviation",
+    "time": "elapsed seconds and actions of the stage from the run accounting (tasks) with the observation marks of the suite (seconds, actions) and whether they were exceeded; a mark is a guide value, not a pass criterion (suite resource_policy.task_marks_are_hard_limits = false); null if not recorded",
+    "html": "the criteria lines of the HTML report count a PASSED check as fulfilled in every criterion, because the independent Oracle confirmed its values in BLE (the harness can see a pre-filled field or no save click); the tasks of an open check are shown as recorded"
+  },
   "run_kinds": {
     "BENCHMARK": "Benchmark-Lauf",
     "REHEARSAL": "Probelauf mit Claude-Executor (kein Benchmark-Ergebnis)",
@@ -417,6 +429,7 @@
     "overview_title": "Benchmark-Übersicht NSN014",
     "sections": [
       "status",
+      "summary",
       "stages",
       "changes",
       "open_points",
@@ -424,9 +437,12 @@
       "decisions",
       "checklist",
       "next_steps",
+      "details",
+      "glossary",
       "links"
     ],
     "section_titles": {
+      "summary": "Das Wichtigste",
       "stages": "Ergebnis je Stufe",
       "stages_hint": "ein Segment je Prüfpunkt",
       "changes": "Veränderungen seit dem letzten Lauf",
@@ -434,7 +450,10 @@
       "operating": "Bedienung und Aufwand",
       "decisions": "Entscheidungen erforderlich",
       "checklist": "Lauf-Checkliste",
-      "next_steps": "Was als Nächstes?"
+      "next_steps": "Was als Nächstes?",
+      "details": "Prüfpunkte im Einzelnen",
+      "details_hint": "was geprüft wurde und woran es lag",
+      "glossary": "Begriffe"
     },
     "result_sentences": {
       "BESTANDEN": "Alle {max_points} Prüfpunkte bestanden.",
@@ -581,7 +600,309 @@
         "ausgefallenes Review",
         "ausgefallene Reviews"
       ]
-    }
+    },
+    "summary": {
+      "levels": {
+        "critical": "kritisch",
+        "important": "wichtig",
+        "good": "gut",
+        "note": "Hinweis"
+      },
+      "critical_failed": "{count} mit belegter BLE-Abweichung: fachlich bestätigen ({checks}).",
+      "critical_invalid": "Messung ungültig in {stages}: dort sagt das Ergebnis nichts über BLE.",
+      "critical_suite": "{count} an der Test-Suite gescheitert ({where}: {causes}). Zuerst klären, sonst misst der Lauf dort die Suite statt BLE.",
+      "critical_provider": "{count} ohne Ergebnis wegen ausgefallener Modellanfragen.",
+      "critical_not_run": "{count} nicht ausgeführt ({stages}).",
+      "important_cause": "Größte Lücke: {count}, {cause} ({origin}).",
+      "important_saves": "Speichern: {tasks} vollständig eingegeben, aber nicht gespeichert; Speicherquote {rate}.",
+      "important_marks": "Zeitaufwand: {count} von {stages} Stufen über der Zeitmarke ({labels}); Marken zählen nicht in die Punkte.",
+      "good_no_deviation": "Keine BLE-Abweichung belegt: alle {decided} entschiedenen Prüfpunkte bestanden.",
+      "good_no_deviation_none": "Keine BLE-Abweichung belegt.",
+      "good_stages": "Vollständig bestanden: {stages}.",
+      "kind_note": {
+        "REHEARSAL": "Probelauf: zeigt die Schwierigkeiten vor einem Benchmark-Lauf und zählt nie als Benchmark-Ergebnis.",
+        "DRY_RUN": "Trockenlauf: prüft nur die Messung, ohne Modell; kein Benchmark-Ergebnis."
+      },
+      "limit": 8
+    },
+    "cause_lines": {
+      "meaning": "Bedeutung",
+      "if_kept": "Wenn es bleibt",
+      "benefit": "Beheben bringt"
+    },
+    "cause_code": "Code",
+    "details_link": "Details",
+    "causes": {
+      "MODELL/SUITE:EXECUTOR_REPORTED_BLOCKED": {
+        "name": "nach abgelehnter Aktion aufgegeben",
+        "meaning": "Der Wächter hat eine Aktion abgelehnt, etwa einen Klick außerhalb der erlaubten Wege; danach meldete das Modell „blockiert“, statt den üblichen Weg zu nehmen.",
+        "if_kept": "Diese Prüfpunkte bleiben ohne Ergebnis; ob BLE dort richtig arbeitet, bleibt ungeprüft.",
+        "benefit": "Jeder behobene Fall macht einen Prüfpunkt messbar, über einen neutralen Satz in der Anweisung (Entscheidung des PO) oder ein stärkeres Modell."
+      },
+      "MODELL:EXECUTOR_REPORTED_BLOCKED": {
+        "name": "Modell hat aufgegeben",
+        "meaning": "Das Modell meldete „blockiert“, ohne dass der Wächter etwas abgelehnt hat.",
+        "if_kept": "Der Prüfpunkt bleibt ohne Ergebnis; das ist eine Schwäche des Modells, kein Befund über BLE.",
+        "benefit": "Zeigt, wo die Aufgabe für Modelle schwer ist; die Begründung des Modells steht im ausführlichen Bericht."
+      },
+      "NO_VISIBLE_PROGRESS": {
+        "name": "ohne sichtbaren Fortschritt gestoppt",
+        "meaning": "Das Modell wiederholte dieselbe Aktion, ohne dass sich die Seite änderte; der Harness hat die Aufgabe beendet.",
+        "if_kept": "Der Prüfpunkt bleibt ohne Ergebnis und kostet Zeit und Anfragen.",
+        "benefit": "Zeigt die Stelle, an der das Modell nicht weiterkommt (Feld, Speichern oder Navigation)."
+      },
+      "EXECUTOR_DONE_WITHOUT_ALL_APPROVED_INPUTS": {
+        "name": "fertig gemeldet, Werte fehlten",
+        "meaning": "Das Modell meldete fertig, obwohl nicht alle freigegebenen Werte eingegeben waren.",
+        "if_kept": "Der Prüfpunkt bleibt ohne Ergebnis; BLE wird mit unvollständigen Daten nicht geprüft.",
+        "benefit": "Zeigt fehlende Sorgfalt des Modells; an BLE ist nichts zu ändern."
+      },
+      "LAST_FIELD_NOT_COMMITTED": {
+        "name": "letzter Wert nicht übernommen",
+        "meaning": "Der letzte Wert stand im Feld, wurde aber nicht übernommen, weil das Feld nicht verlassen wurde.",
+        "if_kept": "Der Wert fehlt in BLE; der Prüfpunkt bleibt ohne Ergebnis.",
+        "benefit": "Kleiner Bedienfehler des Modells; der Hinweis, das Feld zu verlassen, steht schon in der Anweisung."
+      },
+      "REPORT_NOT_GENERATED": {
+        "name": "Bericht nicht erzeugt",
+        "meaning": "Das Modell hat den Prüfbericht nicht erzeugt.",
+        "if_kept": "Der Bericht dieser Probe bleibt ungeprüft.",
+        "benefit": "Ein Prüfpunkt mehr messbar; zeigt, ob die Berichtsfunktion auffindbar ist."
+      },
+      "PDF_NOT_DOWNLOADED": {
+        "name": "PDF nicht heruntergeladen",
+        "meaning": "Das Modell hat das PDF des Prüfberichts nicht heruntergeladen.",
+        "if_kept": "Der Inhalt des Berichts bleibt ungeprüft.",
+        "benefit": "Ein Prüfpunkt mehr messbar."
+      },
+      "AGENT_ACTION_REJECTED": {
+        "name": "Wächter hat mehrere Aktionen abgelehnt",
+        "meaning": "Mehr als drei Aktionen dieser Aufgabe lagen außerhalb des Erlaubten, etwa eine Eingabe ohne freigegebenes Feld im Fokus; die Aufgabe wurde beendet.",
+        "if_kept": "Der Prüfpunkt bleibt ohne Ergebnis, und offen bleibt, ob die Regel zu streng ist oder das Modell ungenau arbeitet; dort misst der Lauf die Suite statt BLE.",
+        "benefit": "Nach der Klärung ist der Prüfpunkt messbar; eine Regeländerung nur mit Freigabe des PO."
+      },
+      "EXECUTOR_REQUEST_FAILED": {
+        "name": "Modellanfrage ausgefallen",
+        "meaning": "Die Anfrage an das Modell ist ausgefallen (Netz, Grenze oder Antwortformat).",
+        "if_kept": "Der Prüfpunkt bleibt ohne Ergebnis; wiederholte Ausfälle stoppen den Lauf.",
+        "benefit": "Stabiler Lauf; meist reicht ein neuer Lauf, bei Häufung Anmeldung oder Grenzen prüfen."
+      },
+      "DERIVED_VALUE_UPSTREAM_INCOMPLETE": {
+        "name": "Vorstufe unvollständig",
+        "meaning": "Ein Wert hängt von einer früheren Aufgabe ab, die nicht vollständig war.",
+        "if_kept": "Der Folgeprüfpunkt bleibt ohne Ergebnis, solange die Vorstufe fehlt.",
+        "benefit": "Behebt sich mit der Vorstufe; hier ist nichts Eigenes zu tun."
+      },
+      "APPROVED_FIELDS_NOT_PRESENT_ON_PAGE": {
+        "name": "Felder fehlten wegen einer Vorstufe",
+        "meaning": "Die Felder der Aufgabe gab es auf der Seite noch nicht, weil eine frühere Aufgabe fehlte, etwa keine Entnahmen angelegt.",
+        "if_kept": "Der Prüfpunkt bleibt ohne Ergebnis, solange die Vorstufe fehlt.",
+        "benefit": "Behebt sich mit der Vorstufe; die Ursache steht dort."
+      },
+      "PERSISTED_VALUE_DEVIATION": {
+        "name": "BLE speicherte einen anderen Wert",
+        "meaning": "BLE hat einen anderen Wert gespeichert oder berechnet als freigegeben; unabhängig nachgeprüft.",
+        "if_kept": "Möglicher Fehler in BLE.",
+        "benefit": "Fachlich bestätigen und als BLE-Issue melden."
+      },
+      "REPORT_ORACLE_UNAVAILABLE": {
+        "name": "Nachrechnung der Suite fehlgeschlagen",
+        "meaning": "Die unabhängige Nachrechnung der Berichte war nicht möglich, ein Fehler der Test-Suite.",
+        "if_kept": "Die Berichtsstufe kann nicht bewertet werden, und die Rechte-Stufe läuft nicht.",
+        "benefit": "Seit Spezifikation 1.1.0 behoben; zehn Prüfpunkte wieder messbar."
+      },
+      "PROVIDER_AUTHORIZATION_EXPIRED": {
+        "name": "Anmeldung beim Provider abgelaufen",
+        "meaning": "Die Anmeldung beim Modellanbieter lief während des Laufs ab.",
+        "if_kept": "Der Lauf stoppt; die restlichen Stufen bleiben ohne Ergebnis.",
+        "benefit": "Vollständiger Lauf; die Anmeldung wird automatisch erneuert, sonst vor dem Lauf neu anmelden."
+      },
+      "EXECUTOR_UNAVAILABLE_AFTER_REPEATED_FAILURES": {
+        "name": "Provider wiederholt ausgefallen",
+        "meaning": "Mehrere Modellanfragen hintereinander sind ausgefallen; der Lauf wurde gestoppt.",
+        "if_kept": "Die restlichen Stufen bleiben ohne Ergebnis.",
+        "benefit": "Vollständiger Lauf; Anbieter und Grenzen prüfen, dann neu starten."
+      },
+      "MODELL": {
+        "name": "Ursache beim Modell",
+        "meaning": "Das Modell hat die Aufgabe nicht abgeschlossen: aufgegeben, nicht gespeichert oder einen Wert nicht übernommen.",
+        "if_kept": "Der Prüfpunkt bleibt ohne Ergebnis; kein Befund über BLE.",
+        "benefit": "Zeigt, wo Modelle an der Aufgabe scheitern."
+      },
+      "MODELL/SUITE": {
+        "name": "Modell und Suite gemeinsam",
+        "meaning": "Nach einer abgelehnten Aktion hat das Modell die Aufgabe nicht abgeschlossen.",
+        "if_kept": "Der Prüfpunkt bleibt ohne Ergebnis; ob BLE dort richtig arbeitet, bleibt ungeprüft.",
+        "benefit": "Ein Prüfpunkt mehr messbar."
+      },
+      "SUITE": {
+        "name": "Ursache in der Test-Suite",
+        "meaning": "Die Test-Suite (Wächter, Wortlaut oder Harness) hat das Ergebnis verhindert.",
+        "if_kept": "Dort misst der Lauf die Suite statt BLE.",
+        "benefit": "Zuerst beheben: macht den Prüfpunkt messbar."
+      },
+      "PROVIDER": {
+        "name": "Ursache beim Provider",
+        "meaning": "Die Anfragen an das Modell sind ausgefallen.",
+        "if_kept": "Der Prüfpunkt bleibt ohne Ergebnis.",
+        "benefit": "Stabiler Lauf."
+      },
+      "VORSTUFE": {
+        "name": "Voraussetzung fehlt",
+        "meaning": "Eine frühere Aufgabe fehlte, oder das Modul wurde nicht erreicht.",
+        "if_kept": "Folgeprüfpunkte bleiben ohne Ergebnis.",
+        "benefit": "Behebt sich mit der Vorstufe."
+      },
+      "NICHT_AUSGEFUEHRT": {
+        "name": "Stufe nicht ausgeführt",
+        "meaning": "Die Stufe lief nicht, weil eine frühere Stufe den Lauf gestoppt hat.",
+        "if_kept": "Diese Prüfpunkte fehlen im Ergebnis.",
+        "benefit": "Behebt sich mit dem Stopp davor."
+      },
+      "UNGUELTIG": {
+        "name": "Messung ungültig",
+        "meaning": "Die Messung selbst war fehlerhaft (Harness).",
+        "if_kept": "Das Ergebnis dieser Stufe ist nicht verwertbar.",
+        "benefit": "Zuerst beheben; sagt nichts über BLE."
+      },
+      "BLE-ABWEICHUNG": {
+        "name": "belegte Abweichung von BLE",
+        "meaning": "Die unabhängige Nachprüfung zeigt eine Abweichung von BLE.",
+        "if_kept": "Möglicher Fehler in BLE.",
+        "benefit": "Fachlich bestätigen und als BLE-Issue melden."
+      },
+      "UNKLAR": {
+        "name": "Ursache nicht bestimmbar",
+        "meaning": "Aus den aufgezeichneten Daten lässt sich die Ursache nicht bestimmen.",
+        "if_kept": "Der Prüfpunkt bleibt ohne Ergebnis.",
+        "benefit": "Aufzeichnung verbessern, damit die Ursache sichtbar wird."
+      }
+    },
+    "details": {
+      "tests": {
+        "NSN014-PLAN": "Die Laborleitung legt die zehn Planproben von NSN 014 einmal über den Planprozess an; geprüft werden genau zehn Proben mit Datum, Produkt und Planbezug.",
+        "NSN014-RECEIPT": "Der Labormitarbeiter gleicht zehn Proben, Produkte und Entnahmedatum mit dem Plan ab, ohne etwas zu ändern; geprüft werden die zehn Planproben und unveränderte Daten.",
+        "NSN014-PREPARATION": "Für die vorgesehenen Proben Abschlämmung und Entnahmen eingeben und speichern; geprüft werden je Probe die gespeicherten Massen, Einheiten und Zuordnungen.",
+        "NSN014-SIEVE": "Für zehn Proben die Siebrückstände eingeben und speichern; geprüft werden je Probe die gespeicherten Massen und die unabhängig nachgerechneten Siebergebnisse.",
+        "NSN014-SHAPE": "Für fünf Proben die Kornform eingeben; geprüft werden die gespeicherten Massen und die nachgerechneten Kennzahlen.",
+        "NSN014-BOILING": "Für vier Proben den Kochversuch eingeben; geprüft werden die gespeicherten Massen und die nachgerechneten Ergebnisse.",
+        "NSN014-SE": "Zwei Wiederholungen des Sandäquivalents eingeben; geprüft werden beide gespeicherten Werte, die Kennzahl und die Rundung.",
+        "NSN014-ASSESS": "Die Bewertungsansicht mit den vorhandenen Daten prüfen; geprüft wird, ob der angezeigte Stand zu den Daten passt.",
+        "NSN014-WPK": "Plan gegen Fertiggestelltes für die zehn Positionen prüfen; geprüft wird, ob geplant, erledigt und fällig zu den Daten passen.",
+        "NSN014-ANALYSIS": "Beschreiben, was die Oberfläche für diesen Plan ermöglicht und was fehlt; geprüft wird, ob die Aussagen durch sichtbare Belege und gespeicherte Daten gedeckt sind.",
+        "NSN014-REPORT": "Für zehn Proben Berichtsvorschau und PDF-Download ohne Freigabe; geprüft wird je Bericht, ob PDF und Berichtsstand zu den Daten passen.",
+        "NSN014-RIGHTS": "Mit dem Werkskonto die Rechte prüfen, ohne etwas zu ändern; geprüft werden verweigerte Schreib- und Freigaberechte, die Sicht auf das eigene Werk und unveränderte Daten."
+      },
+      "test_label": "Geprüft wird",
+      "criteria": {
+        "finished": "Aufgabe abgeschlossen",
+        "reached": "Modul erreicht",
+        "entered": "Werte vollständig eingegeben",
+        "values": "Werte stimmen (unabhängige Prüfung)",
+        "saved": "Gespeichert",
+        "rejected": "Abgelehnte Aktionen",
+        "time": "Zeitaufwand",
+        "actions": "Aktionen"
+      },
+      "of": "{n} von {total}",
+      "open": "offen: {items}",
+      "deviating": "abweichend: {items}",
+      "single_task": "Aufgabe",
+      "mismatch_note": "erwartet, wenn nicht oder nur teilweise gespeichert wurde; kein BLE-Fehler",
+      "mark": "Ist {actual} · Marke {mark} · {state}",
+      "mark_states": {
+        "over": "über der Marke",
+        "within": "innerhalb der Marke"
+      },
+      "marks_note": "Marken sind Richtwerte der Suite je Stufe und zählen nicht in die Punkte.",
+      "none": "keine",
+      "passed": "bestanden: {positions}",
+      "passed_single": "bestanden",
+      "check": "{position} · {status} · {origin}: {cause}",
+      "finished_labels": {
+        "DONE": "abgeschlossen",
+        "BLOCKED": "als blockiert gemeldet",
+        "STALLED": "ohne Fortschritt gestoppt",
+        "REJECTED": "nach Ablehnungen beendet",
+        "INCONCLUSIVE": "ohne Ergebnis beendet",
+        "EXECUTOR_FAILED": "Modellanfrage ausgefallen",
+        "INVALID": "Messung ungültig"
+      },
+      "kind_labels": {
+        "wash": "Abschlämmung",
+        "allocations": "Entnahmen",
+        "sieve": "Siebanalyse",
+        "partial": "Teilsiebung",
+        "shape": "Kornform",
+        "boiling": "Kochversuch",
+        "sand": "Sandäquivalent"
+      },
+      "entered": "eingegeben {done} von {required}",
+      "effort": "{actions} Aktionen, {scrolls} Scrolls",
+      "rejected": "abgelehnt: {items}",
+      "action_labels": {
+        "click": "Klick",
+        "type": "Eingabe",
+        "scroll": "Scrollen",
+        "wait": "Warten",
+        "key": "Taste"
+      },
+      "rejection_labels": {
+        "MEASUREMENT_ACTION_SCOPE_DENIED": "außerhalb der freigegebenen Felder",
+        "INSPECTION_ACTION_SCOPE_DENIED": "außerhalb der erlaubten Wege",
+        "WAIT_OUT_OF_BOUNDS": "Wartezeit außerhalb der Grenzen",
+        "SCROLL_OUT_OF_BOUNDS": "außerhalb der Seite"
+      },
+      "rejection_reasons": {
+        "NO_APPROVED_FIELD_FOCUSED": "kein freigegebenes Feld im Fokus",
+        "TEXT_DIFFERS_FROM_APPROVED_VALUE": "Wert weicht vom freigegebenen ab"
+      },
+      "fazit_all": "Fazit: alle {checks} Prüfpunkte bestanden.",
+      "fazit_all_single": "Fazit: bestanden.",
+      "fazit_open": "Fazit: {passed} von {checks} bestanden; offen {positions}, {cause}.",
+      "fazit_open_single": "Fazit: ohne Ergebnis, {cause}.",
+      "fazit_failed": " {count} mit belegter BLE-Abweichung, fachlich bestätigen.",
+      "fazit_no_deviation": " Keine BLE-Abweichung.",
+      "fazit_over_mark": " Zeit über der Marke.",
+      "not_recorded": "nicht erfasst"
+    },
+    "decision_texts": {
+      "context": "Hintergrund",
+      "recommendation": "Empfehlung",
+      "answer": "So antwortest du",
+      "now": "jetzt",
+      "later": "später"
+    },
+    "glossary": [
+      [
+        "Benchmark-Lauf",
+        "Ein vollständiger, gewerteter Durchgang aller 12 Stufen (46 Prüfpunkte) mit dem echten Executor auf einer frischen BLE-Kopie. Jeder Lauf ist neu und einmalig und braucht die ausdrückliche Freigabe des PO."
+      ],
+      [
+        "Probelauf",
+        "Derselbe Ablauf mit Claude als Executor über das Claude-Abo auf einer Wegwerfkopie. Findet Schwierigkeiten vorab und zählt nie als Benchmark-Ergebnis."
+      ],
+      [
+        "Trockenlauf",
+        "Derselbe Ablauf mit einem Skript statt Modell, einmal sauber und einmal mit eingebauten Fehlern. Prüft nur, ob richtig gemessen wird."
+      ],
+      [
+        "Freigabe",
+        "Der PO gibt jeden Benchmark-Lauf einzeln frei. Die Freigabe gilt nur für genau diesen Lauf und steht in seiner Lauf-Akte."
+      ],
+      [
+        "Vergleichbar",
+        "Zwei Läufe sind vergleichbar, wenn Suite, Anweisungen, Wächter, Daten und Modelle gleich sind, also bei gleicher Vergleichsgruppe."
+      ],
+      [
+        "Marke",
+        "Richtwert der Suite für Zeit und Aktionen je Stufe. Wird angezeigt und zählt nicht in die Punkte."
+      ],
+      [
+        "Ursache",
+        "Warum ein Prüfpunkt kein Ergebnis hat: Modell, Suite, Provider oder Vorstufe. Nur „BLE“ ist ein möglicher Fehler von BLE."
+      ]
+    ]
   },
   "comparability_group_rule": "first 8 hex characters of the canonical SHA256 of the comparability values without spec_version; \"unvollständig\" if a value is not recorded; equal groups are comparable",
   "comparability_rule": "two runs are comparable only if every comparability value is recorded (not null) in both and equal"

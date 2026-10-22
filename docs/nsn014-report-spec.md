@@ -5,15 +5,17 @@ Entscheidung des PO vom 19.10.2026: Ein Benchmark-Lauf wird immer mit einem **Pu
 ob ein Lauf gut oder schlecht war. Der Auswertungsbericht hat immer **dieselbe feste Definition**; sie ändert sich nur durch eine **neue Version**
 (Erweiterung oder Feinanpassung).
 
-Maschinenlesbare Definition: `projects/ble-elva/suites/nsn014-report-spec-v1.json` (Version 1.2.0). Umsetzung: `projects/ble-elva/tools/report_spec.py`
+Maschinenlesbare Definition: `projects/ble-elva/suites/nsn014-report-spec-v1.json` (Version 1.3.0). Umsetzung: `projects/ble-elva/tools/report_spec.py`
 und `report_html.py`.
 
 ## Was herauskommt
 
 Jeder Lauf-Ordner enthält neben dem ausführlichen `completion-report.md`:
 
-- **`bericht.html`**: der Bericht für Menschen, aufgebaut wie der Daily-Bericht des PO (Status, ein Balkensegment je Prüfpunkt, Veränderungen zum
-  Vorlauf, offene Prüfpunkte nach Ursache, Kennzahlen, offene Entscheidungen, Checkliste, nächste Schritte). E-Mail-tauglich, nur aus der Punktekarte.
+- **`bericht.html`**: der Bericht für Menschen, aufgebaut wie der Daily-Bericht des PO (Status, das Wichtigste nach festen Regeln, ein Balkensegment
+  je Prüfpunkt, Veränderungen zum Vorlauf, offene Prüfpunkte nach Ursache mit Bedeutung, Folge und Nutzen der Behebung, Kennzahlen, offene
+  Entscheidungen mit Empfehlung, Checkliste, nächste Schritte, unten jeder Prüfpunkt je Stufe mit seinen Kriterien, Begriffe). E-Mail-tauglich, nur
+  aus der Punktekarte.
 - **`uebersicht.html`** (im Ordner aller Läufe): alle Läufe mit Ergebnis, Punkten und Vergleichsgruppe.
 - **`punktebericht.md`**: der Bericht in der festen Form (neun Abschnitte, immer in dieser Reihenfolge, immer dieselben Tabellen und Sätze).
 - **`scorecard.json`**: dieselben Zahlen maschinenlesbar (Schlüssel und Reihenfolge fest). Aus dieser Datei entsteht der Bericht; ein Agent liest sie, statt Text zu deuten.
@@ -88,6 +90,10 @@ Ein Wert, der in einem Lauf nicht erfasst wurde, gilt nicht als gleich (seit 1.2
 Änderungsverlauf: **1.0.0** (19.10.2026) erste feste Definition. **1.1.0** (20.10.2026, MINOR): Ursprung „Suite“ für den Stufengrund `REPORT_ORACLE_UNAVAILABLE` (vorher „unklar“;
 Lauf 8), „Technischer Status“ und „Kritischer Stopp“ als letzte Zeilen von Abschnitt 1; kein Status und kein Punkt ändert sich. **1.2.0** (21.10.2026, MINOR):
 Art des Laufs (Benchmark, Probelauf, Trockenlauf), HTML-Bericht und Übersicht mit festen Texten und Regeln, „nicht erfasst ist nicht gleich“ beim Vergleich.
+**1.3.0** (22.10.2026, MINOR, Rückmeldung des PO zum HTML-Bericht): Kriterien je Prüfpunkt (wie jede Aufgabe endete, Modul erreicht, Werte eingegeben,
+gespeichert, abgelehnte Aktionen mit Ziel, Aufwand; ob die unabhängige Prüfung die Werte bestätigt) und Zeit, Aktionen und Marken je Stufe in der
+Punktekarte; im HTML-Bericht das Wichtigste, Ursachen in Klartext, die Kriterien je Stufe, Begriffe und Entscheidungen mit Frage, Folgen, Empfehlung und
+Antwort. Kein Status und kein Punkt ändert sich; Marken werden angezeigt, nie gewertet.
 
 Jede Änderung braucht: neue Versionsnummer und Eintrag im Änderungsverlauf der Spezifikation, neuen gepinnten Hash und neue Golden-Datei im Test
 (`tests/test_report_spec.py`, `tests/golden/`). Ohne das schlagen die Tests fehl: Die Definition kann sich nicht unbemerkt ändern. Eine MAJOR-Änderung

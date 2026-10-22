@@ -28,7 +28,8 @@ damit deren Zeitgrenze den Lauf nicht mitnimmt (das Protokoll liegt in der Lauf-
 
 ## Ergebnisse lesen
 
-- **`bericht.html`** im Lauf-Ordner: der Bericht für Menschen (Status, Balken je Stufe, Veränderungen, offene Punkte, Entscheidungen, Checkliste, nächste Schritte).
+- **`bericht.html`** im Lauf-Ordner: der Bericht für Menschen (das Wichtigste, Balken je Stufe, Veränderungen, offene Punkte mit Bedeutung
+  und Nutzen der Behebung, Entscheidungen mit Empfehlung, Checkliste, nächste Schritte, unten jeder Prüfpunkt mit seinen Kriterien, Begriffe).
 - **`uebersicht.html`** im Ordner aller Läufe: alle Läufe mit Ergebnis, Punkten und Vergleichsgruppe.
 - `scorecard.json` (für Maschinen), `punktebericht.md` (feste Fassung), `completion-report.md` (Belege für Nachprüfungen).
 - Trocken- und Probeläufe liegen in der Lauf-Akte, sind gekennzeichnet und **nie Benchmark-Ergebnisse**.

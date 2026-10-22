@@ -1,9 +1,10 @@
 """Human-readable NSN014 report (bericht.html) and overview of all runs (uebersicht.html), rendered only from scorecards (PO decision 2026-10-21).
 
-Built like the daily development dashboard the PO uses: dark header, status card, segmented bars (one segment per check), changes since the
-previous run, open checks by cause, key figures, open decisions, checklist, next steps. One screen for a human; machine data stays in
-scorecard.json. Email-safe: tables and inline styles only, no scripts, no external files or fonts. Every text is fixed by the report
-specification (section `html`), every number comes from the scorecard, the open decisions come from projects/ble-elva/decisions.json.
+Built like the daily development dashboard the PO uses: dark header, status card, the most important points, segmented bars (one segment per
+check), changes since the previous run, open checks by cause in plain language, key figures, open decisions, checklist, next steps, and at
+the end the criteria of every check per stage and a glossary (PO feedback 2026-10-22). Machine data stays in scorecard.json. Email-safe:
+tables and inline styles only, no scripts, no external files or fonts. Every text is fixed by the report specification (section `html`),
+every number comes from the scorecard, the open decisions come from projects/ble-elva/decisions.json.
 """
 import html
 import json
@@ -27,6 +28,10 @@ ORIGIN_BADGES = {'BLE-ABWEICHUNG': ('#fee4e2', '#b42318'), 'UNGUELTIG': ('#eaecf
                  'PROVIDER': ('#fef0c7', '#b54708'), 'NICHT_AUSGEFUEHRT': ('#f2f4f7', '#475467'), 'VORSTUFE': ('#eff8ff', '#175cd3'),
                  'MODELL/SUITE': ('#fef0c7', '#b54708'), 'MODELL': ('#f2f4f7', '#344054'), 'UNKLAR': ('#f2f4f7', '#475467')}
 KIND_SHORT = {'BENCHMARK': 'Benchmark', 'REHEARSAL': 'Probelauf', 'DRY_RUN': 'Trockenlauf'}
+LEVEL_COLORS = {'critical': '#b42318', 'important': '#b54708', 'good': '#1f7a6d', 'note': '#475467'}
+MARKS = {True: ('&#10003;', '#1f7a6d'), False: ('&#10007;', '#b42318'), 'warn': ('!', '#b54708'), None: ('&#8211;', '#98a2b3')}
+SAVE_OUTCOMES = ('SAVED', 'SAVE_CLICK_REJECTED', 'NOT_SAVED_AFTER_ENTRY', 'NOT_SAVED_PARTIAL_ENTRY', 'NOT_REACHED')
+SOFT_ORIGINS = ('MODELL', 'MODELL/SUITE', 'VORSTUFE', 'UNKLAR')
 
 
 # ---- formatting -------------------------------------------------------------------------------------------------------------------------------
@@ -201,6 +206,226 @@ def next_steps(spec, card):
     return steps[:limit]
 
 
+def anchor(stage):
+    return 'stufe-' + stage.replace('NSN014-', '').lower()
+
+
+def cause_key(spec, origin, detail):
+    """The entry of the cause texts for an open check: origin with class first, then the class alone, then the origin."""
+    causes = spec['html']['causes']
+    code = str(detail).split(':')[0] if detail else None
+    for key in ((origin + ':' + code) if code else None, code, origin):
+        if key and key in causes:
+            return key
+    return 'UNKLAR'
+
+
+def cause_groups(spec, card):
+    """Open checks grouped by cause across the stages: ((origin, cause key), checks), in the fixed origin priority, then larger groups first."""
+    groups = {}
+    for check in card['checks']:
+        if check['status'] != 'PASSED':
+            origin = check['origin'] or 'UNKLAR'
+            groups.setdefault((origin, cause_key(spec, origin, check['detail'])), []).append(check)
+    priority, stages = spec['html']['origin_priority'], spec['stage_order']
+    return sorted(groups.items(), key=lambda item: (priority.index(item[0][0]) if item[0][0] in priority else len(priority), -len(item[1]),
+                                                     stages.index(item[1][0]['stage'])))
+
+
+def where(spec, checks):
+    """(stage, stage label with the positions of the checks) in stage order."""
+    places = {}
+    for check in checks:
+        places.setdefault(check['stage'], []).append(check['position'])
+    ordered = sorted(places.items(), key=lambda item: spec['stage_order'].index(item[0]))
+    return [(stage, spec['stage_labels'][stage] + (' ' + ', '.join(p for p in positions if p) if any(positions) else '')) for stage, positions in ordered]
+
+
+def summary_items(spec, card):
+    """The critical, important and good points of the run by fixed rules, critical first: [(level, text)]."""
+    texts, causes, counts, checks = spec['html']['summary'], spec['html']['causes'], card['counts'], card['checks']
+    critical, important, good = [], [], []
+    failed = [c for c in checks if c['status'] == 'FAILED']
+    if failed:
+        critical.append(texts['critical_failed'].format(count=_count(spec, 'check', len(failed)), checks=', '.join(check_label(spec, c) for c in failed)))
+    invalid = [s['label'] for s in card['stages'] if s['counts']['INVALID']]
+    if invalid:
+        critical.append(texts['critical_invalid'].format(stages=', '.join(invalid)))
+    suite = [c for c in checks if c['status'] != 'PASSED' and c['origin'] == 'SUITE']
+    if suite:
+        names = ', '.join(dict.fromkeys(causes[cause_key(spec, 'SUITE', c['detail'])]['name'] for c in suite))
+        critical.append(texts['critical_suite'].format(count=_count(spec, 'check', len(suite)), where='; '.join(t for _, t in where(spec, suite)), causes=names))
+    provider = [c for c in checks if c['status'] != 'PASSED' and c['origin'] == 'PROVIDER']
+    if provider:
+        critical.append(texts['critical_provider'].format(count=_count(spec, 'check', len(provider))))
+    if counts['NOT_RUN']:
+        critical.append(texts['critical_not_run'].format(count=_count(spec, 'check', counts['NOT_RUN']),
+                                                         stages=', '.join(s['label'] for s in card['stages'] if s['counts']['NOT_RUN'])))
+    soft = [(key, group) for key, group in cause_groups(spec, card) if key[0] in SOFT_ORIGINS]
+    if soft:
+        (origin, key), group = max(soft, key=lambda item: len(item[1]))  # among equal sizes the first in the fixed order
+        important.append(texts['important_cause'].format(count=_count(spec, 'check', len(group)), cause=causes[key]['name'],
+                                                         origin=spec['html']['origin_short'].get(origin, origin)))
+    unsaved = (card['operating']['saves'] or {}).get('NOT_SAVED_AFTER_ENTRY')
+    if unsaved:
+        important.append(texts['important_saves'].format(tasks=_count(spec, 'task', unsaved), rate=_n(card['rates']['save_rate_percent'], ' %')))
+    over = [s['label'] for s in card['stages'] if (s.get('time') or {}).get('over_time_mark')]
+    if over:
+        important.append(texts['important_marks'].format(count=len(over), stages=len(card['stages']), labels=', '.join(over)))
+    if not failed:
+        decided = counts['PASSED'] + counts['FAILED']
+        good.append(texts['good_no_deviation'].format(decided=decided) if decided else texts['good_no_deviation_none'])
+    full = [s['label'] for s in card['stages'] if stage_state(s) == 'PASSED']
+    if full:
+        good.append(texts['good_stages'].format(stages=', '.join(full)))
+    note = texts['kind_note'].get(card['run'].get('kind', 'BENCHMARK'))
+    items = ([('critical', t) for t in critical] + [('important', t) for t in important] + [('good', t) for t in good])
+    return items[:texts['limit'] - (1 if note else 0)] + ([('note', note)] if note else [])
+
+
+def _task_name(spec, check, task, several):
+    kind = spec['html']['details']['kind_labels'].get(task.get('kind'), task.get('kind')) if several and task.get('kind') else None
+    return ' '.join(x for x in (check['position'], kind) if x)
+
+
+def _rejections(spec, tasks, limit=3):
+    """Rejected actions as plain text with their count: Klick „label“ (reason)."""
+    d = spec['html']['details']
+    counted = {}
+    for task in tasks:
+        for item in task['rejected']:
+            text = d['action_labels'].get(item['action'], item['action'] or '?')
+            if item['label']:
+                text += f' „{item["label"]}“'
+            reason = d['rejection_reasons'].get(item['reason']) or d['rejection_labels'].get(item['code'], item['code'])
+            text += f' ({reason})' if reason else ''
+            counted[text] = counted.get(text, 0) + 1
+    parts = [(f'{n}× ' if n > 1 else '') + text for text, n in counted.items()]
+    return '; '.join(parts[:limit]) + (' …' if len(parts) > limit else '')
+
+
+def _seconds(seconds):
+    return '—' if seconds is None else f'{seconds} Sek.' if seconds < 60 else _duration(seconds)
+
+
+def stage_criteria(spec, card, stage):
+    """Criteria lines of one stage: (state, label, text) with state True, False, 'warn' or None (only shown).
+
+    A passed check counts as fulfilled in every criterion: the independent Oracle confirmed its values in BLE, even where the harness saw a
+    pre-filled field or no click on Speichern (live rehearsal lauf-09, Kornform P09 and P10)."""
+    d = spec['html']['details']
+    labels = d['criteria']
+    checks = [c for c in card['checks'] if c['stage'] == stage['stage']]
+    tasks = [(c, t) for c in checks for t in (c.get('criteria') or {}).get('tasks', [])]
+    several = len({t.get('kind') for _, t in tasks}) > 1
+    lines = []
+
+    def add(label, items, note=None, open_text='open'):
+        done = sum(1 for _, ok, _ in items if ok)
+        text = d['of'].format(n=done, total=len(items))
+        bad = [name + (f' ({why})' if why else '') for name, ok, why in items if not ok and name]
+        if bad:
+            text += ' · ' + d[open_text].format(items=', '.join(dict.fromkeys(bad)))
+        elif done < len(items):
+            text += ' · ' + '; '.join(dict.fromkeys(why for _, ok, why in items if not ok and why))
+        lines.append((done == len(items), label, text + (f' · {note}' if note else '')))
+
+    def judged(c, ok, why):
+        return (True, None) if c['status'] == 'PASSED' else (ok, None if ok else why)
+
+    finished = [(_task_name(spec, c, t, several),) + judged(c, t['finished'] == 'DONE', d['finished_labels'].get(t['finished'], t['finished']))
+                for c, t in tasks if t['finished']]
+    if finished:
+        add(labels['finished'], finished)
+    reached = [(_task_name(spec, c, t, several),) + judged(c, t['reached'], None) for c, t in tasks if t['reached'] is not None]
+    if reached:
+        add(labels['reached'], reached)
+    entered = [(_task_name(spec, c, t, several),) + judged(c, t['entered'][0] >= t['entered'][1], f'{t["entered"][0]} von {t["entered"][1]}')
+               for c, t in tasks if t['entered']]
+    if entered:
+        add(labels['entered'], entered)
+    values = [(c['position'] or '', (c.get('criteria') or {}).get('values') == 'MATCH', None) for c in checks if (c.get('criteria') or {}).get('values')]
+    if values:
+        expected = any((c.get('criteria') or {}).get('values') == 'MISMATCH' and c['status'] != 'FAILED' for c in checks)
+        add(labels['values'], values, d['mismatch_note'] if expected else None, 'deviating')
+    saves = [(_task_name(spec, c, t, several),) + judged(c, t['saved'] == 'SAVED', spec['save_labels'].get(t['saved'], t['saved']))
+             for c, t in tasks if t['saved'] in SAVE_OUTCOMES]
+    if saves:
+        add(labels['saved'], saves)
+    if tasks:
+        count = sum(len(t['rejected']) for _, t in tasks)
+        lines.append((None, labels['rejected'], f'{count}: ' + _rejections(spec, [t for _, t in tasks]) if count else d['none']))
+    time = stage.get('time')
+    if time:
+        for key, actual, mark, over in (('time', _seconds(time['seconds']), _seconds(time['mark_seconds']), time['over_time_mark']),
+                                        ('actions', _n(time['actions']), _n(time['mark_actions']), time['over_action_mark'])):
+            state = d['mark_states']['over' if over else 'within']
+            lines.append(('warn' if over else None, labels[key], d['mark'].format(actual=actual, mark=mark, state=state)))
+    return lines
+
+
+def stage_fazit(spec, card, stage):
+    """One fixed sentence per stage from its checks and its time."""
+    d, causes = spec['html']['details'], spec['html']['causes']
+    checks = [c for c in card['checks'] if c['stage'] == stage['stage']]
+    open_ = [c for c in checks if c['status'] != 'PASSED']
+    if not open_:
+        text = d['fazit_all'].format(checks=len(checks)) if len(checks) > 1 else d['fazit_all_single']
+    else:
+        counted = {}
+        for check in open_:
+            key = cause_key(spec, check['origin'] or 'UNKLAR', check['detail'])
+            counted[key] = counted.get(key, 0) + 1
+        cause = causes[max(counted, key=counted.get)]['name']
+        positions = ', '.join(c['position'] for c in open_ if c['position'])
+        text = (d['fazit_open'].format(passed=stage['counts']['PASSED'], checks=len(checks), positions=positions, cause=cause) if positions
+                else d['fazit_open_single'].format(cause=cause))
+    failed = stage['counts']['FAILED']
+    text += d['fazit_failed'].format(count=_count(spec, 'check', failed)) if failed else d['fazit_no_deviation']
+    if (stage.get('time') or {}).get('over_time_mark'):
+        text += d['fazit_over_mark']
+    return text
+
+
+def check_lines(spec, card, stage):
+    """(state, text, detail lines) per not passed check of a stage, after one line with the passed ones."""
+    d, causes = spec['html']['details'], spec['html']['causes']
+    checks = [c for c in card['checks'] if c['stage'] == stage['stage']]
+    passed = [c for c in checks if c['status'] == 'PASSED']
+    several = len({t.get('kind') for c in checks for t in (c.get('criteria') or {}).get('tasks', [])}) > 1
+    lines = []
+    if passed:
+        positions = ', '.join(c['position'] for c in passed if c['position'])
+        lines.append((True, d['passed'].format(positions=positions) if positions else d['passed_single'], []))
+    for check in checks:
+        if check['status'] == 'PASSED':
+            continue
+        origin = check['origin'] or 'UNKLAR'
+        text = d['check'].format(position=check['position'] or d['single_task'], status=spec['status_labels'][check['status']],
+                                 origin=spec['html']['origin_short'].get(origin, origin), cause=causes[cause_key(spec, origin, check['detail'])]['name'])
+        details = []
+        for task in (check.get('criteria') or {}).get('tasks', []):
+            parts = []
+            if task['entered']:
+                parts.append(d['entered'].format(done=task['entered'][0], required=task['entered'][1]))
+            if task['saved'] in SAVE_OUTCOMES:
+                parts.append(spec['save_labels'].get(task['saved'], task['saved']))
+            if task['finished']:
+                parts.append(d['finished_labels'].get(task['finished'], task['finished']))
+            if task['actions'] is not None:
+                parts.append(d['effort'].format(actions=task['actions'], scrolls=_n(task['scrolls'])))
+            if task['rejected']:
+                parts.append(d['rejected'].format(items=_rejections(spec, [task])))
+            kind = d['kind_labels'].get(task.get('kind'), task.get('kind')) if several and task.get('kind') else None
+            details.append((kind + ': ' if kind else '') + ' · '.join(parts))
+        lines.append((False if check['status'] in ('FAILED', 'NOT_DECIDED', 'INVALID') else None, text, details))
+    return lines
+
+
+def _option(option):
+    return (option, None) if isinstance(option, str) else (option.get('label'), option.get('effect'))
+
+
 # ---- the report of one run ------------------------------------------------------------------------------------------------------------------
 
 def render_report(card, *, spec=None, previous=None, decisions=None, gates=None, links=None):
@@ -239,6 +464,14 @@ def render_report(card, *, spec=None, previous=None, decisions=None, gates=None,
                 f'<td align="right" style="{FONT}font-size:14px;font-weight:700;color:{color};">{_n(points["points"])} von {_n(points["max_points"])} Punkten'
                 f' · {_n(card["rates"]["points_percent"], " %")}</td></tr></table>'
                 f'<div style="{FONT}font-size:14px;color:#344054;margin-top:8px;line-height:1.45;">{_e(sentence)}</div></td></tr></table></td></tr>')
+    # the most important points
+    levels = h['summary']['levels']
+    body = ''.join(f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid #f2f4f7;"><tr>'
+                   f'<td valign="top" width="84" style="{FONT}padding:7px 8px 7px 0;"><span style="display:inline-block;padding:2px 7px;border-radius:4px;'
+                   f'background:{LEVEL_COLORS[level]};color:#ffffff;font-size:11px;font-weight:700;">{_e(levels[level])}</span></td>'
+                   f'<td style="{FONT}font-size:14px;color:#101828;padding:7px 0;line-height:1.45;">{_e(text)}</td></tr></table>'
+                   for level, text in summary_items(spec, card))
+    rows.append(_card(titles['summary'], body))
     # stages
     body = []
     for stage in card['stages']:
@@ -249,7 +482,8 @@ def render_report(card, *, spec=None, previous=None, decisions=None, gates=None,
         if open_:
             detail += ' · offen: ' + ', '.join(f'{n} {h["origin_short"].get(o, o)}' for o, n in open_)
         body.append(f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px 0;"><tr>'
-                    f'<td style="{FONT}font-size:14px;font-weight:700;color:#101828;padding-bottom:6px;">{_e(stage["label"])}</td>'
+                    f'<td style="{FONT}font-size:14px;font-weight:700;color:#101828;padding-bottom:6px;"><a href="#{anchor(stage["stage"])}" '
+                    f'style="color:#101828;text-decoration:none;">{_e(stage["label"])}</a></td>'
                     f'<td align="right" style="{FONT}font-size:13px;font-weight:700;color:{STAGE_STATE_COLORS[state]};padding-bottom:6px;">'
                     f'{_e(h["stage_states"][state])}</td></tr><tr><td colspan="2">{_segments([STATUS_COLORS[c["status"]] for c in checks])}</td></tr>'
                     f'<tr><td colspan="2" style="{FONT}font-size:12px;color:#667085;padding-top:5px;">{_e(detail)}</td></tr></table>')
@@ -272,16 +506,19 @@ def render_report(card, *, spec=None, previous=None, decisions=None, gates=None,
                 f'<div style="{FONT}font-size:12px;color:#667085;margin-top:10px;">{_e(note)} Punkte: {_n(comparison["points_a"])} → '
                 f'{_n(comparison["points_b"])}.</div>')
     rows.append(_card(titles['changes'], body))
-    # open points by cause
+    # open points by cause, in plain language
     items = []
-    for (origin, stage), checks in open_groups(spec, card):
-        positions = ', '.join(c['position'] for c in checks if c['position'])
-        details = ', '.join(dict.fromkeys(str(c['detail']) for c in checks if c['detail']))
-        count = f'{len(checks)} Prüfpunkt' + ('e' if len(checks) != 1 else '')
-        sub = ' · '.join(x for x in (positions, details) if x)
-        items.append(f'<tr><td valign="top" width="104" style="padding:8px 10px 8px 0;border-bottom:1px solid #f2f4f7;">{_badge(origin, spec)}</td>'
-                     f'<td style="{FONT}padding:8px 0;border-bottom:1px solid #f2f4f7;"><div style="font-size:14px;font-weight:700;color:#101828;">'
-                     f'{_e(count)} · {_e(spec["stage_labels"][stage])}</div><div style="font-size:12px;color:#667085;margin-top:2px;">{_e(sub)}</div></td></tr>')
+    for (origin, key), checks in cause_groups(spec, card):
+        info = h['causes'][key]
+        places = ' · '.join(f'<a href="#{anchor(stage)}" style="color:#1f7a6d;">{_e(text)}</a>' for stage, text in where(spec, checks))
+        codes = ', '.join(dict.fromkeys(str(c['detail']) for c in checks if c['detail']))
+        explained = ''.join(f'<div style="font-size:13px;color:#344054;margin-top:3px;line-height:1.4;"><span style="font-weight:700;">{_e(h["cause_lines"][part])}:</span> '
+                            f'{_e(info[part])}</div>' for part in ('meaning', 'if_kept', 'benefit'))
+        code = f'<div style="font-size:11px;color:#98a2b3;margin-top:3px;">{_e(h["cause_code"])}: {_e(codes)}</div>' if codes else ''
+        items.append(f'<tr><td valign="top" width="104" style="padding:10px 10px 10px 0;border-bottom:1px solid #f2f4f7;">{_badge(origin, spec)}</td>'
+                     f'<td style="{FONT}padding:10px 0;border-bottom:1px solid #f2f4f7;"><div style="font-size:14px;font-weight:700;color:#101828;">'
+                     f'{_e(_count(spec, "check", len(checks)))} · {_e(info["name"])}</div><div style="font-size:12px;margin-top:2px;">{places}</div>'
+                     f'{explained}{code}</td></tr>')
     body = (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{"".join(items)}</table>' if items
             else f'<div style="{FONT}font-size:13px;color:#667085;">{_e(h["open_none"])}</div>')
     rows.append(_card(titles['open_points'], body))
@@ -297,15 +534,32 @@ def render_report(card, *, spec=None, previous=None, decisions=None, gates=None,
     body = ('<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
             + ''.join('<tr>' + ''.join(tiles[i:i + 2]) + '</tr>' for i in range(0, len(tiles), 2)) + '</table>')
     rows.append(_card(titles['operating'], body))
-    # decisions
-    open_decisions = [d for d in (decisions or []) if d.get('status') == 'OPEN']
-    if open_decisions:
-        body = ''.join(f'<div style="{FONT}padding:8px 0;border-bottom:1px solid #f2f4f7;"><div style="font-size:14px;font-weight:700;color:#101828;">'
-                       f'{_e(d["title"])}</div><div style="font-size:12px;color:#667085;margin-top:3px;">{_e(" · ".join(d.get("options", [])))}</div>'
-                       f'<div style="font-size:12px;color:#1f7a6d;margin-top:3px;">{_e(h["decisions_next"] + d.get("next_step", "—"))}</div></div>'
-                       for d in open_decisions)
-    else:
-        body = f'<div style="{FONT}font-size:13px;color:#667085;">{_e(h["decisions_none"])}</div>'
+    # decisions: question, background, options with their effect, recommendation and how to answer
+    texts = h['decision_texts']
+    open_decisions = sorted((d for d in (decisions or []) if d.get('status') == 'OPEN'), key=lambda d: d.get('priority', 9))
+    blocks = []
+    for d in open_decisions:
+        now = d.get('priority', 9) == 1
+        tag = (f' <span style="display:inline-block;padding:1px 6px;border-radius:4px;background:{"#b54708" if now else "#eaecf0"};'
+               f'color:{"#ffffff" if now else "#475467"};font-size:11px;font-weight:700;">{_e(texts["now"] if now else texts["later"])}</span>')
+        part = [f'<div style="font-size:14px;font-weight:700;color:#101828;">{_e(d.get("question") or d["title"])}{tag}</div>']
+        if d.get('context'):
+            part.append(f'<div style="font-size:12px;color:#667085;margin-top:3px;line-height:1.4;">{_e(texts["context"])}: {_e(d["context"])}</div>')
+        options = [_option(o) for o in d.get('options', [])]
+        if options and (now or not d.get('recommendation')):
+            part.append(''.join(f'<div style="font-size:13px;color:#344054;margin-top:3px;line-height:1.4;">&#8226; <span style="font-weight:700;">{_e(label)}</span>'
+                                + (f': {_e(effect)}' if effect else '') + '</div>' for label, effect in options))
+        elif options:
+            part.append(f'<div style="font-size:12px;color:#667085;margin-top:3px;">{_e(" · ".join(label for label, _ in options))}</div>')
+        if d.get('recommendation'):
+            part.append(f'<div style="font-size:13px;color:#1f7a6d;margin-top:4px;line-height:1.4;"><span style="font-weight:700;">{_e(texts["recommendation"])}:</span> '
+                        f'{_e(d["recommendation"])}</div>')
+        if d.get('answer'):
+            part.append(f'<div style="font-size:12px;color:#475467;margin-top:3px;">{_e(texts["answer"])}: {_e(d["answer"])}</div>')
+        elif d.get('next_step'):
+            part.append(f'<div style="font-size:12px;color:#1f7a6d;margin-top:3px;">{_e(h["decisions_next"] + d["next_step"])}</div>')
+        blocks.append(f'<div style="{FONT}padding:9px 0;border-bottom:1px solid #f2f4f7;">{"".join(part)}</div>')
+    body = ''.join(blocks) or f'<div style="{FONT}font-size:13px;color:#667085;">{_e(h["decisions_none"])}</div>'
     rows.append(_card(titles['decisions'], body))
     # checklist
     items = checklist(spec, card, comparison=comparison, gates=gates)
@@ -325,6 +579,34 @@ def render_report(card, *, spec=None, previous=None, decisions=None, gates=None,
                    f'<td style="{FONT}font-size:14px;color:#101828;padding:4px 0;line-height:1.45;">{_e(text)}</td></tr></table>'
                    for index, text in enumerate(steps, 1)) or f'<div style="{FONT}font-size:13px;color:#667085;">—</div>'
     rows.append(_card(titles['next_steps'], body))
+    # every check per stage: what was tested, the criteria, the checks, a fixed conclusion
+    details = h['details']
+    blocks = []
+    for stage in card['stages']:
+        state = stage_state(stage)
+        lines = stage_criteria(spec, card, stage) if state != 'PASSED' else [l for l in stage_criteria(spec, card, stage) if l[1] in (details['criteria']['time'], details['criteria']['actions'])]
+        criteria = ''.join(f'<tr><td valign="top" width="18" style="{FONT}font-size:13px;font-weight:700;color:{MARKS[mark][1]};padding:2px 0;">{MARKS[mark][0]}</td>'
+                           f'<td valign="top" width="200" style="{FONT}font-size:12px;color:#475467;padding:2px 8px 2px 0;">{_e(label)}</td>'
+                           f'<td style="{FONT}font-size:12px;color:#101828;padding:2px 0;line-height:1.4;">{_e(text)}</td></tr>' for mark, label, text in lines)
+        listed = ''.join(f'<tr><td valign="top" width="18" style="{FONT}font-size:13px;font-weight:700;color:{MARKS[mark][1]};padding:3px 0;">{MARKS[mark][0]}</td>'
+                         f'<td colspan="2" style="{FONT}font-size:12px;color:#101828;padding:3px 0;line-height:1.4;">{_e(text)}'
+                         + ''.join(f'<div style="color:#667085;margin-top:1px;">{_e(sub)}</div>' for sub in subs if sub) + '</td></tr>'
+                         for mark, text, subs in check_lines(spec, card, stage))
+        blocks.append(f'<a id="{anchor(stage["stage"])}" name="{anchor(stage["stage"])}"></a>'
+                      f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid #eaecf0;margin-bottom:12px;"><tr>'
+                      f'<td style="{FONT}font-size:14px;font-weight:700;color:#101828;padding-bottom:3px;">{_e(stage["label"])}</td>'
+                      f'<td align="right" style="{FONT}font-size:13px;font-weight:700;color:{STAGE_STATE_COLORS[state]};padding-bottom:3px;">'
+                      f'{_e(h["stage_states"][state])} · {_e(h["stage_line"].format(passed=stage["counts"]["PASSED"], checks=stage["checks"]))}</td></tr>'
+                      f'<tr><td colspan="2" style="{FONT}font-size:12px;color:#667085;padding-bottom:6px;line-height:1.4;">{_e(details["test_label"])}: '
+                      f'{_e(details["tests"][stage["stage"]])}</td></tr><tr><td colspan="2"><table role="presentation" width="100%" cellpadding="0" '
+                      f'cellspacing="0">{criteria}{listed}</table></td></tr><tr><td colspan="2" style="{FONT}font-size:12px;font-weight:700;color:#344054;'
+                      f'padding:6px 0 10px 0;">{_e(stage_fazit(spec, card, stage))}</td></tr></table>')
+    blocks.append(f'<div style="{FONT}font-size:11px;color:#98a2b3;">{_e(details["marks_note"])}</div>')
+    rows.append(_card(titles['details'], ''.join(blocks), titles['details_hint']))
+    # glossary
+    body = ''.join(f'<tr><td valign="top" width="120" style="{FONT}font-size:13px;font-weight:700;color:#101828;padding:5px 10px 5px 0;">{_e(term)}</td>'
+                   f'<td style="{FONT}font-size:12px;color:#475467;padding:5px 0;line-height:1.4;">{_e(text)}</td></tr>' for term, text in h['glossary'])
+    rows.append(_card(titles['glossary'], f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{body}</table>'))
     # links and footer
     button = (f'<a href="{_e(links["details"])}" style="{FONT}display:inline-block;background:#1f7a6d;color:#ffffff;font-size:14px;font-weight:700;'
               f'text-decoration:none;padding:11px 20px;border-radius:6px;">{_e(h["links"]["details"])} &#8599;</a>') if links.get('details') else ''

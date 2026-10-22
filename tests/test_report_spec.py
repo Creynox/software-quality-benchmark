@@ -14,7 +14,8 @@ GOLDEN = Path(__file__).parent / 'golden' / ('nsn014-punktebericht-%s.md' % modu
 # The definition may only change together with a new version: an edit of the specification file without a new entry here fails.
 PINNED_SPEC_SHA256 = {'1.0.0': '9adbd93d93c2404965fe27c5525a6a1c835e4b7b8a3e7cfaabb02549a7987f3d',
                       '1.1.0': '7419a3d08b743a0707d20b4f671d7fc1733c38e0ca363256f42443ac77ca9291',
-                      '1.2.0': 'b1496795f0022867198426769e0a9112c303b364e6d6780c30fb7f88280d5a4e'}
+                      '1.2.0': 'b1496795f0022867198426769e0a9112c303b364e6d6780c30fb7f88280d5a4e',
+                      '1.3.0': 'd2b2b7608a61833a9dc77aceb1c176a7ca6733bccf97ded5951d5b7345931c6b'}
 
 
 def manifest(**extra):
@@ -55,6 +56,34 @@ def review(verdict='PASS', scores=(3, 4, 5, None), findings=()):
 
 def build(m=None, records=None, rows=(), reviews=()):
     return module.build_scorecard(m or manifest(), records if records is not None else every_stage(), list(rows), list(reviews))
+
+
+def criteria_records():
+    """Every stage passed except SIEVE P02 (blocked after a rejected entry, Oracle deviation) and RECEIPT (data right, model gave up)."""
+    records = every_stage()
+    by_stage = {r['case_id']: r for r in records}
+    receipt = by_stage['NSN014-RECEIPT']
+    receipt.update(result='INCONCLUSIVE', reason='EXECUTOR_REPORTED_BLOCKED', status='BLOCKED', effort=effort(rejected=1),
+                   rejected_actions=[{'error_code': 'INSPECTION_ACTION_SCOPE_DENIED', 'action': 'click', 'target': {'label': 'Plan öffnen'}}],
+                   oracle={'status': 'PASS', 'sample_count': 10})
+    sieve = by_stage['NSN014-SIEVE']
+    sieve['result'] = 'INCONCLUSIVE'
+    sieve['position_results'][1].update(result='INCOMPLETE', **{'class': 'EXECUTOR_REPORTED_BLOCKED'})
+    sieve['positions'] = [
+        {'position_id': 'P01', 'kind': 'sieve', 'status': 'DONE', 'module_reached': True, 'fields_required': 2, 'fields_entered': 1,
+         'save_status': 'NOT_SAVED_PARTIAL_ENTRY', 'effort': effort(), 'rejected_actions': []},
+        {'position_id': 'P02', 'kind': 'sieve', 'status': 'BLOCKED', 'module_reached': True, 'fields_required': 4, 'fields_entered': 2,
+         'save_status': 'NOT_SAVED_PARTIAL_ENTRY', 'effort': effort(rejected=1),
+         'rejected_actions': [{'error_code': 'MEASUREMENT_ACTION_SCOPE_DENIED', 'action': 'type', 'target': {'label': 'Rückstand 2 mm'},
+                               'detail': {'reason': 'NO_APPROVED_FIELD_FOCUSED', 'typed_chars': 3}}]}]
+    sieve['oracle'] = {'status': 'FAIL', 'components': [{'status': 'FAIL', 'checks': 20, 'mismatches': [{'position_id': 'P02', 'kind': 'sieves'}]}]}
+    return records
+
+
+def accounting_with_sieve_task():
+    base = manifest()['accounting']
+    return dict(base, tasks=[{'case_id': 'NSN014-SIEVE', 'elapsed_seconds': 700.4, 'actions': 70, 'observation_marks': {'seconds': 600, 'actions': 60},
+                              'time_mark_exceeded': True, 'action_mark_exceeded': True}])
 
 
 class ReportSpecTests(unittest.TestCase):
@@ -115,7 +144,8 @@ class ReportSpecTests(unittest.TestCase):
         self.assertEqual(checks['NSN014-PREPARATION/P04']['origin'], 'PROVIDER')
         self.assertEqual(checks['NSN014-PREPARATION/P05']['origin'], 'VORSTUFE')
         self.assertEqual(checks['NSN014-PREPARATION/P06']['origin'], 'UNKLAR')
-        self.assertEqual(checks['NSN014-PREPARATION/P07'], {'id': 'NSN014-PREPARATION/P07', 'stage': 'NSN014-PREPARATION', 'position': 'P07', 'status': 'NOT_DECIDED', 'origin': 'UNKLAR', 'detail': None})
+        self.assertEqual(checks['NSN014-PREPARATION/P07'], {'id': 'NSN014-PREPARATION/P07', 'stage': 'NSN014-PREPARATION', 'position': 'P07', 'status': 'NOT_DECIDED', 'origin': 'UNKLAR', 'detail': None,
+                                                            'criteria': {'tasks': [], 'values': None}})
         self.assertEqual({checks['NSN014-SIEVE/P%02d' % i]['status'] for i in range(1, 11)}, {'INVALID'})
         self.assertEqual(checks['NSN014-SIEVE/P01']['origin'], 'UNGUELTIG')
         self.assertEqual((checks['NSN014-SHAPE/P01']['status'], checks['NSN014-SHAPE/P01']['origin']), ('NOT_DECIDED', 'PROVIDER'))
@@ -124,6 +154,29 @@ class ReportSpecTests(unittest.TestCase):
         self.assertEqual(card['points']['points'], 2)
         self.assertEqual(sum(card['counts'][s] for s in module.load_spec()['status_order']), 46)
         self.assertEqual(sum(card['origins'].values()), 46 - card['counts']['PASSED'])
+
+    def test_criteria_and_stage_time_come_only_from_recorded_tasks_the_oracle_and_the_accounting(self):
+        records = criteria_records()
+        card = build(manifest(accounting=accounting_with_sieve_task()), records)
+        checks = {c['id']: c for c in card['checks']}
+        passed, open_ = checks['NSN014-SIEVE/P01']['criteria'], checks['NSN014-SIEVE/P02']['criteria']
+        self.assertEqual(passed['values'], 'MATCH', 'a passed check has matching values by definition')
+        self.assertEqual(passed['tasks'][0]['entered'], [1, 2])
+        self.assertEqual(open_['values'], 'MISMATCH', 'the Oracle lists P02 with a deviation')
+        self.assertEqual(open_['tasks'], [{'kind': 'sieve', 'finished': 'BLOCKED', 'reached': True, 'entered': [2, 4], 'saved': 'NOT_SAVED_PARTIAL_ENTRY',
+                                           'actions': 10, 'scrolls': 2, 'scrolls_after_last_entry': 1,
+                                           'rejected': [{'code': 'MEASUREMENT_ACTION_SCOPE_DENIED', 'action': 'type', 'label': 'Rückstand 2 mm',
+                                                         'reason': 'NO_APPROVED_FIELD_FOCUSED'}]}])
+        self.assertNotIn('typed', json.dumps(card['checks']), 'never a typed text or its length')
+        self.assertEqual(checks['NSN014-SIEVE/P03']['criteria'], {'tasks': [], 'values': 'MATCH'})
+        receipt = checks['NSN014-RECEIPT']['criteria']
+        self.assertEqual((receipt['values'], receipt['tasks'][0]['finished']), ('MATCH', 'BLOCKED'), 'right data, but the model gave up')
+        self.assertEqual(checks['NSN014-PLAN']['criteria'], {'tasks': [], 'values': 'MATCH'}, 'passed without recorded tasks')
+        times = {s['stage']: s['time'] for s in card['stages']}
+        self.assertEqual(times['NSN014-SIEVE'], {'seconds': 700, 'actions': 70, 'mark_seconds': 600, 'mark_actions': 60, 'over_time_mark': True,
+                                                 'over_action_mark': True})
+        self.assertIsNone(times['NSN014-PLAN'], 'not recorded is not zero')
+        self.assertEqual(card['points']['points'], 44, 'criteria never change a point: only RECEIPT and SIEVE P02 are open')
 
     def test_a_blocked_stage_names_its_reason_as_critical_stop_and_a_suite_oracle_fault_is_attributed_to_the_suite(self):
         # Live run 824fa661: the report stage was blocked by the calculation oracle (REPORT_ORACLE_UNAVAILABLE), RIGHTS was not run.

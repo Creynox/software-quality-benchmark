@@ -67,6 +67,11 @@ def validate_spec(spec):
         problems.append('SECTION_IDS_NOT_CONSECUTIVE')
     if len({check_id(*c) for c in catalogue(spec)}) != len(catalogue(spec)):
         problems.append('DUPLICATE_CHECK_ID')
+    html_texts = spec.get('html', {})
+    if any(origin not in html_texts.get('causes', {}) for origin in spec['origin_order']):
+        problems.append('CAUSE_TEXT_MISSING_FOR_AN_ORIGIN')
+    if set(html_texts.get('details', {}).get('tests', {})) != set(stages):
+        problems.append('STAGE_TEST_TEXT_DOES_NOT_MATCH_STAGE_ORDER')
     return problems
 
 
@@ -97,6 +102,74 @@ def _undecided_origin(spec, reason, rejected=0):
     if name in spec['stage_reason_origin']:
         return spec['stage_reason_origin'][name]
     return _origin_code(cause_source('INCOMPLETE', reason, rejected))
+
+
+def _rejected(items):
+    """Code, action, target label and reason of every rejected action of a task; never a typed text."""
+    found = []
+    for item in items or []:
+        if isinstance(item, dict):
+            target = item['target'] if isinstance(item.get('target'), dict) else {}
+            detail = item['detail'] if isinstance(item.get('detail'), dict) else {}
+            found.append({'code': item.get('error_code'), 'action': item.get('action'), 'label': target.get('label') or None, 'reason': detail.get('reason')})
+    return found
+
+
+def _task(item):
+    """How one recorded task of a check went, as recorded facts (spec criteria_rules.tasks)."""
+    effort = item['effort'] if isinstance(item.get('effort'), dict) else {}
+    required = item.get('fields_required')
+    reached = item.get('module_reached')
+    return {'kind': item.get('kind'), 'finished': item.get('status'), 'reached': reached if isinstance(reached, bool) else None,
+            'entered': [item.get('fields_entered') or 0, required] if type(required) is int else None, 'saved': item.get('save_status'),
+            'actions': effort.get('actions'), 'scrolls': effort.get('scrolls'), 'scrolls_after_last_entry': effort.get('scrolls_after_last_entry'),
+            'rejected': _rejected(item.get('rejected_actions'))}
+
+
+def _deviating_positions(oracle):
+    """Positions the independent Oracle of a stage lists with a deviation (mismatch, missing, failed report)."""
+    found = set()
+    for part in [oracle] + [c for c in oracle.get('components', []) or [] if isinstance(c, dict)]:
+        for key in ('mismatches', 'failures'):
+            found |= {e['position_id'] for e in part.get(key, []) or [] if isinstance(e, dict) and isinstance(e.get('position_id'), str)}
+        for key in ('mismatched_positions', 'missing_positions'):
+            found |= {p for p in part.get(key, []) or [] if isinstance(p, str)}
+        found |= {e['position_id'] for e in part.get('positions', []) or [] if isinstance(e, dict) and isinstance(e.get('position_id'), str)
+                  and (e.get('pdf_status') not in (None, 'PASS') or e.get('relations_valid') is False)}
+    return found
+
+
+def _criteria(record, position, status):
+    """The criteria of one check (spec criteria_rules): the recorded tasks and whether the independent Oracle found the values right."""
+    if record is None:
+        return {'tasks': [], 'values': None}
+    if position is None:
+        items = [record] if any(key in record for key in ('status', 'effort', 'rejected_actions')) else []
+    else:
+        items = [p for p in record.get('positions', []) or [] if isinstance(p, dict) and p.get('position_id') == position]
+    oracle = record['oracle'] if isinstance(record.get('oracle'), dict) else None
+    if status == 'PASSED':
+        values = 'MATCH'
+    elif oracle is None:
+        values = None
+    elif position is None:
+        values = {'PASS': 'MATCH', 'FAIL': 'MISMATCH'}.get(oracle.get('status'))
+    else:
+        values = 'MISMATCH' if position in _deviating_positions(oracle) else 'MATCH'
+    return {'tasks': [_task(item) for item in items], 'values': values}
+
+
+def _stage_time(manifest, stage):
+    """Seconds and actions of a stage from the run accounting with the observation marks of the suite; None if not recorded."""
+    tasks = (manifest.get('accounting') or {}).get('tasks') or []
+    task = next((t for t in tasks if isinstance(t, dict) and t.get('case_id') == stage), None)
+    if task is None:
+        return None
+    marks = task['observation_marks'] if isinstance(task.get('observation_marks'), dict) else {}
+    seconds = task.get('elapsed_seconds')
+    return {'seconds': None if seconds is None else int(Decimal(str(seconds)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)),
+            'actions': task.get('actions'), 'mark_seconds': marks.get('seconds'), 'mark_actions': marks.get('actions'),
+            'over_time_mark': task.get('time_mark_exceeded'), 'over_action_mark': task.get('action_mark_exceeded')}
 
 
 def _checks(spec, records, rows):
@@ -155,7 +228,8 @@ def _checks(spec, records, rows):
                     detail = item.get('class')
                     row = by_position.get((stage.replace('NSN014-', ''), position))
                     origin = _origin_code(row['origin']) if row else _origin_code(cause_source('INCOMPLETE', detail))
-        checks.append({'id': check_id(stage, position), 'stage': stage, 'position': position, 'status': status, 'origin': origin, 'detail': detail})
+        checks.append({'id': check_id(stage, position), 'stage': stage, 'position': position, 'status': status, 'origin': origin, 'detail': detail,
+                       'criteria': _criteria(record, position, status)})
     for stage, record in known.items():
         found = [p.get('position_id') for p in record.get('position_results', []) if isinstance(p, dict)]
         listed = spec['check_catalogue']['positions'].get(stage, [])
@@ -289,7 +363,8 @@ def build_scorecard(manifest, records, rows, reviews, *, spec=None):
                   'pass_rate_of_decided_percent': _pct(counts['PASSED'], counts['PASSED'] + counts['FAILED']),
                   'save_rate_percent': operating['save_rate_percent']},
         'stages': [{'stage': stage, 'label': spec['stage_labels'][stage], 'stage_result': stage_results[stage],
-                    'points': by_stage[stage]['PASSED'], 'checks': sum(by_stage[stage].values()), 'counts': by_stage[stage]} for stage in spec['stage_order']],
+                    'points': by_stage[stage]['PASSED'], 'checks': sum(by_stage[stage].values()), 'counts': by_stage[stage],
+                    'time': _stage_time(manifest, stage)} for stage in spec['stage_order']],
         'checks': checks,
         'origins': origins,
         'operating': operating,

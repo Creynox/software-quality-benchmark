@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "suite_id": "ENZBERG-NSN018",
+  "version": "0.1",
+  "dataset_id": "enzberg-nsn018-original-v1",
+  "provider": "chatgpt_plan",
+  "automatic_retry": false,
+  "physical_operations": "simulated",
+  "real_delivery": false,
+  "reference": {
+    "plan": "NSN 018",
+    "sampling_date": "2026-06-05",
+    "authority": "Original plan Nr. 18, corrected by PO on 2026-10-14; historical DB mismatch retained separately",
+    "positions": [
+      "STS 0/45",
+      "BS wie in STS 0/45",
+      "BS abgemagert",
+      "Sp 2/8",
+      "Sp 8/16",
+      "Betonsplitt 2/8",
+      "Betonsplitt 8/16",
+      "Asphaltsplitt 2/16",
+      "Asphaltsplitt 16/32",
+      "KSM Abmagerung"
+    ]
+  },
+  "personas": {
+    "laboratory_lead": "Laborleiter",
+    "laboratory_staff": "Mitarbeiter",
+    "restricted_viewer": "Viewer",
+    "wpk_lead": "functional persona; exact security-role mapping pending",
+    "plant_lead": "functional persona; exact security-role mapping pending"
+  },
+  "cases": [
+    {
+      "case_id": "NSN018-PLAN",
+      "persona": "laboratory_lead",
+      "task": "Read the designated plan and confirm exactly the ten specified positions and sampling date.",
+      "oracle_contract": "Exact plan position/order/date projection; no mutation.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage plan",
+      "expected": "Approved NSN018-v1 dataset contract for plan",
+      "implementation": "pending",
+      "depends_on": [],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-RECEIPT",
+      "persona": "laboratory_staff",
+      "task": "Register the ten designated laboratory samples with unique codes and the fixed sampling date.",
+      "oracle_contract": "Exactly ten samples, owner/tenant/product links and standard snapshots; no duplicates.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage receipt",
+      "expected": "Approved NSN018-v1 dataset contract for receipt",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-PLAN"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-PREPARATION",
+      "persona": "laboratory_staff",
+      "task": "Document the approved simulated laboratory splits for each sample.",
+      "oracle_contract": "Exact split masses, units, sources and parent links; no invented physical performance.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage preparation",
+      "expected": "Approved NSN018-v1 dataset contract for preparation",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-RECEIPT"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-SIEVE",
+      "persona": "laboratory_staff",
+      "task": "Capture the approved original sieve measurements for each specified sample.",
+      "oracle_contract": "Persisted raw masses and independent recomputed sieve results, within approved rounding.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage sieve",
+      "expected": "Approved NSN018-v1 dataset contract for sieve",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-PREPARATION"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-SHAPE",
+      "persona": "laboratory_staff",
+      "task": "Capture the specified particle-shape measurements for the applicable samples.",
+      "oracle_contract": "Persisted total/poor-shaped masses and independently recomputed indices.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage shape",
+      "expected": "Approved NSN018-v1 dataset contract for shape",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-SIEVE"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-BOILING",
+      "persona": "laboratory_staff",
+      "task": "Capture the specified boiling/marl measurements for the applicable samples.",
+      "oracle_contract": "Persisted approved original masses and independent calculated results.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage boiling",
+      "expected": "Approved NSN018-v1 dataset contract for boiling",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-SHAPE"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-SE",
+      "persona": "laboratory_staff",
+      "task": "Capture the two specified STS sand-equivalent repetitions with approved units.",
+      "oracle_contract": "Both persisted repetitions and independently recomputed index/rounding.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage sand_equivalent",
+      "expected": "Approved NSN018-v1 dataset contract for sand_equivalent",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-BOILING"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-ASSESS",
+      "persona": "laboratory_lead",
+      "task": "Assess completeness and conformity; identify the reference deviations rather than approving everything.",
+      "oracle_contract": "Approved independent expectations and historical standard snapshot, no unsupported conformity claim.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage assessment",
+      "expected": "Approved NSN018-v1 dataset contract for assessment",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-SE"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-RELEASE",
+      "persona": "laboratory_lead",
+      "task": "Apply the approved release or hold decision and document the reason.",
+      "oracle_contract": "Exact decision, reason, actor and immutable history; no unjustified blanket release.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage release",
+      "expected": "Approved NSN018-v1 dataset contract for release",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-ASSESS"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-WPK",
+      "persona": "wpk_lead",
+      "task": "Compare the ten planned positions with completed tests and identify gaps/nonconformities.",
+      "oracle_contract": "Independent planned/completed/due projection and approved decision expectations.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage wpk",
+      "expected": "Approved NSN018-v1 dataset contract for wpk",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-RELEASE"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-ANALYSIS",
+      "persona": "plant_lead",
+      "task": "Explain product-specific findings and the evidence limits for this plan.",
+      "oracle_contract": "Every decision linked to approved results; no invented trend from a single plan.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage analysis",
+      "expected": "Approved NSN018-v1 dataset contract for analysis",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-WPK"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-REPORT",
+      "persona": "laboratory_lead",
+      "task": "Generate the approved report and inspect its values, status and provenance.",
+      "oracle_contract": "Report file/hash/owner, approved values, correct release marks and no stale hidden results.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage report",
+      "expected": "Approved NSN018-v1 dataset contract for report",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-ANALYSIS"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-DELIVERY",
+      "persona": "laboratory_lead",
+      "task": "Demonstrate delivery only to the controlled local test sink.",
+      "oracle_contract": "Exactly the approved sink event; no external email or real recipient.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage delivery",
+      "expected": "Approved NSN018-v1 dataset contract for delivery",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-REPORT"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    },
+    {
+      "case_id": "NSN018-RIGHTS",
+      "persona": "restricted_viewer",
+      "task": "Inspect the permitted plan/results; do not change or approve laboratory data.",
+      "oracle_contract": "Denied write/approve rights, exact plant scope and unchanged protected data.",
+      "fixture_contract": "NSN018-v1 disposable isolated clone; stage rights",
+      "expected": "Approved NSN018-v1 dataset contract for rights",
+      "implementation": "pending",
+      "depends_on": [
+        "NSN018-DELIVERY"
+      ],
+      "max_minutes": 25,
+      "max_actions": 150,
+      "max_model_calls": 152
+    }
+  ],
+  "required_position_ids": [
+    "P01",
+    "P02",
+    "P03",
+    "P04",
+    "P05",
+    "P06",
+    "P07",
+    "P08",
+    "P09",
+    "P10"
+  ]
+}

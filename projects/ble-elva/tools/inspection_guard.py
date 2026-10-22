@@ -1,0 +1,110 @@
+"""Read-only navigation, plus a distinct non-official report/PDF capability."""
+import json
+import re
+from urllib.parse import urlsplit
+from sqbf.read_only import ReadOnlyViolation, request_allowed
+from .suite_fixture import validate_target
+
+REPORT_PATH=re.compile(r'/reports/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+
+
+def contract(fixture,paths,*,report=False,plan_samples=False):
+    validate_target(fixture)
+    if not paths or any(not isinstance(p,str) or not p.startswith('/') or '?' in p or '#' in p for p in paths):
+        raise ValueError('Explicit inspected paths required')
+    if type(report) is not bool or type(plan_samples) is not bool or report and plan_samples:raise ValueError('One explicit capability required')
+    return {'origin':fixture['target_url'].rstrip('/'),'paths':list(paths),'report':report,
+            'plan_samples':plan_samples,'plan_path':'/beprobung/'+fixture['suite_copy']['mapping']['plan_id'] if plan_samples else None}
+
+
+CLASSIFY=r"""
+const allowed=p=>config.paths.includes(p)||(config.report&&/^\/reports\/[0-9a-f-]{36}$/.test(p));
+const norm=e=>(e?.innerText||'').replace(/\s+/g,' ').trim();
+// Text and layout that does nothing when clicked (PO decision 2026-10-19, live run b7a34e94: about 14 harmless text clicks were rejected and tasks ended
+// on them). Passive means: no interactive element around it and no pointer cursor; the cursor is inherited, so a clickable container shows through.
+// A card title in BLE has cursor auto and a click on it does nothing (checked on a scratch clone, 19.10.2026).
+const INTERACTIVE='a,button,input,select,textarea,summary,label,[role="button"],[role="link"],[role="tab"],[role="menuitem"],[role="option"],[role="checkbox"],'
+  +'[role="switch"],[role="combobox"],[role="listbox"],[tabindex]:not([tabindex="-1"]),[onclick],.mud-button-root,.mud-chip,.mud-list-item,.mud-menu-item,.mud-select,'
+  +'.mud-expand-panel-header,.mud-nav-link,.mud-icon-button,.mud-tab,.mud-table-sort-label,.mud-input-control,.sa-kpi-editable';
+const passive=e=>{if(!e||e.nodeType!==1||e.closest(INTERACTIVE))return false;try{return getComputedStyle(e).cursor!=='pointer';}catch(_){return false;}};
+const text=s=>(s||'').replace(/\s+/g,' ').trim();
+// Purely presentational controls of BLE's list, plan and analytics views: quick filters, view switches, sorting, time ranges,
+// sidebar toggles, KPI tiles and the sample code that opens a sample. They change what is shown, never a record (live run 413f7abe: the
+// first click of four read tasks was rejected because only two controls per page were known).
+const READONLY=/^(Alle|Meine|Offen|Heute|Überfällig|Final|Tabelle|Nach (Besitzer|Plan)|Karten|Weitere Filter( öffnen)?|Woche|Monat|Quartal|Jahr|Benutzerdefiniert|Navigation (umschalten|verkleinern))$|^Nach .+ sortieren$|^(Gesamt|Neu|In Bearbeitung|Wartet auf Freigabe|Überfällig|Final|Proben|Bewertungsabdeckung)\b.*\d|^[A-Z]{2,}-\d{8}-[A-Z]+-\d+-\d+$/;
+const classify=e=>{
+ if(!allowed(location.pathname))return {kind:'blocked'};
+ const a=e?.closest('a');if(a){
+   if(config.report&&a.download&&a.href.startsWith('blob:'+config.origin+'/')&&window.__sqbfPdfDownload===location.pathname)return {kind:'blob_download'};
+   const u=new URL(a.href,location.href);if(u.origin===config.origin&&!u.search&&!u.hash&&allowed(u.pathname))return {kind:'navigation'};
+   // Anchor on the same page ("Zu den Modulen"): scrolls only.
+   if(u.origin===config.origin&&u.pathname===location.pathname&&u.hash&&!u.search)return {kind:'navigation'};
+ }
+ const tab=e?.closest('[role="tab"]');
+ if(tab&&!/schlie(ß|ss)en/i.test(text(tab.getAttribute('aria-label')||tab.innerText)))return {kind:'read_control'};
+ if(e?.closest('.mud-expand-panel-header')||e?.closest('.mud-tabs-toolbar [role="tab"]')||e?.closest('.mud-table-pagination button'))return {kind:'read_control'};
+ if(e?.closest('.mud-select,.mud-select-item,[role="option"],[role="listbox"]'))return {kind:'read_control'};
+ const b=e?.closest('button');
+ if(b&&!b.closest('form')&&READONLY.test(text(b.getAttribute('aria-label')||b.innerText)))return {kind:'read_control'};
+ // Sidebar groups ("Toggle Beprobung") only expand the menu; live run 6c23f768 rejected the click that RECEIPT needed to reach the plan.
+ if(b&&!b.closest('form')&&b.closest('.mud-nav-group')&&/^Toggle [^\/]{1,40}$/.test(text(b.getAttribute('aria-label'))))return {kind:'read_control'};
+ if(config.plan_samples&&location.pathname===config.plan_path&&norm(b)==='Proben anlegen / nachanlegen')return {kind:'plan_samples',scope:location.pathname};
+ // A row of the sample list opens its detail (aria-label "Probe <code> auswählen"; aria-selected is not always present, live run 083896e6).
+ if(location.pathname==='/samples'&&e?.closest('tr[aria-label^="Probe "][aria-label$="auswählen"]'))return {kind:'read_control'};
+ if(b?.getAttribute('title')==='Probe oeffnen'&&location.pathname.startsWith('/beprobung/'))return {kind:'read_control'};
+ if(location.pathname==='/samples'&&['Detail anzeigen','Probe vollständig öffnen'].includes(norm(b)))return {kind:'read_control'};
+ if(b?.getAttribute('aria-label')==='Weitere Aktionen')return {kind:'read_control'};
+ // Closing the detail panel of the plan only hides it (live run b7a34e94: the rejection ended RIGHTS).
+ if(b&&!b.closest('form')&&/^Detailpanel schlie(ß|ss)en$/.test(text(b.getAttribute('aria-label')||b.innerText)))return {kind:'read_control'};
+ if(config.report){
+   // BLE's menu entries are div.mud-menu-item (MudMenuItem), not buttons: the first version never recognised "Prüfbericht".
+   const item=e?.closest('button,.mud-list-item,.mud-menu-item,[role="menuitem"]');
+   if(norm(item)==='Prüfbericht'&&config.paths.includes(location.pathname))return {kind:'generate',scope:location.pathname};
+   if(norm(item)==='PDF herunterladen'&&/^\/reports\/[0-9a-f-]{36}$/.test(location.pathname))return {kind:'download',scope:location.pathname};
+ }
+ if(passive(e))return {kind:'read_control'};
+ return {kind:'blocked'};
+};
+"""
+
+
+def event_guard(config):
+    return r"""(()=>{const config=__CONFIG__;__CLASSIFY__
+const stop=e=>{e.preventDefault();e.stopImmediatePropagation();};
+document.addEventListener('click',e=>{
+ const t=classify(e.target);if(t.kind==='blocked')return stop(e);
+ if(t.kind==='download')window.__sqbfPdfDownload=location.pathname;
+ if(t.kind==='blob_download')window.__sqbfPdfDownload=null;
+ if(t.kind==='generate'||t.kind==='plan_samples'){
+   const key='sqbf-'+t.kind+'-attempt:'+t.scope;
+   if(sessionStorage.getItem(key))return stop(e);
+   sessionStorage.setItem(key,'attempted');
+ }
+},true);
+for(const kind of ['input','change','submit','beforeinput'])document.addEventListener(kind,stop,true);
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')stop(e);},true);
+})()""".replace('__CONFIG__',json.dumps(config)).replace('__CLASSIFY__',CLASSIFY)
+
+
+def check_action(page,action,config,generated):
+    p=urlsplit(page.url)
+    if (f'{p.scheme}://{p.netloc}'!=config['origin'] or
+            (p.path not in config['paths'] and not (config['report'] and REPORT_PATH.fullmatch(p.path)))):
+        raise ReadOnlyViolation('INSPECTION_PAGE_SCOPE_DENIED')
+    state=page.evaluate(r"""({config,x,y})=>{__CLASSIFY__
+return classify(Number.isFinite(x)&&Number.isFinite(y)?document.elementFromPoint(x,y):null);
+}""".replace('__CLASSIFY__',CLASSIFY),{'config':config,'x':action.get('x'),'y':action.get('y')})
+    if action['action'] in ('done','blocked','wait','scroll'):return state
+    if action['action']=='key' and action.get('key')=='Escape':return state
+    if action['action']=='click' and state['kind'] in ('navigation','read_control'):return state
+    if config['report'] and action['action']=='click' and state['kind']=='download':return state
+    if config['report'] and action['action']=='click' and state['kind']=='generate' and state['scope'] not in generated:return state
+    if config['plan_samples'] and action['action']=='click' and state['kind']=='plan_samples' and state['scope'] not in generated:return state
+    raise ReadOnlyViolation('INSPECTION_ACTION_SCOPE_DENIED')
+
+
+def transport_allowed(url,method,config,policy):
+    p=urlsplit(url)
+    if method in ('GET','HEAD') and f'{p.scheme}://{p.netloc}'==config['origin'] and not p.query:
+        if p.path in config['paths'] or (config['report'] and REPORT_PATH.fullmatch(p.path)):return True
+    return request_allowed(url,method,config['origin'],policy)

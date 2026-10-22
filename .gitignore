@@ -1,0 +1,14 @@
+# Screenshot evidence and structured output must remain local.
+runs/
+.secrets/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+venv/
+playwright-report/
+test-results/

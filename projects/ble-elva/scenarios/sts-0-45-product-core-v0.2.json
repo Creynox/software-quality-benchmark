@@ -1,0 +1,19 @@
+{
+  "scenario_id": "ble.labor.lab-01.product.create.sts-0-45",
+  "scenario_version": "0.2",
+  "persona": "Laborleitung",
+  "fixture_id": "enzberg-product-core-v0.2",
+  "software_version": "unknown-set-from-deployment",
+  "url": "http://127.0.0.1:5080/",
+  "allowed_hosts": [
+    "127.0.0.1"
+  ],
+  "max_minutes": 25,
+  "max_actions": 150,
+  "task": "LAB-01 Prozessbenchmark: Melde dich als Laborleitung an und lege im isolierten Benchmark-Werk Enzberg über die sichtbare BLE-Oberfläche das Produkt STS 0/45 an. Verwende die aktive Materialklasse 'Ungebundenes Gemisch' mit dem zugehörigen aktiven Produkttyp STS, Verwendungsbereich 'Ungebundenes Gemisch' und Produktstufe 'Fertiges Gemisch'. Setze den Siebbereich von 0 mm bis 45 mm und fülle die vom Produktkern geforderten Materialbasis- und Materialherkunft-Felder nur mit sachlich belegbaren Werten. Dieser Prozessbenchmark prüft die Produktanlage und Werkzuordnung; eine Normzuordnung gehört nicht zum Speichervertrag. Lege keine Norm oder Normedition neu an, ordne keine unbelegte Norm zu und erfinde keine Grenzwerte oder Prüfpflichten. Wenn ein Pflichtwert fachlich nicht belegbar ist oder die UI beim Speichern tatsächlich eine nicht bereits erfüllte Voraussetzung fordert, halte vor dem Speichern an und melde den konkreten Code-/Fachblocker. Speichere, verlasse die Ansicht, suche das Produkt erneut und kontrolliere die Stammdaten.",
+  "expected": [
+    "Ein Produkt STS 0–45 ist dem Benchmark-Werk Enzberg eindeutig zugeordnet und über BLE.Web gespeichert.",
+    "Nach Verlassen der Eingabemaske ist das Produkt durch sichtbare Navigation oder Suche wieder auffindbar.",
+    "Die Pflichtfelder Materialbasis und Materialherkunft sind mit belegbaren Werten gespeichert; es wurde keine Normedition neu angelegt oder unbelegt zugeordnet."
+  ]
+}

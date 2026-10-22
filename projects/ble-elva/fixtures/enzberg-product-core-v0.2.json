@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "fixture_id": "enzberg-product-core-v0.2",
+  "fixture_version": "0.2",
+  "status": "READY_FOR_UI_PROCESS_PILOT",
+  "application": "BLE/ELVA",
+  "test_mode": "isolated_benchmark_only",
+  "isolation_required": true,
+  "destructive_operations_permitted": false,
+  "target_url": "http://127.0.0.1:5080/",
+  "read_only_oracle": {
+    "expected_counts": {
+      "workspace_products": 0,
+      "samples": 0,
+      "lims_sample": 0,
+      "ble_reports": 0,
+      "product_norm_version_assignments": 0,
+      "norm_standards": 15,
+      "norm_versions": 15,
+      "workspace_plants": 1,
+      "material_classes": 9,
+      "product_types": 22
+    }
+  },
+  "database": {
+    "container": "ble-benchmark-pg-20261012",
+    "container_id": "90603c3389acca27a4ff023afd2174e2cf393d94d2164915cdc1d456f9159354",
+    "image": "postgres:16",
+    "host_binding": "127.0.0.1:55432",
+    "name": "ble_benchmark_20261012",
+    "volume": "ble_benchmark_20261012_data",
+    "host_port": 55432,
+    "bootstrap_user": "ble_benchmark",
+    "oracle_role": "sqbf_oracle_ro",
+    "startup_seeding": "disabled"
+  },
+  "identity_scope_check": {
+    "access": "verified_fixture_controller_read_only",
+    "role": "ble_benchmark",
+    "projection": "projects/ble-elva/tools/identity-scope.sql",
+    "projection_sha256": "c9c5ea9fbb0b435c005229946c40a0d494e8fa92d7a646e979570a24d3b49cd5",
+    "executable": "bin/Debug/net8.0/BLE.Web.exe",
+    "assembly": "bin/Debug/net8.0/BLE.Web.dll"
+  },
+  "fixture_data": {
+    "tenant_id": "7e9a1d20-0000-4000-8000-000000000001",
+    "plant_id": "3bf304e0-3c58-4c3a-8900-7c00bdbfd001",
+    "plant_name": "Enzberg",
+    "site_number": "SQBF-LAB01-ENZBERG",
+    "customer_id": null,
+    "laboratory_id": null,
+    "laboratory_lead_account": "sqbf-laborleitung",
+    "laboratory_lead_user_id": "a3d08b2e-7643-41cc-9396-13b0096d3614",
+    "plant_scope_id": "3bf304e0-3c58-4c3a-8900-7c00bdbfd002",
+    "global_scope": "inactive",
+    "tenant_scope": "active",
+    "permission_products_manage": true,
+    "product_count": 0,
+    "sample_count": 0,
+    "lims_sample_count": 0,
+    "report_count": 0
+  },
+  "oracle_expectations": {
+    "product_name": "STS 0–45",
+    "material_class_id": "88888888-8888-8888-8888-888888888888",
+    "material_class_code": "unbound_mix",
+    "product_type_id": "20000000-0000-0000-0000-000000000007",
+    "product_type_code": "sts",
+    "category": "Gemisch",
+    "use_area": "Unbound",
+    "product_level": "mixture",
+    "before_counts": {
+      "products": 0,
+      "samples": 0,
+      "lims_samples": 0,
+      "reports": 0,
+      "product_norm_assignments": 0,
+      "norm_standards": 15,
+      "norm_versions": 15
+    }
+  },
+  "ui_verification": {
+    "login": "passed",
+    "product_create_route": "/products/new",
+    "enzberg_selected_as_owner": true,
+    "product_saved": false,
+    "session_reloaded_and_route_verified": true,
+    "session_file": "local-only; stored outside the repository with current-user-only ACL",
+    "screenshot_directory": "D:/Temp/sqbf-lab01-evidence"
+  },
+  "scope": [
+    "Create only the synthetic tenant-owned Enzberg plant and scoped laboratory-lead authorization.",
+    "Do not seed standards, standards versions, customers, laboratories, products, samples, LIMS samples, or reports.",
+    "Do not reset the database; setup is additive and idempotent."
+  ],
+  "preconditions": [
+    "Verify the exact benchmark container, image, loopback port, database, and isolated volume before every write.",
+    "Laborleiter-Benchmark-Konto is synthetic and has products.manage permission with an explicit Enzberg plant scope.",
+    "Die aktive Materialklasse unbound_mix und der aktive, zugehörige Produkttyp sts sind unabhängig nachgewiesen.",
+    "The UI check stops before product submission; no STS 0–45 product or sample exists."
+  ],
+  "verification": {
+    "provisioner_modes": [
+      "WhatIf",
+      "Provision (twice)",
+      "Verify"
+    ],
+    "independent_database_oracle": "before phase passed against the dedicated sqbf_oracle_ro role; evidence retained locally outside the repository",
+    "norm_hashes_unchanged": true,
+    "no_product_sample_or_report_rows": true
+  },
+  "reset": "Forbidden. Fixture setup only adds the deterministic synthetic Werk and scope after independent DB identity checks.",
+  "independent_oracle": "Separate CLI uses only a loopback DSN for the dedicated non-superuser SELECT-only role sqbf_oracle_ro and read-only transactions. Live before phase passed: Docker identity/container/volume/loopback mapping, DB identity, Enzberg tenant ownership, active STS classification, exact counts (0 products, samples, LIMS samples, reports and norm assignments; 15 standards and 15 versions), and absence of STS 0–45. After a later UI run it validates persisted owner, tenant, STS fields, 0/45 range, required fields, norm-free save, and no unexpected product/sample/report or norm-reference changes.",
+  "blocking_issue": "https://github.com/Creynox/software-quality-benchmark/issues/11",
+  "application_source_commit": "90b6d58dd875463ca20c48ffd42f5e940a18e815",
+  "fixture_setup_worktree_commit": "fb933961099a6dd6da301998365d22ccb6921857"
+}
